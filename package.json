@@ -18,6 +18,7 @@
     "pg": "^8.13.1",
     "postgres": "^3.4.5",
     "proper-lockfile": "^4.1.2",
+    "svelte": "^5.16.0",
     "tcp-api": "git+https://github.com/tsaxking/tcp-api.git",
     "ts-node": "^10.9.2",
     "ts-utils": "git+https://github.com/tsaxking/global-ts-utilities.git",
