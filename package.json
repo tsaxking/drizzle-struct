@@ -2,9 +2,9 @@
   "name": "drizzle-struct",
   "version": "1.0.0",
   "description": "",
-  "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "build": "tsc",
+    "install": "npm run build"
   },
   "keywords": [],
   "author": "",
@@ -22,10 +22,12 @@
     "svelte": "^5.16.0",
     "ts-node": "^10.9.2",
     "ts-utils": "git+https://github.com/tsaxking/global-ts-utilities.git",
+    "typescript": "^5.7.2",
     "uuid": "^11.0.3",
     "zod": "^3.24.1"
   },
   "devDependencies": {
+    "@types/mdx": "^2.0.13",
     "@types/pg": "^8.11.10",
     "drizzle-kit": "^0.22.0",
     "tsx": "^4.19.2",
