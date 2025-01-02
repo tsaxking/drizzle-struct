@@ -46,7 +46,7 @@ importers:
         version: 10.9.2(@types/node@22.10.3)(typescript@5.7.2)
       ts-utils:
         specifier: git+https://github.com/tsaxking/global-ts-utilities.git
-        version: global-ts-utilities.git@https://codeload.github.com/tsaxking/global-ts-utilities/tar.gz/38893cf5725d9eef050e811f37e89da89ed00bd7
+        version: global-ts-utilities@https://codeload.github.com/tsaxking/global-ts-utilities/tar.gz/5946fd28f8e6ccd8a6cc6eeaeaddf00bb3fca662
       uuid:
         specifier: ^11.0.3
         version: 11.0.3
@@ -1083,9 +1083,9 @@ packages:
   get-tsconfig@4.8.1:
     resolution: {integrity: sha512-k9PN+cFBmaLWtVz29SkUoqU5O0slLuHJXt/2P+tMVFT+phsSGXGkp9t3rQIqdz0e+06EHNGs3oM6ZX1s2zHxRg==}
 
-  global-ts-utilities.git@https://codeload.github.com/tsaxking/global-ts-utilities/tar.gz/38893cf5725d9eef050e811f37e89da89ed00bd7:
-    resolution: {tarball: https://codeload.github.com/tsaxking/global-ts-utilities/tar.gz/38893cf5725d9eef050e811f37e89da89ed00bd7}
-    version: 0.0.0
+  global-ts-utilities@https://codeload.github.com/tsaxking/global-ts-utilities/tar.gz/5946fd28f8e6ccd8a6cc6eeaeaddf00bb3fca662:
+    resolution: {tarball: https://codeload.github.com/tsaxking/global-ts-utilities/tar.gz/5946fd28f8e6ccd8a6cc6eeaeaddf00bb3fca662}
+    version: 1.0.0
 
   globalyzer@0.1.0:
     resolution: {integrity: sha512-40oNTM9UfG6aBmuKxk/giHn5nQ8RVz/SS4Ir6zgzOv9/qC3kKZ9v4etGTcJbEl/NyVQH7FGU7d+X1egr57Md2Q==}
@@ -2132,7 +2132,7 @@ snapshots:
     dependencies:
       resolve-pkg-maps: 1.0.0
 
-  global-ts-utilities.git@https://codeload.github.com/tsaxking/global-ts-utilities/tar.gz/38893cf5725d9eef050e811f37e89da89ed00bd7: {}
+  global-ts-utilities@https://codeload.github.com/tsaxking/global-ts-utilities/tar.gz/5946fd28f8e6ccd8a6cc6eeaeaddf00bb3fca662: {}
 
   globalyzer@0.1.0: {}
 
