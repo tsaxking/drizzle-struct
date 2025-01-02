@@ -8,7 +8,7 @@ import { type ColumnDataType } from 'drizzle-orm';
 import { EventEmitter } from 'ts-utils/event-emitter';
 import { Loop } from 'ts-utils/loop';
 import { Stream } from 'ts-utils/stream';
-import { ClientAPI, ServerAPI } from 'tcp-api/src/api';
+import { ClientAPI, ServerAPI } from './api';
 import { z } from 'zod';
 import { v4 as uuid } from 'uuid';
 import { DataAction, PropertyAction } from './types';

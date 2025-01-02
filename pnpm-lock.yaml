@@ -11,6 +11,9 @@ importers:
       '@sveltejs/kit':
         specifier: ^2.15.1
         version: 2.15.1(@sveltejs/vite-plugin-svelte@5.0.3(svelte@5.16.0)(vite@5.4.11(@types/node@22.10.3)))(svelte@5.16.0)(vite@5.4.11(@types/node@22.10.3))
+      '@types/proper-lockfile':
+        specifier: ^4.1.4
+        version: 4.1.4
       dotenv:
         specifier: ^16.4.7
         version: 16.4.7
@@ -38,9 +41,6 @@ importers:
       svelte:
         specifier: ^5.16.0
         version: 5.16.0
-      tcp-api:
-        specifier: git+https://github.com/tsaxking/tcp-api.git
-        version: https://codeload.github.com/tsaxking/tcp-api/tar.gz/012211064c6d99653c8d69860a75bbffcc51e4d3
       ts-node:
         specifier: ^10.9.2
         version: 10.9.2(@types/node@22.10.3)(typescript@5.7.2)
@@ -807,6 +807,12 @@ packages:
   '@types/pg@8.11.10':
     resolution: {integrity: sha512-LczQUW4dbOQzsH2RQ5qoeJ6qJPdrcM/DcMLoqWQkMLMsq83J5lAX3LXjdkWdpscFy67JSOWDnh7Ny/sPFykmkg==}
 
+  '@types/proper-lockfile@4.1.4':
+    resolution: {integrity: sha512-uo2ABllncSqg9F1D4nugVl9v93RmjxF6LJzQLMLDdPaXCUIDPeOJ21Gbqi43xNKzBi/WQ0Q0dICqufzQbMjipQ==}
+
+  '@types/retry@0.12.5':
+    resolution: {integrity: sha512-3xSjTp3v03X/lSQLkczaN9UIEwJMoMCA1+Nb5HfbJEQWogdeQIyVtTvxPXDQjZ5zws8rFQfVfRdz03ARihPJgw==}
+
   '@vitest/expect@2.1.8':
     resolution: {integrity: sha512-8ytZ/fFHq2g4PJVAtDX57mayemKgDR6X3Oa2Foro+EygiOJHUXhCqBAAKQYYajZpFoIfvBCF1j6R6IYRSIUFuw==}
 
@@ -1282,10 +1288,6 @@ packages:
   svelte@5.16.0:
     resolution: {integrity: sha512-Ygqsiac6UogVED2ruKclU+pOeMThxWtp9LG+li7BXeDKC2paVIsRTMkNmcON4Zejerd1s5sZHWx6ZtU85xklVg==}
     engines: {node: '>=18'}
-
-  tcp-api@https://codeload.github.com/tsaxking/tcp-api/tar.gz/012211064c6d99653c8d69860a75bbffcc51e4d3:
-    resolution: {tarball: https://codeload.github.com/tsaxking/tcp-api/tar.gz/012211064c6d99653c8d69860a75bbffcc51e4d3}
-    version: 1.0.0
 
   tiny-glob@0.2.9:
     resolution: {integrity: sha512-g/55ssRPUjShh+xkfx9UPDXqhckHEsHr4Vd9zX55oSdGZc/MD0m3sferOkwWtp98bv+kcVfEHtRJgBVJzelrzg==}
@@ -1876,6 +1878,12 @@ snapshots:
       pg-protocol: 1.7.0
       pg-types: 4.0.2
 
+  '@types/proper-lockfile@4.1.4':
+    dependencies:
+      '@types/retry': 0.12.5
+
+  '@types/retry@0.12.5': {}
+
   '@vitest/expect@2.1.8':
     dependencies:
       '@vitest/spy': 2.1.8
@@ -2325,12 +2333,6 @@ snapshots:
       locate-character: 3.0.0
       magic-string: 0.30.17
       zimmerframe: 1.1.2
-
-  tcp-api@https://codeload.github.com/tsaxking/tcp-api/tar.gz/012211064c6d99653c8d69860a75bbffcc51e4d3:
-    dependencies:
-      proper-lockfile: 4.1.2
-      ts-utils: global-ts-utilities.git@https://codeload.github.com/tsaxking/global-ts-utilities/tar.gz/38893cf5725d9eef050e811f37e89da89ed00bd7
-      zod: 3.24.1
 
   tiny-glob@0.2.9:
     dependencies:

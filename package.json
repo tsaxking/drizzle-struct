@@ -11,6 +11,7 @@
   "license": "ISC",
   "dependencies": {
     "@sveltejs/kit": "^2.15.1",
+    "@types/proper-lockfile": "^4.1.4",
     "dotenv": "^16.4.7",
     "drizzle-orm": "^0.38.3",
     "drizzle-zod": "^0.6.1",
@@ -20,7 +21,6 @@
     "postgres": "^3.4.5",
     "proper-lockfile": "^4.1.2",
     "svelte": "^5.16.0",
-    "tcp-api": "git+https://github.com/tsaxking/tcp-api.git",
     "ts-node": "^10.9.2",
     "ts-utils": "git+https://github.com/tsaxking/global-ts-utilities.git",
     "uuid": "^11.0.3",
