@@ -1,4 +1,4 @@
-import { Client, ClientEvents, Server, type Events } from './tcp';
+import { Client, type ClientEvents, Server, type Events } from './tcp';
 import { z } from 'zod';
 import fs from 'fs';
 import path from 'path';
