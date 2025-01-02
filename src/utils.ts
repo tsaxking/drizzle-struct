@@ -1,5 +1,5 @@
 import { match } from 'ts-utils/dist/match';
-import { ColType } from './types';
+import { type ColType } from './types';
 
 export const checkStrType = (str: string, type: ColType): boolean => {
     switch (type) {
