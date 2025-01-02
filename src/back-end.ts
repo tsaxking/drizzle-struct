@@ -300,7 +300,7 @@ export class StructData<T extends Blank = any, Name extends string = any> {
             attributes = attributes
                 .filter(i => typeof i === 'string')
                 .filter((v, i, a) => a.indexOf(v) === i);
-            return await this.database.update(this.struct.table).set({
+            await this.database.update(this.struct.table).set({
                 attributes: JSON.stringify(attributes),
                 updated: new Date(),
             } as any).where(sql`${this.struct.table.id} = ${this.id}`);
@@ -333,7 +333,7 @@ export class StructData<T extends Blank = any, Name extends string = any> {
             universes = universes
                 .filter(i => typeof i === 'string')
                 .filter((v, i, a) => a.indexOf(v) === i);
-            return await this.database.update(this.struct.table).set({
+            await this.database.update(this.struct.table).set({
                 universes: JSON.stringify(universes),
                 updated: new Date(),
             } as any).where(sql`${this.struct.table.id} = ${this.id}`);
