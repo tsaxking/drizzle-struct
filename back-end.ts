@@ -8,54 +8,11 @@ import { type ColumnDataType } from 'drizzle-orm';
 import { EventEmitter } from 'ts-utils/event-emitter';
 import { Loop } from 'ts-utils/loop';
 import { Stream } from 'ts-utils/stream';
-import { match } from 'ts-utils/match';
 import { ClientAPI, ServerAPI } from 'tcp-api/src/api';
 import { z } from 'zod';
 import { v4 as uuid } from 'uuid';
-
-export const checkStrType = (str: string, type: ColumnDataType): boolean => {
-    switch (type) {
-        case 'string':
-            return true;
-        case 'number':
-            return !Number.isNaN(+str);
-        case 'bigint':
-            return !Number.isNaN(+str) || BigInt(str).toString() === str;
-        case 'boolean':
-            return ['y', 'n', '1', '0', 'true', 'false'].includes(str);
-        default:
-            return false;
-    }
-};
-
-export const returnType = (str: string, type: ColumnDataType) => {
-    return match(type)
-        .case('string', () => str)
-        .case('number', () => +str)
-        .case('bigint', () => BigInt(str))
-        .case('boolean', () => ['y', '1', 'true'].includes(str))
-        .exec()
-        .unwrap();
-};
-
-
-export enum PropertyAction {
-    Read = 'read',
-    Update = 'update'
-}
-
-
-// these are not property specific
-export enum DataAction {
-    Create = 'create',
-    Delete = 'delete',
-    Archive = 'archive',
-    RestoreArchive = 'restore-archive',
-    RestoreVersion = 'restore-version',
-    DeleteVersion = 'delete-version',
-    ReadVersionHistory = 'read-version-history',
-    ReadArchive = 'read-archive'
-}
+import { DataAction, PropertyAction } from './types';
+import { Cookies } from '@sveltejs/kit';
 
 export class StructError extends Error {
     constructor(message: string) {
@@ -449,14 +406,21 @@ type StructEvents<T extends Blank, Name extends string> = {
 
 interface RequestEvent {
     request: Request;
-    cookies: Map<string, string>;
+    cookies: Cookies;
 }
+
+type RequestAction = {
+    action: DataAction | PropertyAction;
+    data: unknown;
+    event: RequestEvent;
+    struct: Struct;
+};
 
 type TsType<T extends ColumnDataType> = T extends 'string' ? string : T extends 'number' ? number : T extends 'boolean' ? boolean : T extends 'timestamp' ? Date : never;
 
 export class Struct<T extends Blank = any, Name extends string = any> {
-    public static async buildAll(database: PostgresJsDatabase) {
-        return resolveAll(await Promise.all([...Struct.structs.values()].map(s => s.build(database))));
+    public static async buildAll(database: PostgresJsDatabase, handler?: (event: RequestAction) => Promise<Response> | Response) {
+        return resolveAll(await Promise.all([...Struct.structs.values()].map(s => s.build(database, handler))));
     }
 
     public static readonly structs = new Map<string, Struct<Blank, string>>();
@@ -475,7 +439,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
             const struct = Struct.structs.get(B.struct);
             if (!struct) return new Response('Struct not found', { status: 404 });
 
-            const response = (await struct._eventHandler?.({ action: B.action, data: B.data, request: event }));
+            const response = (await struct._eventHandler?.({ action: B.action, data: B.data, event, struct }));
             if (response) return response;
 
             return new Response('Not implemented', { status: 501 });
@@ -711,7 +675,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
         return this.all(true).pipe(fn);
     }
 
-    build(database: PostgresJsDatabase) {
+    build(database: PostgresJsDatabase, handler?: (event: RequestAction) => Promise<Response> | Response) {
         if (this.built) throw new FatalStructError(`Struct ${this.name} has already been built`);
         if (this.data.sample) throw new FatalStructError(`Struct ${this.name} is a sample struct and should never be built`);
         return attemptAsync(async () => {
@@ -726,22 +690,18 @@ export class Struct<T extends Blank = any, Name extends string = any> {
                 });
             }))).unwrap();
 
+            if (handler) {
+                this.eventHandler(handler);
+            }
+
             this.built = true;
         });
     }
 
-    private _eventHandler: ((event: {
-        action: DataAction | PropertyAction;
-        data: unknown;
-        request: RequestEvent;
-    }) => Response | Promise<Response>) | undefined;
+    private _eventHandler: ((event: RequestAction) => Promise<Response> | Response) | undefined;
 
     eventHandler(
-        fn: (event: {
-            action: DataAction | PropertyAction;
-            data: unknown;
-            request: RequestEvent;
-        }) => Response | Promise<Response>
+        fn: (event: RequestAction) => Promise<Response> | Response
     ): void {
         this._eventHandler = fn;
     }
