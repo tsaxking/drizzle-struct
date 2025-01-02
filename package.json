@@ -10,10 +10,9 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@sveltejs/kit": "^2.15.1",
     "@types/proper-lockfile": "^4.1.4",
     "dotenv": "^16.4.7",
-		"drizzle-orm": "^0.33.0",
+    "drizzle-orm": "^0.36.0",
     "drizzle-zod": "^0.6.1",
     "fuzzy-search": "^3.2.1",
     "math": "git+https://github.com/tsaxking/calculations.git",
@@ -28,7 +27,7 @@
   },
   "devDependencies": {
     "@types/pg": "^8.11.10",
-		"drizzle-kit": "^0.22.0",
+    "drizzle-kit": "^0.22.0",
     "tsx": "^4.19.2",
     "vitest": "^2.1.8"
   }

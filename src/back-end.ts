@@ -12,7 +12,6 @@ import { ClientAPI, ServerAPI } from './api';
 import { z } from 'zod';
 import { v4 as uuid } from 'uuid';
 import { DataAction, PropertyAction } from './types';
-import { Cookies } from '@sveltejs/kit';
 
 export class StructError extends Error {
     constructor(message: string) {
@@ -406,7 +405,7 @@ type StructEvents<T extends Blank, Name extends string> = {
 
 interface RequestEvent {
     request: Request;
-    cookies: Cookies;
+    cookies: any;
 }
 
 type RequestAction = {
