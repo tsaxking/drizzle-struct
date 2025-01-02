@@ -43,7 +43,7 @@ importers:
         version: 10.9.2(@types/node@22.10.3)(typescript@5.7.2)
       ts-utils:
         specifier: git+https://github.com/tsaxking/global-ts-utilities.git
-        version: global-ts-utilities@https://codeload.github.com/tsaxking/global-ts-utilities/tar.gz/5946fd28f8e6ccd8a6cc6eeaeaddf00bb3fca662
+        version: global-ts-utilities@https://codeload.github.com/tsaxking/global-ts-utilities/tar.gz/2b053ec990898a15f353f18671e4bcc98e43615f
       typescript:
         specifier: ^5.7.2
         version: 5.7.2
@@ -1045,8 +1045,8 @@ packages:
   get-tsconfig@4.8.1:
     resolution: {integrity: sha512-k9PN+cFBmaLWtVz29SkUoqU5O0slLuHJXt/2P+tMVFT+phsSGXGkp9t3rQIqdz0e+06EHNGs3oM6ZX1s2zHxRg==}
 
-  global-ts-utilities@https://codeload.github.com/tsaxking/global-ts-utilities/tar.gz/5946fd28f8e6ccd8a6cc6eeaeaddf00bb3fca662:
-    resolution: {tarball: https://codeload.github.com/tsaxking/global-ts-utilities/tar.gz/5946fd28f8e6ccd8a6cc6eeaeaddf00bb3fca662}
+  global-ts-utilities@https://codeload.github.com/tsaxking/global-ts-utilities/tar.gz/2b053ec990898a15f353f18671e4bcc98e43615f:
+    resolution: {tarball: https://codeload.github.com/tsaxking/global-ts-utilities/tar.gz/2b053ec990898a15f353f18671e4bcc98e43615f}
     version: 1.0.0
 
   graceful-fs@4.2.11:
@@ -1996,7 +1996,9 @@ snapshots:
     dependencies:
       resolve-pkg-maps: 1.0.0
 
-  global-ts-utilities@https://codeload.github.com/tsaxking/global-ts-utilities/tar.gz/5946fd28f8e6ccd8a6cc6eeaeaddf00bb3fca662: {}
+  global-ts-utilities@https://codeload.github.com/tsaxking/global-ts-utilities/tar.gz/2b053ec990898a15f353f18671e4bcc98e43615f:
+    dependencies:
+      typescript: 5.7.2
 
   graceful-fs@4.2.11: {}
 

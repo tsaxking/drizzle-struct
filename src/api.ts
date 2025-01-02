@@ -3,8 +3,8 @@ import { z } from 'zod';
 import fs from 'fs';
 import path from 'path';
 import { lock } from 'proper-lockfile';
-import { EventEmitter } from 'ts-utils/event-emitter';
-import { attemptAsync } from 'ts-utils/check';
+import { EventEmitter } from 'ts-utils/src/event-emitter';
+import { attemptAsync } from 'ts-utils/src/check';
 
 const encode = (input: string): string => {
     return Array.from(input)

@@ -1,9 +1,9 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { attempt, attemptAsync } from "ts-utils/check";
-import { EventEmitter } from "ts-utils/event-emitter";
-import { match } from "ts-utils/match";
-import { Stream } from "ts-utils/stream";
-import { decode } from "ts-utils/text";
+import { attempt, attemptAsync } from "ts-utils/src/check";
+import { EventEmitter } from "ts-utils/src/event-emitter";
+import { match } from "ts-utils/src/match";
+import { Stream } from "ts-utils/src/stream";
+import { decode } from "ts-utils/src/text";
 import { DataAction, PropertyAction } from './types';
 import type { Readable, Writable } from "svelte/store";
 import { type ColType } from "./types";
