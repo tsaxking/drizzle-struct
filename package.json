@@ -2,10 +2,11 @@
   "name": "drizzle-struct",
   "version": "1.0.0",
   "description": "",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "main": "lib/index.js",
+  "module": "lib/index.js",
+  "types": "lib/index.d.ts",
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && tsc -p tsconfig.commonjs.json",
     "install": "npm run build"
   },
   "keywords": [],
@@ -32,5 +33,35 @@
     "@types/pg": "^8.11.10",
     "drizzle-kit": "^0.22.0",
     "vitest": "^2.1.8"
+  },
+  "exports": {
+    ".": {
+      "import": "./lib/index.js",
+      "require": "./lib/index.js"
+    },
+    "./api": {
+      "import": "./lib/api.js",
+      "require": "./lib/cjs/api.js"
+    },
+    "./back-end": {
+      "import": "./lib/back-end.js",
+      "require": "./lib/cjs/back-end.js"
+    },
+    "./front-end": {
+      "import": "./lib/front-end.js",
+      "require": "./lib/cjs/front-end.js"
+    },
+    "./tcp": {
+      "import": "./lib/tcp.js",
+      "require": "./lib/cjs/tcp.js"
+    },
+    "./types": {
+      "import": "./lib/types.js",
+      "require": "./lib/cjs/types.js"
+    },
+    "./utils": {
+      "import": "./lib/utils.js",
+      "require": "./lib/cjs/utils.js"
+    }
   }
 }
