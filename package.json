@@ -2,11 +2,11 @@
   "name": "drizzle-struct",
   "version": "1.0.0",
   "description": "",
-  "main": "lib/index.js",
-  "module": "lib/index.js",
-  "types": "lib/index.d.ts",
+  "main": "lib/cjs/index.js",
+  "module": "lib/esm/index.js",
+  "types": "lib/esm/index.d.ts",
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && tsc -p tsconfig.commonjs.json",
     "install": "npm run build"
   },
   "keywords": [],
@@ -36,31 +36,31 @@
   },
   "exports": {
     ".": {
-      "import": "./lib/index.js",
+      "import": "./lib/esm/index.js",
       "require": "./lib/index.js"
     },
     "./api": {
-      "import": "./lib/api.js",
+      "import": "./lib/esm/api.js",
       "require": "./lib/cjs/api.js"
     },
     "./back-end": {
-      "import": "./lib/back-end.js",
+      "import": "./lib/esm/back-end.js",
       "require": "./lib/cjs/back-end.js"
     },
     "./front-end": {
-      "import": "./lib/front-end.js",
+      "import": "./lib/esm/front-end.js",
       "require": "./lib/cjs/front-end.js"
     },
     "./tcp": {
-      "import": "./lib/tcp.js",
+      "import": "./lib/esm/tcp.js",
       "require": "./lib/cjs/tcp.js"
     },
     "./types": {
-      "import": "./lib/types.js",
+      "import": "./lib/esm/types.js",
       "require": "./lib/cjs/types.js"
     },
     "./utils": {
-      "import": "./lib/utils.js",
+      "import": "./lib/esm/utils.js",
       "require": "./lib/cjs/utils.js"
     }
   }
