@@ -7,7 +7,8 @@
   "types": "lib/esm/index.d.ts",
   "scripts": {
     "build": "tsc && tsc -p tsconfig.commonjs.json && node ./scripts/post-build.js",
-    "install": "npm run build"
+    "install": "npm run build",
+    "test": "vitest"
   },
   "keywords": [],
   "author": "",
