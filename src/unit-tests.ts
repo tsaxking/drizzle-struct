@@ -94,48 +94,47 @@ export const structTest = async (DB: PostgresJsDatabase, struct: Struct) => {
 
     (await struct.build(DB as any)).unwrap();
 
-    test('Test Struct', async () => {
-        (await struct.clear()).unwrap();
+    (await struct.clear()).unwrap();
 
-        const testNew = (
-            await struct.new({
-                name: 'test',
-                age: 50
-            })
-        ).unwrap();
+    const testNew = (
+        await struct.new({
+            name: 'test',
+            age: 50
+        })
+    ).unwrap();
 
-        expect(testNew.data.name).toBe('test');
-        expect(testNew.data.age).toBe(50);
+    expect(testNew.data.name).toBe('test');
+    expect(testNew.data.age).toBe(50);
 
-        const selected = (await struct.fromProperty('name', 'test', false)).unwrap();
-        if (selected.length === 0) {
-            throw new Error('No results found');
-        }
+    const selected = (await struct.fromProperty('name', 'test', false)).unwrap();
+    if (selected.length === 0) {
+        throw new Error('No results found');
+    }
 
-        const [testSelected] = selected;
-        expect(testSelected.data.name).toBe('test');
+    const [testSelected] = selected;
+    expect(testSelected.data.name).toBe('test');
 
-        (
-            await testSelected.update({
-                name: 'test2'
-            })
-        ).unwrap();
+    (
+        await testSelected.update({
+            name: 'test2'
+        })
+    ).unwrap();
 
-        const updated = (await struct.fromProperty('name', 'test2', false)).unwrap();
+    const updated = (await struct.fromProperty('name', 'test2', false)).unwrap();
 
-        if (updated.length === 0) {
-            throw new Error('No results found');
-        }
+    if (updated.length === 0) {
+        throw new Error('No results found');
+    }
 
-        const [testUpdated] = updated;
+    const [testUpdated] = updated;
 
-        expect(testUpdated.data.name).toBe('test2');
+    expect(testUpdated.data.name).toBe('test2');
 
-        (await testSelected.delete()).unwrap();
+    (await testSelected.delete()).unwrap();
 
-        const deleted = (await struct.fromProperty('name', 'test2', false)).unwrap();
+    const deleted = (await struct.fromProperty('name', 'test2', false)).unwrap();
 
-        expect(deleted.length).toBe(0);
-    });
+    expect(deleted.length).toBe(0);
 
+    return true;
 };
