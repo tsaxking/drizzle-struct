@@ -63,6 +63,10 @@
     "./utils": {
       "import": "./lib/esm/utils.js",
       "require": "./lib/cjs/utils.js"
+    },
+    "./unit-tests": {
+      "import": "./lib/esm/unit-tests.js",
+      "require": "./lib/cjs/unit-test.js"
     }
   }
 }
