@@ -1,20 +1,9 @@
 import { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import { test, describe, expect } from 'vitest';
 import { Struct } from './back-end';
-import { text } from 'drizzle-orm/pg-core';
 import { Server, Client } from './tcp';
 import { z } from 'zod';
 import { ClientAPI, ServerAPI } from './api';
-
-
-const testStructForType = new Struct({
-    name: 'test',
-    structure: {
-        name: text('name').notNull(),
-        age: text('age').notNull(),
-    },
-    sample: true,
-});
 
 export const tcpTest = (server: Server, client: Client) => {
     
@@ -86,10 +75,26 @@ export const tcpTest = (server: Server, client: Client) => {
     });
 };
 
-export const structTest = async (DB: PostgresJsDatabase, struct: typeof testStructForType) => {
+export const structTest = async (DB: PostgresJsDatabase, struct: Struct) => {
     if (!struct.built) {
         (await struct.build(DB)).unwrap();
     }
+
+    if (!struct.data.structure.name) {
+        throw new Error('No name column');
+    }
+
+    if (!struct.data.structure.age) {
+        throw new Error('No age column');
+    }
+
+    if (struct.data.structure.name.config.dataType !== 'string') {
+        throw new Error('Name is not a string');
+    }
+
+    if (struct.data.structure.age.config.dataType !== 'number') {
+        throw new Error('Age is not a number');
+    } 
 
     describe('Struct Init', async () => {
         (await struct.build(DB as any)).unwrap();
@@ -100,11 +105,12 @@ export const structTest = async (DB: PostgresJsDatabase, struct: typeof testStru
             const testNew = (
                 await struct.new({
                     name: 'test',
-                    age: 'test'
+                    age: 50
                 })
             ).unwrap();
     
             expect(testNew.data.name).toBe('test');
+            expect(testNew.data.age).toBe(50);
     
             const selected = (await struct.fromProperty('name', 'test', false)).unwrap();
             if (selected.length === 0) {
