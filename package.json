@@ -6,7 +6,7 @@
   "module": "lib/esm/index.js",
   "types": "lib/esm/index.d.ts",
   "scripts": {
-    "build": "tsc && tsc -p tsconfig.commonjs.json",
+    "build": "tsc && tsc -p tsconfig.commonjs.json && node ./scripts/post-build.js",
     "install": "npm run build"
   },
   "keywords": [],
