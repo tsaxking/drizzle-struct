@@ -17,9 +17,10 @@ const testStructForType = new Struct({
 });
 
 export const tcpTest = (server: Server, client: Client) => {
-    test('TCP', async () => {
-        server.start();
     
+    server.start();
+    
+    test('TCP', async () => {
         client.listen(
             'test',
             ({ data }) => {
@@ -58,12 +59,30 @@ export const tcpTest = (server: Server, client: Client) => {
             Date.now()
         );
 
+    });
+
+    test('API', async () => {
         const serverApi = new ServerAPI(server, 'apiKey');
         const clientApi = new ClientAPI(client, 'apiKey');
 
         await serverApi.init((key) => true, (key, struct, event) => true);
 
         await clientApi.init();
+
+        serverApi.listen('apitest', (data) => {
+            expect(data.data.test).toBe('apitest');
+            serverApi.send('apitest', {
+                test: 'apitest'
+            });
+        });
+
+        clientApi.listen('apitest', (data) => {
+            expect(data.data.test).toBe('apitest');
+        });
+
+        clientApi.send('apitest', {
+            test: 'apitest',
+        });
     });
 };
 

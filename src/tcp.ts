@@ -14,12 +14,16 @@ export type Events = {
     connect: string;
     disconnect: void;
     struct: StructEvent;
+    test: { test: string };
+    apitest: { test: string };
 };
 
 export type ClientEvents = {
     connect: undefined;
     disconnect: void;
     struct: StructEvent;
+    test: { test: string };
+    apitest: { test: string };
 }
 
 
