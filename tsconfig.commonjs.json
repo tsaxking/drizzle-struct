@@ -6,7 +6,7 @@
       "outDir": "./lib/cjs",                        // Output directory
       "esModuleInterop": true,                  // Allow default imports for non-ESM modules
       "declaration": true,                      // Generate type declarations
-      "declarationDir": "./lib",                // Output directory for type declarations
+      "declarationDir": "./lib/cjs",                // Output directory for type declarations
       "strict": true                           // Strict type checking
     },
     "include": ["src/**/*"],                    // Include all files in src directory

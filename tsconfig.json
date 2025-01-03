@@ -1,6 +1,7 @@
 {
   "compilerOptions": {
-    "outDir": "./lib",
+    "outDir": "./lib/esm",
+    "declarationDir": "./lib/esm",
     "module": "ESNext",
     "target": "es2022",
     "declaration": true,
