@@ -273,66 +273,76 @@ export class Struct<T extends Blank> {
     constructor(public readonly data: StructBuilder<T>) {
         Struct.structs.set(data.name, this as any);
 
-        data.socket.on(`struct:${data.name}`, (data) => {
-            if (typeof data !== 'object' || data === null) {
-                return console.error('Invalid data:', data);
-            }
-            if (!Object.hasOwn(data, 'event')) {
-                return console.error('Invalid event:', data);
-            }
-            if (!Object.hasOwn(data, 'data')) {
-                return console.error('Invalid data:', data);
-            }
-            const { event, data: structData } = data as { 
-                event: 'create' | 'update' | 'archive' | 'delete' | 'restore'; 
-                data:  PartialStructable<T> & Structable<GlobalCols>; 
-            };
-            const { id } = structData;
-            
-            match(event)
-                .case('archive', () => {
-                    const d = this.cache.get(id);
-                    if (d) {
-                        d.set({
-                            ...d.data,
-                            archived: true,
-                        });
-                        this.emit('archive', d);
-                    }
-                })
-                .case('create', () => {
-                    const exists = this.cache.get(id);
-                    if (exists) return;
-                    const d = new StructData(this, structData);
-                    this.cache.set(id, d);
-                    this.emit('new', d);
-                })
-                .case('delete', () => {
-                    const d = this.cache.get(id);
-                    if (d) {
-                        this.cache.delete(id);
-                        this.emit('delete', d);
-                    }
-                })
-                .case('restore', () => {
-                    const d = this.cache.get(id);
-                    if (d) {
-                        d.set({
-                            ...d.data,
-                            archived: false,
-                        });
-                        this.emit('restore', d);
-                    }
-                })
-                .case('update', () => {
-                    const d = this.cache.get(id);
-                    if (d) {
-                        d.set(structData);
-                        this.emit('update', d);
-                    }
-                })
-                .default(() => console.error('Invalid event:', event))
-                .exec();
+
+    }
+
+    new(data: Structable<T>) {
+        return this.post(DataAction.Create, data);
+    }
+
+    private setListeners() {
+        return attempt(() => {
+            this.data.socket.on(`struct:${this.data.name}`, (data) => {
+                if (typeof data !== 'object' || data === null) {
+                    return console.error('Invalid data:', data);
+                }
+                if (!Object.hasOwn(data, 'event')) {
+                    return console.error('Invalid event:', data);
+                }
+                if (!Object.hasOwn(data, 'data')) {
+                    return console.error('Invalid data:', data);
+                }
+                const { event, data: structData } = data as { 
+                    event: 'create' | 'update' | 'archive' | 'delete' | 'restore'; 
+                    data:  PartialStructable<T> & Structable<GlobalCols>; 
+                };
+                const { id } = structData;
+                
+                match(event)
+                    .case('archive', () => {
+                        const d = this.cache.get(id);
+                        if (d) {
+                            d.set({
+                                ...d.data,
+                                archived: true,
+                            });
+                            this.emit('archive', d);
+                        }
+                    })
+                    .case('create', () => {
+                        const exists = this.cache.get(id);
+                        if (exists) return;
+                        const d = new StructData(this, structData);
+                        this.cache.set(id, d);
+                        this.emit('new', d);
+                    })
+                    .case('delete', () => {
+                        const d = this.cache.get(id);
+                        if (d) {
+                            this.cache.delete(id);
+                            this.emit('delete', d);
+                        }
+                    })
+                    .case('restore', () => {
+                        const d = this.cache.get(id);
+                        if (d) {
+                            d.set({
+                                ...d.data,
+                                archived: false,
+                            });
+                            this.emit('restore', d);
+                        }
+                    })
+                    .case('update', () => {
+                        const d = this.cache.get(id);
+                        if (d) {
+                            d.set(structData);
+                            this.emit('update', d);
+                        }
+                    })
+                    .default(() => console.error('Invalid event:', event))
+                    .exec();
+            });
         });
     }
 
@@ -373,6 +383,35 @@ export class Struct<T extends Blank> {
                     data,
                 }),
             });
+        });
+    }
+
+    build() {
+        return attemptAsync(async () => {
+            const connect = (await this.connect()).unwrap();
+            if (!connect.success) {
+                throw new FatalStructError(connect.message);
+            }
+
+            this.setListeners().unwrap();
+        });
+    }
+
+    connect() {
+        return attemptAsync<{
+            success: boolean;
+            message: string;
+        }>(async () => {
+            return fetch('/struct/connect', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    name: this.data.name,
+                    structure: this.data.structure, 
+                }),
+            }).then(r => r.json());
         });
     }
 
