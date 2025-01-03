@@ -465,7 +465,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
     }
     
     public readonly table: Table<T & typeof globalCols, Name>;
-    public readonly versionTable?: Table<T & typeof globalCols & typeof versionGlobalCols, Name>;
+    public readonly versionTable?: Table<T & typeof globalCols & typeof versionGlobalCols, `${Name}_history`>;
     public readonly eventEmitter = new EventEmitter<StructEvents<T, Name>>();
 
     public readonly on = this.eventEmitter.on.bind(this.eventEmitter);
@@ -477,19 +477,19 @@ export class Struct<T extends Blank = any, Name extends string = any> {
     public built = false;
 
     constructor(public readonly data: StructBuilder<T, Name>) {
-        Struct.structs.set(data.name, this as any);
+        Struct.structs.set(data.name, this as Struct);
 
         this.table = pgTable(data.name, {
             ...globalCols,
             ...data.structure,
-        }) as any;
+        });
 
         if (data.versionHistory) {
             this.versionTable = pgTable(`${data.name}_history`, {
                 ...globalCols,
                 ...versionGlobalCols,
                 ...data.structure,
-            }) as any;
+            });
         }
     }
 
