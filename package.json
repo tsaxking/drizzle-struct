@@ -6,7 +6,7 @@
   "module": "lib/index.js",
   "types": "lib/index.d.ts",
   "scripts": {
-    "build": "tsc && tsc -p tsconfig.commonjs.json",
+    "build": "tsc",
     "install": "npm run build"
   },
   "keywords": [],
