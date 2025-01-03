@@ -23,7 +23,7 @@
     "proper-lockfile": "^4.1.2",
     "svelte": "^5.16.0",
     "ts-node": "^10.9.2",
-    "ts-utils": "git+https://github.com/tsaxking/global-ts-utilities.git",
+		"ts-utils": "github:tsaxking/global-ts-utilities",
     "typescript": "^5.7.2",
     "uuid": "^11.0.3",
     "zod": "^3.24.1"

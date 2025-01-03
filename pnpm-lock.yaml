@@ -42,8 +42,8 @@ importers:
         specifier: ^10.9.2
         version: 10.9.2(@types/node@22.10.3)(typescript@5.7.2)
       ts-utils:
-        specifier: git+https://github.com/tsaxking/global-ts-utilities.git
-        version: global-ts-utilities@https://codeload.github.com/tsaxking/global-ts-utilities/tar.gz/2b053ec990898a15f353f18671e4bcc98e43615f
+        specifier: github:tsaxking/global-ts-utilities
+        version: https://codeload.github.com/tsaxking/global-ts-utilities/tar.gz/3d3c37c6526cdd5c601a99888eca925680e1557c
       typescript:
         specifier: ^5.7.2
         version: 5.7.2
@@ -1045,10 +1045,6 @@ packages:
   get-tsconfig@4.8.1:
     resolution: {integrity: sha512-k9PN+cFBmaLWtVz29SkUoqU5O0slLuHJXt/2P+tMVFT+phsSGXGkp9t3rQIqdz0e+06EHNGs3oM6ZX1s2zHxRg==}
 
-  global-ts-utilities@https://codeload.github.com/tsaxking/global-ts-utilities/tar.gz/2b053ec990898a15f353f18671e4bcc98e43615f:
-    resolution: {tarball: https://codeload.github.com/tsaxking/global-ts-utilities/tar.gz/2b053ec990898a15f353f18671e4bcc98e43615f}
-    version: 1.0.0
-
   graceful-fs@4.2.11:
     resolution: {integrity: sha512-RbJ5/jmFcNNCcDV5o9eTnBLJ/HszWV0P73bc+Ff4nS/rJj+YaS6IGyiOL0VoBYX+l1Wrl3k63h/KrH+nhJ0XvQ==}
 
@@ -1250,6 +1246,10 @@ packages:
         optional: true
       '@swc/wasm':
         optional: true
+
+  ts-utils@https://codeload.github.com/tsaxking/global-ts-utilities/tar.gz/3d3c37c6526cdd5c601a99888eca925680e1557c:
+    resolution: {tarball: https://codeload.github.com/tsaxking/global-ts-utilities/tar.gz/3d3c37c6526cdd5c601a99888eca925680e1557c}
+    version: 1.0.0
 
   tsx@4.19.2:
     resolution: {integrity: sha512-pOUl6Vo2LUq/bSa8S5q7b91cgNSjctn9ugq/+Mvow99qW6x/UZYwzxy/3NmqoT66eHYfCVvFvACC58UBPFf28g==}
@@ -1996,10 +1996,6 @@ snapshots:
     dependencies:
       resolve-pkg-maps: 1.0.0
 
-  global-ts-utilities@https://codeload.github.com/tsaxking/global-ts-utilities/tar.gz/2b053ec990898a15f353f18671e4bcc98e43615f:
-    dependencies:
-      typescript: 5.7.2
-
   graceful-fs@4.2.11: {}
 
   is-reference@3.0.3:
@@ -2203,6 +2199,10 @@ snapshots:
       typescript: 5.7.2
       v8-compile-cache-lib: 3.0.1
       yn: 3.1.1
+
+  ts-utils@https://codeload.github.com/tsaxking/global-ts-utilities/tar.gz/3d3c37c6526cdd5c601a99888eca925680e1557c:
+    dependencies:
+      typescript: 5.7.2
 
   tsx@4.19.2:
     dependencies:

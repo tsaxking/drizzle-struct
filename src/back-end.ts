@@ -2,12 +2,12 @@
 import { pgTable, text, timestamp, boolean, integer } from 'drizzle-orm/pg-core';
 import type { PgColumnBuilderBase, PgTableWithColumns } from 'drizzle-orm/pg-core';
 import { sql, type BuildColumns } from 'drizzle-orm';
-import { attempt, attemptAsync, resolveAll, type Result } from 'ts-utils/dist/check';
+import { attempt, attemptAsync, resolveAll, type Result } from 'ts-utils/check';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import { type ColumnDataType } from 'drizzle-orm';
-import { EventEmitter } from 'ts-utils/dist/event-emitter';
-import { Loop } from 'ts-utils/dist/loop';
-import { Stream } from 'ts-utils/dist/stream';
+import { EventEmitter } from 'ts-utils/event-emitter';
+import { Loop } from 'ts-utils/loop';
+import { Stream } from 'ts-utils/stream';
 import { ClientAPI, ServerAPI } from './api';
 import { z } from 'zod';
 import { v4 as uuid } from 'uuid';
@@ -371,15 +371,16 @@ export const toJson = <T extends Blank>(struct: Struct<T, string>, data: Structa
         for (const key in data) {
             // drizzle's type during compile and runtime are different, '_' at compile is 'config' at runtime
             const type = (struct.data.structure[key] as any).config.dataType as ColumnDataType;
+            const d = data[key];
             switch (type) {
                 case 'string':
                 case 'number':
                 case 'boolean':
-                    obj[key] = data[key];
+                    obj[key] = d;
                     break;
                 case 'date':
-                    if (data[key] instanceof Date) {
-                        obj[key] = data[key].toISOString();
+                    if (d instanceof Date) {
+                        obj[key] = d.toISOString();
                     }
                     break;
                 default:

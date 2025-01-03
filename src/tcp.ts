@@ -1,8 +1,8 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import net from 'net';
 import { z } from 'zod';
-import { EventEmitter } from 'ts-utils/dist/event-emitter';
-import { attemptAsync } from 'ts-utils/dist/check';
+import { EventEmitter } from 'ts-utils/event-emitter';
+import { attemptAsync } from 'ts-utils/check';
 
 type StructEvent = {
     struct: string;

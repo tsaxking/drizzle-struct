@@ -1,4 +1,4 @@
-import { match } from 'ts-utils/dist/match';
+import { match } from 'ts-utils/match';
 import { type ColType } from './types';
 
 export const checkStrType = (str: string, type: ColType): boolean => {
