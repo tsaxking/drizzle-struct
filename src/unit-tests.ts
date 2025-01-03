@@ -76,10 +76,6 @@ export const tcpTest = (server: Server, client: Client) => {
 };
 
 export const structTest = async (DB: PostgresJsDatabase, struct: Struct) => {
-    if (!struct.built) {
-        (await struct.build(DB)).unwrap();
-    }
-
     if (!struct.data.structure.name) {
         throw new Error('No name column');
     }
