@@ -2,12 +2,12 @@
 import { pgTable, text, timestamp, boolean, integer } from 'drizzle-orm/pg-core';
 import type { PgColumnBuilderBase, PgTableWithColumns } from 'drizzle-orm/pg-core';
 import { sql, type BuildColumns } from 'drizzle-orm';
-import { attempt, attemptAsync, resolveAll, type Result } from 'ts-utils/check';
+import { attempt, attemptAsync, resolveAll, type Result } from 'ts-utils/dist/check';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import { type ColumnDataType } from 'drizzle-orm';
-import { EventEmitter } from 'ts-utils/event-emitter';
-import { Loop } from 'ts-utils/loop';
-import { Stream } from 'ts-utils/stream';
+import { EventEmitter } from 'ts-utils/dist/event-emitter';
+import { Loop } from 'ts-utils/dist/loop';
+import { Stream } from 'ts-utils/dist/stream';
 import { ClientAPI, ServerAPI } from './api';
 import { z } from 'zod';
 import { v4 as uuid } from 'uuid';
