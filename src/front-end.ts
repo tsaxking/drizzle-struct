@@ -474,6 +474,7 @@ export class Struct<T extends Blank> {
                 }
 
                 chunks = chunks.filter(i => {
+                    if (i === 'end') done = true;
                     try {
                         JSON.parse(i);
                         return true;
