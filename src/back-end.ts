@@ -80,7 +80,7 @@ export type StructBuilder<T extends Blank, Name extends string> = {
 export type Data<T extends Struct<Blank, string>> = T['sample'];
 
 
-const globalCols = {
+export const globalCols = {
     id: text('id').primaryKey(),
     created: timestamp<'created', 'string'>('created').notNull(),
     updated: timestamp<'updated', 'string'>('updated').notNull(),
@@ -90,7 +90,7 @@ const globalCols = {
     lifetime: integer('lifetime').notNull(),
 };
 
-type Table<T extends Blank, TableName extends string> = PgTableWithColumns<{
+export type Table<T extends Blank, TableName extends string> = PgTableWithColumns<{
     name: TableName;
     schema: undefined;
     columns: BuildColumns<TableName, T, 'pg'>;
@@ -107,7 +107,7 @@ export class StructStream<T extends Blank = Blank, Name extends string = string>
     }
 }
 
-const versionGlobalCols = {
+export const versionGlobalCols = {
     vhId: text('vh_id').primaryKey(),
     id: text('id').notNull(), // Used to overwrite the other primary key
     vhCreated: timestamp<'vh_created', 'string'>('vh_created').notNull(),
@@ -392,7 +392,7 @@ export const toJson = <T extends Blank>(struct: Struct<T, string>, data: Structa
     });
 };
 
-type StructEvents<T extends Blank, Name extends string> = {
+export type StructEvents<T extends Blank, Name extends string> = {
     update: StructData<T, Name>;
     archive: StructData<T, Name>;
     delete: StructData<T, Name>;
@@ -404,19 +404,19 @@ type StructEvents<T extends Blank, Name extends string> = {
     'restore-version': DataVersion<T, Name>;
 };
 
-interface RequestEvent {
+export interface RequestEvent {
     request: Request;
     cookies: any;
 }
 
-type RequestAction = {
+export type RequestAction = {
     action: DataAction | PropertyAction;
     data: unknown;
-    event: RequestEvent;
+    request: RequestEvent;
     struct: Struct;
 };
 
-type TsType<T extends ColumnDataType> = T extends 'string' ? string : T extends 'number' ? number : T extends 'boolean' ? boolean : T extends 'timestamp' ? Date : never;
+export type TsType<T extends ColumnDataType> = T extends 'string' ? string : T extends 'number' ? number : T extends 'boolean' ? boolean : T extends 'timestamp' ? Date : never;
 
 export class Struct<T extends Blank = any, Name extends string = any> {
     public static async buildAll(database: PostgresJsDatabase, handler?: (event: RequestAction) => Promise<Response> | Response) {
@@ -439,7 +439,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
             const struct = Struct.structs.get(B.struct);
             if (!struct) return new Response('Struct not found', { status: 404 });
 
-            const response = (await struct._eventHandler?.({ action: B.action, data: B.data, event, struct }));
+            const response = (await struct._eventHandler?.({ action: B.action, data: B.data, request: event, struct }));
             if (response) return response;
 
             return new Response('Not implemented', { status: 501 });
@@ -863,7 +863,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
         });
     }
 
-    private readonly bypasses: {
+    public readonly bypasses: {
         action: DataAction | PropertyAction | '*';
         condition: (account: Account, data?: any) => boolean;
     }[] = [];
@@ -876,7 +876,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
     }
 }
 
-interface Account {
+export interface Account {
     data: {
         id: string;
         username: string;
