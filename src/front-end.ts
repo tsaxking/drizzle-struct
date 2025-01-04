@@ -113,8 +113,8 @@ export class StructData<T extends Blank> implements Writable< PartialStructable<
         });
     }
 
-    setArchive<StatusMessage>(archive: boolean) {
-        return attemptAsync(async () => {
+    setArchive(archive: boolean) {
+        return attemptAsync<StatusMessage>(async () => {
             if (archive) {
                 return this.struct.post(DataAction.Archive, {
                     id: this.data.id,
