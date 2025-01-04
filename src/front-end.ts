@@ -101,8 +101,11 @@ export class StructData<T extends Blank> implements Writable< PartialStructable<
     public async update(fn: (value: PartialStructable<T> & Structable<GlobalCols>) => PartialStructable<T> & Structable<GlobalCols>) {
         return attemptAsync(async () => {
             const prev = { ...this.data };
-            (await this.struct.post(PropertyAction.Update, fn(this.data))).unwrap();
-            return () => this.update(() => prev);
+            const res = (await this.struct.post(PropertyAction.Update, fn(this.data))).unwrap();
+            return {
+                result: await res.json(),
+                undo: () => this.update(() => prev),
+            }
         });
     }
 
