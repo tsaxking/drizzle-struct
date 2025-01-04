@@ -461,7 +461,7 @@ export class Struct<T extends Blank> {
             reader.read().then(({ done, value }) => {
                 this.log('Stream Read:', done, value);
                 const text = new TextDecoder().decode(value);
-                const chunks = text.split('\n\n');
+                let chunks = text.split('\n\n');
                 this.log('Stream Chunks:', ...chunks);
 
                 if (buffer) {
@@ -472,6 +472,15 @@ export class Struct<T extends Blank> {
                 if (!text.endsWith('\n\n')) {
                     buffer = chunks.pop() || '';
                 }
+
+                chunks = chunks.filter(i => {
+                    try {
+                        JSON.parse(i);
+                        return true;
+                    } catch {
+                        return false;
+                    }
+                });
 
                 for (const chunk of chunks) {
                     try {

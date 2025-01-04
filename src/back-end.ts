@@ -565,6 +565,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
                 for (let i = 0; i < dataStream.length; i++) {
                     stream.add(this.Generator(dataStream[i] as any));
                 }
+                stream.end();
             })();
             return stream;
         } else {
@@ -586,6 +587,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
                 for (let i = 0; i < dataStream.length; i++) {
                     stream.add(this.Generator(dataStream[i] as any));
                 }
+                stream.end();
             })();
             return stream;
         } else {
@@ -607,6 +609,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
                 for (let i = 0; i < dataStream.length; i++) {
                     stream.add(this.Generator(dataStream[i] as any));
                 }
+                stream.end();
             })();
             return stream;
         } else {
@@ -628,6 +631,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
                 for (let i = 0; i < dataStream.length; i++) {
                     stream.add(this.Generator(dataStream[i] as any));
                 }
+                stream.end();
             })();
             return stream;
         } else {
@@ -661,6 +665,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
                 for (let i = 0; i < dataStream.length; i++) {
                     stream.add(this.Generator(dataStream[i] as any));
                 }
+                stream.end();
             })();
             return stream;
         } else {
