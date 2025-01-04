@@ -114,7 +114,7 @@ export class StructData<T extends Blank> implements Writable< PartialStructable<
 
             const res = (await this.struct.post(PropertyAction.Update, result)).unwrap();
             return {
-                result: await res.json(),
+                result: await res.json() as StatusMessage,
                 undo: () => this.update(() => prev),
             }
         });
