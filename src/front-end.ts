@@ -454,9 +454,12 @@ export class Struct<T extends Blank> {
                 return;
             }
 
+            this.log('Stream Reader:', reader);
+
             let buffer = '';
 
             reader.read().then(({ done, value }) => {
+                this.log('Stream Read:', done, value);
                 const text = new TextDecoder().decode(value);
                 const chunks = text.split('\n\n');
 
@@ -471,10 +474,14 @@ export class Struct<T extends Blank> {
 
                 for (const chunk of chunks) {
                     const data = JSON.parse(decode(chunk));
+                    this.log('Stream Data:', data);
                     s.add(this.Generator(data));
                 }
 
-                if (done) s.end();
+                if (done) {
+                    this.log('Stream Done');
+                    s.end();
+                }
             });
         });
         return s;
