@@ -112,7 +112,7 @@ export class StructData<T extends Blank> implements Writable< PartialStructable<
             delete result.universes;
             delete result.attributes;
 
-            const res = (await this.struct.post(PropertyAction.Update, fn(this.data))).unwrap();
+            const res = (await this.struct.post(PropertyAction.Update, result)).unwrap();
             return {
                 result: await res.json(),
                 undo: () => this.update(() => prev),

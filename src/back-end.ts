@@ -711,55 +711,58 @@ export class Struct<T extends Blank = any, Name extends string = any> {
         this._eventHandler = fn;
     }
 
-    validate(data: unknown, config?: {
-        // if it doesn't have it, ignore
-        // if it does, it must be the correct type
-        optionals?: string[];
-        not?: string[];
-    }) {
-        if (typeof data !== 'object' || data === null) return false;
-        
+    validate(data: unknown, config?: { optionals?: string[]; not?: string[] }): boolean {
+        if (data === null || Array.isArray(data) || typeof data !== 'object') return false;
+    
         const keys = Object.keys(data);
-
         if (config?.not) {
+            const keySet = new Set(keys);
             for (const n of config.not) {
-                if (keys.includes(n)) return false;
+                if (keySet.has(n)) return false;
             }
         }
-
+    
+        const createSchema = (type: any, key: string) =>
+            config?.optionals?.includes(key) ? type.optional() : type;
+    
         try {
-            z.object({
-                id: config?.optionals?.includes('id') ? z.string().optional() : z.string(),
-                created: config?.optionals?.includes('created') ? z.date().optional() : z.date(),
-                updated: config?.optionals?.includes('updated') ? z.date().optional() : z.date(),
-                archived: config?.optionals?.includes('archived') ? z.boolean().optional() : z.boolean(),
-                universes: config?.optionals?.includes('universes') ? z.string().optional() : z.string(),
-                attributes: config?.optionals?.includes('attributes') ? z.string().optional() : z.string(),
-                lifetime: config?.optionals?.includes('lifetime') ? z.number().optional() : z.number(),
-                ...Object.fromEntries(Object.entries(this.data.structure).map(([k, v]) => {
-                    const optional = !!config?.optionals?.includes(k);
-                    const type = (v as any).config.dataType as ColumnDataType;
+            const schema = z
+                .object({
+                    id: createSchema(z.string(), 'id'),
+                    created: createSchema(z.date().refine((d) => !isNaN(d.getTime()), { message: 'Invalid date' }), 'created'),
+                    updated: createSchema(z.date().refine((d) => !isNaN(d.getTime()), { message: 'Invalid date' }), 'updated'),
+                    archived: createSchema(z.boolean(), 'archived'),
+                    universes: createSchema(z.string(), 'universes'),
+                    attributes: createSchema(z.string(), 'attributes'),
+                    lifetime: createSchema(z.number(), 'lifetime'),
+                    ...Object.fromEntries(
+                        Object.entries(this.data.structure).map(([k, v]) => {
+                            const type = (v as any).config.dataType as ColumnDataType;
+                            const schemaType = (() => {
+                                switch (type) {
+                                    case 'number': return z.number();
+                                    case 'string': return z.string();
+                                    case 'boolean': return z.boolean();
+                                    case 'date': return z.date();
+                                    default: throw new DataError(`Invalid data type: ${type} in ${k} of ${this.name}`);
+                                }
+                            })();
+                            return [k, createSchema(schemaType, k)];
+                        })
+                    ),
+                })
+                .strict(); // Disallow additional keys
     
-                    switch (type) {
-                        case 'number':
-                            return [k, optional ? z.number().optional() : z.number()];
-                        case 'string':
-                            return [k, optional ? z.string().optional() : z.string()];
-                        case 'boolean':
-                            return [k, optional ? z.boolean().optional() : z.boolean()];
-                        case 'date':
-                            return [k, optional ? z.date().optional() : z.date()];
-                        default:
-                            throw new DataError(`Invalid data type: ${type} in ${k} of ${this.name}`);
-                    }
-                })),
-            }).parse(data);
+            schema.parse(data);
             return true;
-    
         } catch (error) {
-            return false;
+            if (error instanceof z.ZodError) {
+                return false;
+            }
+            throw error; // Unexpected errors
         }
     }
+    
 
     hash() {
         return attemptAsync(async () => {
