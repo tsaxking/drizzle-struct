@@ -70,6 +70,12 @@ export type Structable<T extends Blank> = {
     [K in keyof T]: ColTsType<T[K]>;
 };
 
+export type StatusMessage<T = void> = {
+    success: boolean;
+    data?: T;
+    message?: string;
+}
+
 
 export class StructData<T extends Blank> implements Writable< PartialStructable<T> & Structable<GlobalCols>> {
     constructor(public readonly struct: Struct<T>, public data: PartialStructable<T> & Structable<GlobalCols>) {}
@@ -100,19 +106,23 @@ export class StructData<T extends Blank> implements Writable< PartialStructable<
     }
 
     delete() {
-        return this.struct.post(DataAction.Delete, {
-            id: this.data.id,
+        return attemptAsync<StatusMessage>(async () => {
+            return this.struct.post(DataAction.Delete, {
+                id: this.data.id,
+            }).then(r => r.unwrap().json());
         });
     }
 
-    setArchive(archive: boolean) {
-        if (archive) {
-            return this.struct.post(DataAction.Archive, {
+    setArchive<StatusMessage>(archive: boolean) {
+        return attemptAsync(async () => {
+            if (archive) {
+                return this.struct.post(DataAction.Archive, {
+                    id: this.data.id,
+                }).then(r => r.unwrap().json());
+            }
+            return this.struct.post(DataAction.RestoreArchive, {
                 id: this.data.id,
-            });
-        }
-        return this.struct.post(DataAction.RestoreArchive, {
-            id: this.data.id,
+            }).then(r => r.unwrap().json());
         });
     }
 
@@ -277,7 +287,9 @@ export class Struct<T extends Blank> {
     }
 
     new(data: Structable<T>) {
-        return this.post(DataAction.Create, data);
+        return attemptAsync<StatusMessage>(async () => {
+            return this.post(DataAction.Create, data).then(r => r.unwrap().json()) ;
+        });
     }
 
     private setListeners() {
