@@ -295,6 +295,7 @@ export class Struct<T extends Blank> {
     private setListeners() {
         return attempt(() => {
             this.data.socket.on(`struct:${this.data.name}`, (data) => {
+                console.log('Data:', data);
                 if (typeof data !== 'object' || data === null) {
                     return console.error('Invalid data:', data);
                 }
@@ -309,9 +310,13 @@ export class Struct<T extends Blank> {
                     data:  PartialStructable<T> & Structable<GlobalCols>; 
                 };
                 const { id } = structData;
+
+                console.log('Event:', event);
+                console.log('Data:', structData);
                 
                 match(event)
                     .case('archive', () => {
+                        console.log('Archive:', structData);
                         const d = this.cache.get(id);
                         if (d) {
                             d.set({
@@ -322,6 +327,7 @@ export class Struct<T extends Blank> {
                         }
                     })
                     .case('create', () => {
+                        console.log('Create:', structData);
                         const exists = this.cache.get(id);
                         if (exists) return;
                         const d = new StructData(this, structData);
@@ -329,6 +335,7 @@ export class Struct<T extends Blank> {
                         this.emit('new', d);
                     })
                     .case('delete', () => {
+                        console.log('Delete:', structData);
                         const d = this.cache.get(id);
                         if (d) {
                             this.cache.delete(id);
@@ -336,6 +343,7 @@ export class Struct<T extends Blank> {
                         }
                     })
                     .case('restore', () => {
+                        console.log('Restore:', structData);
                         const d = this.cache.get(id);
                         if (d) {
                             d.set({
@@ -346,6 +354,7 @@ export class Struct<T extends Blank> {
                         }
                     })
                     .case('update', () => {
+                        console.log('Update:', structData);
                         const d = this.cache.get(id);
                         if (d) {
                             d.set(structData);
