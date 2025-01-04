@@ -98,9 +98,20 @@ export class StructData<T extends Blank> implements Writable< PartialStructable<
     }
 
     // this is what will send to the backend
-    public async update(fn: (value: PartialStructable<T> & Structable<GlobalCols>) => PartialStructable<T> & Structable<GlobalCols>) {
+    public async update(fn: (value: PartialStructable<T> & Structable<GlobalCols>) => PartialStructable<T> & Structable<{
+        id: 'string';
+    }>) {
         return attemptAsync(async () => {
             const prev = { ...this.data };
+
+            const result = fn(this.data);
+            delete result.archived;
+            delete result.created;
+            delete result.updated;
+            delete result.lifetime;
+            delete result.universes;
+            delete result.attributes;
+
             const res = (await this.struct.post(PropertyAction.Update, fn(this.data))).unwrap();
             return {
                 result: await res.json(),
