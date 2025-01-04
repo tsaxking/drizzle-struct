@@ -441,12 +441,12 @@ export class Struct<T extends Blank> {
         });
     }
 
-    private getStream<K extends keyof ReadTypes>(type: K, data: ReadTypes[K]): StructStream<T> {
-        this.log('Stream:', type, data);
+    private getStream<K extends keyof ReadTypes>(type: K, args: ReadTypes[K]): StructStream<T> {
+        this.log('Stream:', type, args);
         const s = new StructStream(this);
         this.post(PropertyAction.Read, {
             type,
-            data,
+            args,
         }).then((res) => {
             this.log('Stream Result:', res);
             const reader = res.unwrap().body?.getReader();
