@@ -60,6 +60,7 @@ export type StructBuilder<T extends Blank> = {
     name: string;
     structure: T;
     socket: Socket;
+    log?: boolean;
 };
 
 export type PartialStructable<T extends Blank> = {
@@ -295,7 +296,7 @@ export class Struct<T extends Blank> {
     private setListeners() {
         return attempt(() => {
             this.data.socket.on(`struct:${this.data.name}`, (data) => {
-                console.log('Data:', data);
+                this.log('Data:', data);
                 if (typeof data !== 'object' || data === null) {
                     return console.error('Invalid data:', data);
                 }
@@ -311,12 +312,12 @@ export class Struct<T extends Blank> {
                 };
                 const { id } = structData;
 
-                console.log('Event:', event);
-                console.log('Data:', structData);
+                this.log('Event:', event);
+                this.log('Data:', structData);
                 
                 match(event)
                     .case('archive', () => {
-                        console.log('Archive:', structData);
+                        this.log('Archive:', structData);
                         const d = this.cache.get(id);
                         if (d) {
                             d.set({
@@ -327,7 +328,7 @@ export class Struct<T extends Blank> {
                         }
                     })
                     .case('create', () => {
-                        console.log('Create:', structData);
+                        this.log('Create:', structData);
                         const exists = this.cache.get(id);
                         if (exists) return;
                         const d = new StructData(this, structData);
@@ -335,7 +336,7 @@ export class Struct<T extends Blank> {
                         this.emit('new', d);
                     })
                     .case('delete', () => {
-                        console.log('Delete:', structData);
+                        this.log('Delete:', structData);
                         const d = this.cache.get(id);
                         if (d) {
                             this.cache.delete(id);
@@ -343,7 +344,7 @@ export class Struct<T extends Blank> {
                         }
                     })
                     .case('restore', () => {
-                        console.log('Restore:', structData);
+                        this.log('Restore:', structData);
                         const d = this.cache.get(id);
                         if (d) {
                             d.set({
@@ -354,7 +355,7 @@ export class Struct<T extends Blank> {
                         }
                     })
                     .case('update', () => {
-                        console.log('Update:', structData);
+                        this.log('Update:', structData);
                         const d = this.cache.get(id);
                         if (d) {
                             d.set(structData);
@@ -393,7 +394,7 @@ export class Struct<T extends Blank> {
 
     post(action: DataAction | PropertyAction, data: unknown) {
         return attemptAsync(async () => {
-            return fetch('/struct', {
+            const res = await fetch('/struct', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -404,11 +405,14 @@ export class Struct<T extends Blank> {
                     data,
                 }),
             });
+            this.log('Post:', action, data, res);
+            return res;
         });
     }
 
     build() {
         return attemptAsync(async () => {
+            this.log('Building struct:', this.data.name);
             const connect = (await this.connect()).unwrap();
             if (!connect.success) {
                 throw new FatalStructError(connect.message);
@@ -423,6 +427,7 @@ export class Struct<T extends Blank> {
             success: boolean;
             message: string;
         }>(async () => {
+            this.log('Connecting to struct:', this.data.name);
             return fetch('/struct/connect', {
                 method: 'POST',
                 headers: {
@@ -437,11 +442,13 @@ export class Struct<T extends Blank> {
     }
 
     private getStream<K extends keyof ReadTypes>(type: K, data: ReadTypes[K]): StructStream<T> {
+        this.log('Stream:', type, data);
         const s = new StructStream(this);
         this.post(PropertyAction.Read, {
             type,
             data,
         }).then((res) => {
+            this.log('Stream Result:', res);
             const reader = res.unwrap().body?.getReader();
             if (!reader) {
                 return;
@@ -615,5 +622,12 @@ export class Struct<T extends Blank> {
             const data = await res.unwrap().json();
             return this.Generator(data);
         });
+    }
+
+
+    private log(...args: any[]) {
+        if (this.data.log) {
+            this.log(this.data.name + ':', ...args);
+        }
     }
 };
