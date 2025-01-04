@@ -462,6 +462,7 @@ export class Struct<T extends Blank> {
                 this.log('Stream Read:', done, value);
                 const text = new TextDecoder().decode(value);
                 const chunks = text.split('\n\n');
+                this.log('Stream Chunks:', ...chunks);
 
                 if (buffer) {
                     chunks[0] = buffer + chunks[0];
@@ -473,9 +474,13 @@ export class Struct<T extends Blank> {
                 }
 
                 for (const chunk of chunks) {
-                    const data = JSON.parse(decode(chunk));
-                    this.log('Stream Data:', data);
-                    s.add(this.Generator(data));
+                    try {
+                        const data = JSON.parse(decode(chunk));
+                        this.log('Stream Data:', data);
+                        s.add(this.Generator(data));
+                    } catch (error) {
+                        console.error('Invalid JSON:', chunk);
+                    }
                 }
 
                 if (done) {
