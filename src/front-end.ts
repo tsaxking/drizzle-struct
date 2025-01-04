@@ -627,7 +627,7 @@ export class Struct<T extends Blank> {
 
     private log(...args: any[]) {
         if (this.data.log) {
-            this.log(this.data.name + ':', ...args);
+            console.log(this.data.name + ':', ...args);
         }
     }
 };
