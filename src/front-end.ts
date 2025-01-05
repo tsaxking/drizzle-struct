@@ -77,6 +77,59 @@ export type StatusMessage<T = void> = {
     message?: string;
 }
 
+export class StructDataVersion<T extends Blank> {
+    constructor(public readonly struct: Struct<T>, public readonly data: PartialStructable<T> & Structable<GlobalCols> & Structable<{
+        vhId: 'string';
+        vhCreated: 'date';
+    }>) {}
+
+    get vhId() {
+        return this.data.vhId;
+    }
+
+    get id() {
+        return this.data.id;
+    }
+
+    get vhCreated() {   
+        return this.data.vhCreated;
+    }
+
+    get created() {
+        return this.data.created;
+    }
+
+    get updated() {
+        return this.data.updated;
+    }
+
+    get archived() {
+        return this.data.archived;
+    }
+
+    get lifetime() {
+        return this.data.lifetime;
+    }
+
+    delete() {
+        return attemptAsync<StatusMessage>(async () => {
+            return this.struct.post(DataAction.DeleteVersion, {
+                id: this.data.id,
+                vhId: this.data.vhId,
+            }).then(r => r.unwrap().json());
+        });
+    }
+
+    restore() {
+        return attemptAsync<StatusMessage>(async () => {
+            return this.struct.post(DataAction.RestoreVersion, {
+                id: this.data.id,
+                vhId: this.data.vhId,
+            }).then(r => r.unwrap().json());
+        });
+    }
+}
+
 
 export class StructData<T extends Blank> implements Writable< PartialStructable<T> & Structable<GlobalCols>> {
     constructor(public readonly struct: Struct<T>, public data: PartialStructable<T> & Structable<GlobalCols>) {}
@@ -204,6 +257,14 @@ export class StructData<T extends Blank> implements Writable< PartialStructable<
     // addAttributes(...attributes: string[]) {}
     // removeAttributes(...attributes: string[]) {}
     // setAttributes(...attributes: string[]) {}
+
+    getVersions() {
+        return attemptAsync(async () => {
+            const versions = await this.struct.post(DataAction.ReadVersionHistory, {
+                id: this.data.id
+            }).then(r => r.unwrap().json());
+        });
+    }
 }
 
 export class DataArr<T extends Blank> implements Readable<StructData<T>[]> {
