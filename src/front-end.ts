@@ -77,6 +77,11 @@ export type StatusMessage<T = void> = {
     message?: string;
 }
 
+export type VersionStructable<T extends Blank> = Structable<{
+    vhId: 'string';
+    vhCreated: 'date';
+}> & PartialStructable<T> & Structable<GlobalCols>;
+
 export class StructDataVersion<T extends Blank> {
     constructor(public readonly struct: Struct<T>, public readonly data: PartialStructable<T> & Structable<GlobalCols> & Structable<{
         vhId: 'string';
@@ -262,7 +267,13 @@ export class StructData<T extends Blank> implements Writable< PartialStructable<
         return attemptAsync(async () => {
             const versions = await this.struct.post(DataAction.ReadVersionHistory, {
                 id: this.data.id
-            }).then(r => r.unwrap().json());
+            }).then(r => r.unwrap().json()) as StatusMessage<VersionStructable<T>[]>;
+        
+            if (!versions.success) {
+                throw new DataError(versions.message || 'Failed to get versions');
+            }
+
+            return versions.data?.map(v => new StructDataVersion(this.struct, v)) || [];
         });
     }
 }
