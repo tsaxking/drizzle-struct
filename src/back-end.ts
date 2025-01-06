@@ -8,10 +8,11 @@ import { type ColumnDataType } from 'drizzle-orm';
 import { EventEmitter } from 'ts-utils/event-emitter';
 import { Loop } from 'ts-utils/loop';
 import { Stream } from 'ts-utils/stream';
-import { ClientAPI, ServerAPI } from './api';
+import { Client, Server } from './tcp';
 import { z } from 'zod';
 import { v4 as uuid } from 'uuid';
 import { DataAction, PropertyAction } from './types';
+import { ClientAPI, ServerAPI } from './api';
 
 export class StructError extends Error {
     constructor(message: string) {
@@ -781,18 +782,18 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 
     startReflection(API: ClientAPI | ServerAPI) {
         return attempt(() => {
-            let connected = false;
-            if (API instanceof ClientAPI) {
-                const { reflect } = this.data;
-                if (!reflect) return;
+            // let connected = false;
+            // if (API instanceof ClientAPI) {
+            //     const { reflect } = this.data;
+            //     if (!reflect) return;
 
-                API.client.listen('connect', () => connected = true);
-                API.client.listen('disconnect', () => {
-                    connected = false;
-                });
-            } else {
-                // ServerAPI
-            }
+            //     API.client.listen('connect', () => connected = true);
+            //     API.client.listen('disconnect', () => {
+            //         connected = false;
+            //     });
+            // } else {
+            //     // ServerAPI
+            // }
 
             this.on('archive', (d) => API.send('archive', d.id));
             // this.on('build', (d) => API.send('build'));
