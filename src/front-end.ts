@@ -220,7 +220,7 @@ export class StructData<T extends Blank> implements Writable< PartialStructable<
 
             subscribe(fn: (data: typeof o) => void) {
                 this.subscribers.add(fn);
-                fn(this.data);
+                fn(o);
                 return () => {
                     this.subscribers.delete(fn);
                     if (this.subscribers.size === 0) {
