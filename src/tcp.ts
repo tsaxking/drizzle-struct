@@ -12,7 +12,7 @@ import { v4 as uuid } from 'uuid';
 export type StructEvent = {
     struct: string;
     event: keyof StructEvents;
-    data: string;
+    data: unknown;
 };
 
 export type Events = {
@@ -282,7 +282,7 @@ export class ClientConnection {
                             const struct = z.object({
                                 struct: z.string(),
                                 event: z.string(),
-                                data: z.string(),
+                                data: z.any(),
                             }).parse(parsed.data);
                             this.server.emit('struct', {
                                 timestamp: parsed.timestamp,
@@ -297,7 +297,7 @@ export class ClientConnection {
                         {
                             const query = z.object({
                                 qid: z.string(),
-                                type: z.string(),
+                                type: z.enum(['all', 'fromId', 'fromProperty', 'versions', 'fromUniverse', 'archived']),
                                 args: z.any(),
                                 struct: z.string(),
                             }).parse(parsed.data);
@@ -443,12 +443,6 @@ export class Server {
         };
 
         attemptReconnect();
-    }
-
-    listen<T extends keyof StructEvents>(event: T, cb: (data: StructEvent & {
-        timestamp: number;
-    }) => void) {
-        this.on('struct', cb);
     }
 
     send<K extends keyof Events>(event: K, data: Events[K]) {

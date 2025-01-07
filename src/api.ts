@@ -19,6 +19,9 @@ export type StructEvents<T = unknown> = {
         type: keyof QueryTypes;
         args: QueryTypes[keyof QueryTypes];
     } }
+
+    // response, no timestamp
+    'query-data': T;
 };
 
 export type QueryTypes = {
@@ -50,7 +53,7 @@ export class ServerAPI {
                     return console.error('Unauthorized');
                 }
                 try {
-                    const parsed = JSON.parse(payload.data);
+                    const parsed = payload.data;
                     switch (payload.event) {
                         case 'archive':
                             this.emit('archive', {
@@ -116,7 +119,7 @@ export class ServerAPI {
 
     async send<T extends keyof StructEvents>(struct: string, event: T, data: unknown) {
         this.server.send('struct', {
-            data: JSON.stringify(data),
+            data: data,
             event: event,
             struct,
         });
@@ -215,7 +218,7 @@ export class ClientAPI {
 
     async send<T extends keyof StructEvents>(struct: string, event: T, data: unknown) {
         this.client.send('struct', {
-            data: JSON.stringify(data),
+            data: data,
             event: event,
             struct,
         });

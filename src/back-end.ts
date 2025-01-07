@@ -895,7 +895,27 @@ export class Struct<T extends Blank = any, Name extends string = any> {
                 })).unwrap();
             });
 
-            em.on('query', async (event) => {});
+            em.on('query', async (event) => {
+                const pipe = (data: StructData<T>) => API.send(this.name, 'query-data', data.safe());
+                switch (event.data.type) {
+                    case 'all':
+                        this.all(true).pipe(pipe);
+                        break;
+                    case 'archived':
+                        this.archived(true).pipe(pipe);
+                        break;
+                    case 'fromId':
+                        this.fromId((event.data.args as any).id).then(r => {
+                            if (r.isOk() && r.value) pipe(r.value);
+                        });
+                    case 'fromProperty':
+                        this.fromProperty((event.data.args as any).property, (event.data.args as any).value, true).pipe(pipe);
+                        break;
+                    case 'fromUniverse':
+                        this.fromUniverse((event.data.args as any).universe, true).pipe(pipe);
+                        break;
+                }
+            });
         });
     }
 
