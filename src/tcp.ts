@@ -5,10 +5,13 @@ import { EventEmitter } from 'ts-utils/event-emitter';
 import { attemptAsync } from 'ts-utils/check';
 import { CachedEvents } from './cached-events';
 import { Loop } from 'ts-utils/loop';
-import { StructEvents } from './api';
+import { QueryTypes, StructEvents } from './api';
+import { Stream } from 'ts-utils/stream';
+import { v4 as uuid } from 'uuid';
+
 export type StructEvent = {
     struct: string;
-    event: string;
+    event: keyof StructEvents;
     data: string;
 };
 
@@ -16,6 +19,27 @@ export type Events = {
     i_am: string;
     struct: StructEvent;
     test: { test: string };
+    ack: number;
+    'query': {
+        qid: string;
+        type: keyof QueryTypes;
+        args: QueryTypes[keyof QueryTypes];
+        struct: string;
+    };
+    'query-data': {
+        qid: string;
+        data: unknown;
+    };
+    'query-error': {
+        qid: string;
+        error: string;
+    };
+    'query-start': {
+        qid: string;
+    }
+    'query-end': {
+        qid: string;
+    }
 };
 
 type EventPacket<K extends keyof Events = keyof Events> = {
@@ -99,11 +123,16 @@ class TCPEventHandler {
             this.save();
         });
         this.on('event', async (packet) => {
+            // We ignore because we don't want to retransmit acks or queries as they don't change anything. It's okay if they're a little lossy
+            if (packet.event === 'ack') return;
             const id = await this.getNewId();
-            const event = new Event(packet.event, packet.data, Date.now(), id);
+            const event = new Event(packet.event, packet.data as any, Date.now(), id);
             if (this.connected) {
-                this.cache.set(id, event);
-                event.tries++;
+                // Don't cache query packets
+                if (!packet.event.includes('query')) {
+                    this.cache.set(id, event);
+                    event.tries++;
+                }
                 this.send(event);
             } else {
                 event.save();
@@ -213,14 +242,8 @@ class TCPSocket {
 
 // This is a client connection to the server
 export class ClientConnection {
-    private readonly emitter = new EventEmitter<{
+    private readonly emitter = new EventEmitter<Events & {
         disconnect: void;
-        struct: {
-            struct: string;
-            event: string;
-            data: string;
-            timestamp: number;
-        }
     }>();
     public readonly on = this.emitter.on.bind(this.emitter);
     public readonly off = this.emitter.off.bind(this.emitter);
@@ -248,25 +271,59 @@ export class ClientConnection {
                     this.handler.ack(parsed.data);
                     return;
                 }
-    
-                if (parsed.event === 'struct') {
-                    const struct = z.object({
-                        struct: z.string(),
-                        event: z.string(),
-                        data: z.string(),
-                    }).parse(parsed.data);
-                    this.emit('struct', {
-                        timestamp: parsed.timestamp,
-                        struct: struct.struct,
-                        event: struct.event,
-                        data: struct.data,
-                    });
+
+                switch (parsed.event) {
+                    case 'i_am':
+                        this._apiKey = parsed.data;
+                        this.server.emit('client_connected', this._apiKey);
+                    break;
+                    case 'struct':
+                        {    
+                            const struct = z.object({
+                                struct: z.string(),
+                                event: z.string(),
+                                data: z.string(),
+                            }).parse(parsed.data);
+                            this.server.emit('struct', {
+                                timestamp: parsed.timestamp,
+                                struct: struct.struct,
+                                event: struct.event as keyof StructEvents,
+                                data: struct.data,
+                                apiKey: this.apiKey,
+                            });
+                        }
+                        break;
+                    case 'query':
+                        {
+                            const query = z.object({
+                                qid: z.string(),
+                                type: z.string(),
+                                args: z.any(),
+                                struct: z.string(),
+                            }).parse(parsed.data);
+                            this.server.emit('struct', {
+                                apiKey: this.apiKey,
+                                timestamp: parsed.timestamp,
+                                struct: query.struct,
+                                event: 'query',
+                                data: query,
+                            });
+                        }
+                    default:
+                        this.server.emit(parsed.event as keyof Events, parsed.data);
+                        break;
                 }
                 this.handler.sendAck(parsed.id);
             } catch (error) {
                 console.error(error);
             }
         });
+    }
+
+    private _apiKey = '';
+
+    get apiKey() {
+        return this._apiKey;
     }
 
     send<K extends keyof Events>(event: K, data: Events[K]) {
@@ -281,10 +338,15 @@ export class Server {
         client_connected: string; // client key
         client_disconnected: string; // client key
         reconnect_attempt: { key: string; attempt: number; delay: number };
+        struct: StructEvent & {
+            timestamp: number;
+            apiKey: string;
+        };
     }>();
-    private readonly on = this.emitter.on.bind(this.emitter);
-    private readonly off = this.emitter.off.bind(this.emitter);
-    private readonly once = this.emitter.once.bind(this.emitter);
+    public readonly on = this.emitter.on.bind(this.emitter);
+    public readonly off = this.emitter.off.bind(this.emitter);
+    public readonly once = this.emitter.once.bind(this.emitter);
+    public readonly emit = this.emitter.emit.bind(this.emitter);
 
     private readonly server: net.Server;
     private maxReconnectDelay = 30000; // 30 seconds
@@ -292,8 +354,8 @@ export class Server {
     private maxReconnectAttempts = 5;
 
     constructor(
-        public readonly port: number,
         public readonly host: string,
+        public readonly port: number,
         private readonly testKey: (key: string) => Promise<boolean> | boolean
     ) {
         this.server = net.createServer((socket) => this.handleNewConnection(socket));
@@ -383,8 +445,14 @@ export class Server {
         attemptReconnect();
     }
 
-    listen<T extends keyof StructEvents>(event: T, cb: (data: { data: string; timestamp: number; }) => void, zod?: z.ZodType<Events[T]>) {
+    listen<T extends keyof StructEvents>(event: T, cb: (data: StructEvent & {
+        timestamp: number;
+    }) => void) {
+        this.on('struct', cb);
+    }
 
+    send<K extends keyof Events>(event: K, data: Events[K]) {
+        for (const c of this.clients.values()) c.connection?.send(event, data);
     }
 }
 
@@ -392,7 +460,7 @@ export class Server {
 
 // This is the client that will connect to the server
 export class Client {
-    private readonly emitter = new EventEmitter<{
+    private readonly emitter = new EventEmitter<Events & {
         connect: void;
         disconnect: void;
         reconnect_attempt: { attempt: number; delay: number };
@@ -440,20 +508,74 @@ export class Client {
             this.startReconnect();
         });
 
-        socket.on('data', (data) => {
+        socket.on('data', (payload) => {
             try {
-                const event = JSON.parse(data.toString());
+                const event = JSON.parse(payload.toString());
                 const parsed = z.object({
                     event: z.string(),
                     data: z.any(),
                     id: z.number(),
                     timestamp: z.number(),
-                }).parse(event);
-                if (parsed.event === 'ack') {
-                    this.handler?.ack(parsed.data);
-                    return;
-                }
+                }).parse(event) as EventPacket;
 
+                switch (parsed.event) {
+                    case 'ack':
+                        this.handler?.ack(z.number().parse(parsed.data));
+                        return;
+                    case 'query-data':
+                        {
+                            const data = z.object({
+                                qid: z.string(),
+                                data: z.any(),
+                            }).parse(parsed.data);
+
+                            const stream = this.queries.get(data.qid);
+                            if (!stream) {
+                                console.warn('Query not found');
+                                return;
+                            }
+
+                            stream.add(data.data);
+                        }
+                        break;
+                    case 'query-end':
+                        {
+                            const data = z.object({
+                                qid: z.string(),
+                            }).parse(parsed.data);
+
+                            const stream = this.queries.get(data.qid);
+                            if (!stream) {
+                                console.warn('Query not found');
+                                return;
+                            }
+
+                            stream.end();
+                            this.queries.delete(data.qid);
+                        }
+                    case 'query-error':
+                        {
+                            const data = z.object({
+                                qid: z.string(),
+                                error: z.string(),
+                            }).parse(parsed.data);
+
+                            const stream = this.queries.get(data.qid);
+                            if (!stream) {
+                                console.warn('Query not found');
+                                return;
+                            }
+
+                            stream.error(new Error(data.error));
+                            this.queries.delete(data.qid);
+                        }
+                        break;
+                    case 'query-start': 
+                        {
+                            // Do nothing, just acknowledge
+                        }
+                        break;
+                }
                 this.handler?.sendAck(parsed.id);
     
             } catch (error) {
@@ -504,5 +626,16 @@ export class Client {
             return;
         }
         this.handler.write(event, data);
+    }
+
+    private readonly queries = new Map<string, Stream<unknown>>();
+
+    query<T extends keyof QueryTypes>(struct: string, type: T, args: QueryTypes[T]) {
+        const stream = new Stream<unknown>();
+        const id = uuid();
+
+        this.send('query', { qid: id, type, args, struct });
+
+        return stream;
     }
 }

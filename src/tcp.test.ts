@@ -112,7 +112,7 @@ describe('Server', () => {
   const testKey = async (key: string) => key === 'valid-key';
 
   beforeEach(() => {
-    server = new Server(8080, 'localhost', testKey);
+    server = new Server( 'localhost', 8080, testKey);
   });
 
   it('should handle new client connections', () => {
@@ -124,7 +124,7 @@ describe('Server', () => {
     server['handleNewConnection'](mockSocket);
 
     // Simulate client identification
-    const connection = new ClientConnection(mockSocket);
+    const connection = new ClientConnection(mockSocket, server);
     connection.send('i_am', 'valid-key');
     expect(clientConnectedSpy).toHaveBeenCalledWith('valid-key');
   });
@@ -133,7 +133,7 @@ describe('Server', () => {
     const mockSocket = { on: vi.fn(), end: vi.fn() } as unknown as net.Socket;
 
     server['handleNewConnection'](mockSocket);
-    const connection = new ClientConnection(mockSocket);
+    const connection = new ClientConnection(mockSocket, server);
     connection.send('i_am', 'invalid-key');
 
     expect(mockSocket.end).toHaveBeenCalled();
@@ -144,13 +144,15 @@ describe('Event Handling', () => {
   let handler: any;
   let mockSocket: net.Socket;
 
+  const server = new Server('localhost', 8081, () => true);
+
   beforeEach(() => {
     mockSocket = {
       write: vi.fn().mockReturnValue(true),
       on: vi.fn(),
       end: vi.fn(),
     } as unknown as net.Socket;
-    handler = new ClientConnection(mockSocket);
+    handler = new ClientConnection(mockSocket, server);
   });
 
   it('should send an event correctly', () => {

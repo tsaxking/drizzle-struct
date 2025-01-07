@@ -57,6 +57,7 @@ export type StructBuilder<T extends Blank, Name extends string> = {
     generators?: Partial<{
         id: () => string;
         attributes: () => string[];
+        lifetime: () => number;
     }>;
     versionHistory?: {
         type: 'days' | 'versions';
@@ -525,7 +526,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
                 archived: false,
                 universes: '',
                 attributes: JSON.stringify(this.data.generators?.attributes?.() ?? []),
-                lifetime: 0,
+                lifetime: this.data.generators?.lifetime?.() || 0,
             }
             const newData: Structable<T & typeof globalCols> = {
                 ...data,
@@ -783,26 +784,50 @@ export class Struct<T extends Blank = any, Name extends string = any> {
     startReflection(API: ClientAPI | ServerAPI) {
         return attempt(() => {
             // let connected = false;
-            // if (API instanceof ClientAPI) {
-            //     const { reflect } = this.data;
-            //     if (!reflect) return;
+            if (API instanceof ClientAPI) {
+                const { reflect } = this.data;
+                if (!reflect) return;
 
-            //     API.client.listen('connect', () => connected = true);
-            //     API.client.listen('disconnect', () => {
-            //         connected = false;
-            //     });
-            // } else {
-            //     // ServerAPI
-            // }
+                // API.client.listen('connect', () => connected = true);
+                // API.client.listen('disconnect', () => {
+                //     connected = false;
+                // });
+            } else {
+                // ServerAPI
+            }
 
-            this.on('archive', (d) => API.send('archive', d.id));
+            this.on('archive', (d) => API.send(
+                this.name,
+                'archive',
+                {
+                    id: d.id,
+                }
+            ));
             // this.on('build', (d) => API.send('build'));
-            this.on('create', (d) => API.send('create', d.safe()));
-            this.on('delete', (d) => API.send('delete', d.id));
-            this.on('delete-version', (d) => API.send('delete-version', d.vhId));
-            this.on('restore', (d) => API.send('restore', d.id));
-            this.on('restore-version', (d) => API.send('restore-version', d.vhId));
-            this.on('update', (d) => API.send('update', d.safe()));
+            this.on('create', (d) => API.send(
+                this.name,
+                'create',
+                d.safe(),
+            ));
+            this.on('delete', (d) => API.send(
+                this.name,
+                'delete',
+                {
+                    id: d.id,
+                }
+            ));
+            this.on('delete-version', (d) => API.send(this.name, 'delete-version',{
+                id: d.id,
+                vhId: d.vhId,
+            }));
+            this.on('restore', (d) => API.send(this.name, 'restore', {
+                id: d.id
+            }));
+            this.on('restore-version', (d) => API.send(this.name, 'restore-version', {
+                id: d.id,
+                vhId: d.vhId
+            }));
+            this.on('update', (d) => API.send(this.name, 'update', d.safe()));
 
 
             // TODO: handle outdated events, i've only done the updated event so vfar
@@ -869,6 +894,8 @@ export class Struct<T extends Blank = any, Name extends string = any> {
                     emit: false,
                 })).unwrap();
             });
+
+            em.on('query', async (event) => {});
         });
     }
 
