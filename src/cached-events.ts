@@ -5,10 +5,12 @@ export namespace CachedEvents {
     export const Events = new Struct({
         name: 'cached_events',
         structure: {
-            timestamp: integer('timestamp'),
-            eventId: integer('event_id').unique(),
-            event: text('event'),
+            timestamp: integer('timestamp').notNull(),
+            eventId: integer('event_id'),
+            event: text('event').notNull(),
             data: text('data'), // json
+            apiKey: text('api_key').notNull(),
+            tries: integer('tries').notNull(),
         },
     });
 

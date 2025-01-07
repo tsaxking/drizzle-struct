@@ -8,11 +8,10 @@ import { type ColumnDataType } from 'drizzle-orm';
 import { EventEmitter } from 'ts-utils/event-emitter';
 import { Loop } from 'ts-utils/loop';
 import { Stream } from 'ts-utils/stream';
-import { Client, Server } from './tcp';
 import { z } from 'zod';
 import { v4 as uuid } from 'uuid';
 import { DataAction, PropertyAction } from './types';
-import { ClientAPI, ServerAPI } from './api';
+import { Client, Server } from './reflection';
 
 export class StructError extends Error {
     constructor(message: string) {
@@ -555,6 +554,28 @@ export class Struct<T extends Blank = any, Name extends string = any> {
         });
     }
 
+    fromIds(ids: string[], asStream: true): StructStream<T, Name>;
+    fromIds(ids: string[], asStream: false): Promise<Result<StructData<T, Name>[], Error>>;
+    fromIds(ids: string[], asStream: boolean) {
+        const get = () => this.database.select().from(this.table).where(sql`${this.table.id} IN (${ids})`);
+        if (asStream) {
+            const stream = new StructStream(this);
+            (async () => {
+                const dataStream = await get();
+                for (let i = 0; i < dataStream.length; i++) {
+                    stream.add(this.Generator(dataStream[i] as any));
+                }
+                stream.end();
+            })();
+            return stream;
+        } else {
+            return attemptAsync(async () => {
+                const data = await get();
+                return data.map(d => this.Generator(d as any));
+            });
+        }
+    }
+
     // TODO: Integrate limits
     all(asStream: true, includeArchived?: boolean): StructStream<T, Name>;
     all(asStream: false, includeArchived?: boolean): Promise<Result<StructData<T, Name>[], Error>>;
@@ -781,141 +802,9 @@ export class Struct<T extends Blank = any, Name extends string = any> {
         });
     }
 
-    startReflection(API: ClientAPI | ServerAPI) {
+    startReflection(server: Server | Client) {
         return attempt(() => {
-            // let connected = false;
-            if (API instanceof ClientAPI) {
-                const { reflect } = this.data;
-                if (!reflect) return;
-
-                // API.client.listen('connect', () => connected = true);
-                // API.client.listen('disconnect', () => {
-                //     connected = false;
-                // });
-            } else {
-                // ServerAPI
-            }
-
-            this.on('archive', (d) => API.send(
-                this.name,
-                'archive',
-                {
-                    id: d.id,
-                }
-            ));
-            // this.on('build', (d) => API.send('build'));
-            this.on('create', (d) => API.send(
-                this.name,
-                'create',
-                d.safe(),
-            ));
-            this.on('delete', (d) => API.send(
-                this.name,
-                'delete',
-                {
-                    id: d.id,
-                }
-            ));
-            this.on('delete-version', (d) => API.send(this.name, 'delete-version',{
-                id: d.id,
-                vhId: d.vhId,
-            }));
-            this.on('restore', (d) => API.send(this.name, 'restore', {
-                id: d.id
-            }));
-            this.on('restore-version', (d) => API.send(this.name, 'restore-version', {
-                id: d.id,
-                vhId: d.vhId
-            }));
-            this.on('update', (d) => API.send(this.name, 'update', d.safe()));
-
-
-            // TODO: handle outdated events, i've only done the updated event so vfar
-            const em = API.createEmitter<Structable<T>>(this.name);
-
-            em.on('archive', async (event) => {
-                const { id } = event.data;
-                const data = (await this.fromId(id)).unwrap();
-                if (!data) return;
-                await data.setArchive(true);
-            });
-            // em.on('build', async ({ struct }) => built = true);
-            em.on('create', async (data) => {
-                (await (this.new(data.data, {
-                    emit: false,
-                    ignoreGlobals: true,
-                }))).unwrap();
-            });
-            em.on('delete', async (event) => {
-                const { id } = event.data;
-                const data = (await this.fromId(id)).unwrap();
-                if (!data) return;
-                (await data.delete({
-                    emit: false,
-                })).unwrap();
-            });
-            em.on('delete-version', async (event) => {
-                const { vhId, id } = event.data;
-                const data = (await this.fromId(id)).unwrap();
-                if (!data) return;
-                const versions = (await data.getVersions()).unwrap();
-                const version = versions.find(v => v.vhId === vhId);
-                if (!version) return;
-                (await version.delete({
-                    emit: false,
-                })).unwrap();
-            });
-            em.on('restore', async (event) => {
-                const { id } = event.data;
-                const data = (await this.fromId(id)).unwrap();
-                if (!data) return;
-                (await data.setArchive(false, {
-                    emit: false
-                })).unwrap();
-            });
-            em.on('restore-version', async (event) => {
-                const { vhId, id } = event.data;
-                const data = (await this.fromId(id)).unwrap();
-                if (!data) return;
-                const versions = (await data.getVersions()).unwrap();
-                const version = versions.find(v => v.vhId === vhId);
-                if (!version) return;
-                (await version.restore({
-                    emit: false,
-                })).unwrap();
-            });
-            em.on('update', async (event) => {
-                const id = z.string().parse(event.data.id);
-                const d = (await this.fromId(id)).unwrap();
-                if (!d) return;
-                console.log('Dropping outdated event', event);
-                if (d.updated.getTime() >= event.timestamp) return;
-                (await d.update(event.data, {
-                    emit: false,
-                })).unwrap();
-            });
-
-            em.on('query', async (event) => {
-                const pipe = (data: StructData<T>) => API.send(this.name, 'query-data', data.safe());
-                switch (event.data.type) {
-                    case 'all':
-                        this.all(true).pipe(pipe);
-                        break;
-                    case 'archived':
-                        this.archived(true).pipe(pipe);
-                        break;
-                    case 'fromId':
-                        this.fromId((event.data.args as any).id).then(r => {
-                            if (r.isOk() && r.value) pipe(r.value);
-                        });
-                    case 'fromProperty':
-                        this.fromProperty((event.data.args as any).property, (event.data.args as any).value, true).pipe(pipe);
-                        break;
-                    case 'fromUniverse':
-                        this.fromUniverse((event.data.args as any).universe, true).pipe(pipe);
-                        break;
-                }
-            });
+            const em = server.getEmitter(this);
         });
     }
 
