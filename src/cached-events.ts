@@ -8,7 +8,7 @@ export namespace CachedEvents {
             timestamp: integer('timestamp').notNull(),
             eventId: integer('event_id'),
             event: text('event').notNull(),
-            data: text('data'), // json
+            payload: text('payload'), // json
             apiKey: text('api_key').notNull(),
             tries: integer('tries').notNull(),
         },

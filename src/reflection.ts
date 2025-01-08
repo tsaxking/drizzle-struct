@@ -1,12 +1,14 @@
-import { Server as HTTPServer } from 'http';
+import http from 'http';
 import express from 'express';
 import { Blank, Struct, StructData, StructStream } from './back-end';
 import { EventEmitter } from 'ts-utils/event-emitter';
 import { z } from 'zod';
 import { decode, encode } from 'ts-utils/text';
-import { attemptAsync, resolveAll, type Result } from 'ts-utils/check';
+import { attempt, attemptAsync, resolveAll, type Result } from 'ts-utils/check';
 import { Stream } from 'ts-utils/stream';
+import { Loop } from 'ts-utils/loop';
 
+const { Server: HTTPServer } = http;
 
 class APIError extends Error {
     constructor(message: string) {
@@ -35,11 +37,22 @@ const nextId = async () => attemptAsync(async () => {
 });
 
 export class Connection {
+    private buffer: string[] = []; // Buffer for pending messages
+    private isPaused = false; // Indicates if the connection is paused
+    private readonly maxBufferSize = 100; // Maximum allowed buffer size
+    private readonly heartbeatIntervalMs = 30_000; // Interval to send heartbeats
+    private readonly heartbeatTimeoutMs = 60_000; // Timeout to detect stale connections
+    private lastHeartbeat: number = Date.now();
+    private heartbeatTimer: NodeJS.Timeout | undefined;
+
     constructor(
         public readonly apiKey: string,
         public readonly server: Server,
-        public stream: SseStream,
-    ) {}
+        public req: express.Response,
+    ) {
+        // Start the heartbeat mechanism
+        this.startHeartbeat();
+    }
 
     async send(event: string, data: unknown) {
         return attemptAsync(async () => {
@@ -47,15 +60,19 @@ export class Connection {
 
             const id = (await nextId()).unwrap();
             const timestamp = Date.now();
-            this.stream.enqueue(`data ${encode(JSON.stringify({
+            const message = `data: ${encode(JSON.stringify({
                 event,
-                data,
+                payload: data,
                 timestamp,
                 id,
-            }))}\n\n`);
+            }))}\n\n`;
 
+            // Add message to buffer if paused, or try sending directly
+            this.enqueueMessage(message);
+
+            // Save the event in the database
             (await CachedEvents.Events.new({
-                data: JSON.stringify(data),
+                payload: JSON.stringify(data),
                 timestamp,
                 eventId: id,
                 event,
@@ -66,13 +83,90 @@ export class Connection {
             return id;
         });
     }
+
+    private enqueueMessage(message: string) {
+        if (this.isPaused) {
+            this.buffer.push(message);
+
+            // If buffer exceeds max size, drop old messages
+            if (this.buffer.length > this.maxBufferSize) {
+                console.warn(`Buffer overflow for API key: ${this.apiKey}, dropping oldest message.`);
+                this.buffer.shift();
+            }
+
+            return;
+        }
+
+        try {
+            this.req.write(message);
+        } catch (err) {
+            console.error(`Failed to send message, buffering instead. Error: ${err}`);
+            this.isPaused = true;
+            this.buffer.push(message);
+        }
+    }
+
+    private flushBuffer() {
+        while (this.buffer.length > 0 && !this.isPaused) {
+            const message = this.buffer.shift();
+            try {
+                this.req.write(message!);
+            } catch (err) {
+                console.error(`Error while flushing buffer: ${err}`);
+                this.isPaused = true;
+                this.buffer.unshift(message!); // Re-add the message to the buffer
+                return;
+            }
+        }
+
+        if (this.buffer.length === 0) {
+            console.log(`Buffer flushed for API key: ${this.apiKey}`);
+        }
+    }
+
+    resume() {
+        this.isPaused = false;
+        this.flushBuffer();
+    }
+
+    private startHeartbeat() {
+        this.heartbeatTimer = setInterval(() => {
+            const now = Date.now();
+            if (now - this.lastHeartbeat > this.heartbeatTimeoutMs) {
+                console.warn(`Connection timeout for API key: ${this.apiKey}`);
+                this.close();
+                return;
+            }
+
+            this.sendHeartbeat();
+        }, this.heartbeatIntervalMs);
+    }
+
+    private sendHeartbeat() {
+        this.enqueueMessage(`event: heartbeat\ndata: ${JSON.stringify({ timestamp: Date.now() })}\n\n`);
+    }
+
     ack(id: number) {
         return attemptAsync(async () => {
             const { CachedEvents } = await import('./cached-events');
             CachedEvents.Events.fromProperty('eventId', id, true).pipe(e => e.delete());
         });
     }
+
+    close() {
+        return attempt(() => {
+            if (this.heartbeatTimer) clearInterval(this.heartbeatTimer); // Stop heartbeat timer
+            this.req.end(); // End the SSE stream
+            console.log(`Connection closed for API key: ${this.apiKey}`);
+        });
+    }
+
+    updateHeartbeat() {
+        this.lastHeartbeat = Date.now();
+    }
 }
+
+
 
 
 type StructEvent<T extends Blank = Blank> = {
@@ -157,12 +251,14 @@ export class Server {
             try {
                 const structEvent = z.object({
                     event: z.enum(['create', 'update', 'delete', 'delete-version', 'restore-version', 'archive', 'restore', 'set-attributes', 'set-universes']),
-                    data: z.any(),
+                    payload: z.object({
+                        struct: z.string(),
+                        data: z.any(),
+                    }),
                     timestamp: z.number(),
-                    struct: z.string(),
                 });
 
-                const { event, data, timestamp, struct } = structEvent.parse(req.body);
+                const { event, timestamp, payload: { data, struct } } = structEvent.parse(req.body);
                 const apiKey = req.headers['x-api-key'] as string;
                 if (!await checkEvent({
                     apiKey,
@@ -295,7 +391,7 @@ export class Server {
                             return;
                         }
                         send(data);
-                    }
+                    } break;
                     case 'from-ids': {
                         const { ids } = z.object({
                             ids: z.array(z.string()),
@@ -313,12 +409,24 @@ export class Server {
             }
         });
 
-        this.app.post('/sse', (req, res) => {
+        this.app.get('/sse', (req, res) => {
             const apiKey = req.headers['x-api-key'] as string;
             
             res.setHeader('Content-Type', 'text/event-stream');
+            res.setHeader('Cache-Control', 'no-cache');
+            res.setHeader('Connection', 'keep-alive');
+            const self = this;
 
-            if (this.connections.has(apiKey)) {}
+            res.write(`data: ${JSON.stringify({ message: 'Connected to SSE' })}\n\n`);
+
+            const connection = new Connection(apiKey, this, res);
+            this.connections.set(apiKey, connection);
+
+            req.on('close', () => {
+                console.log(`Connection closed for API key: ${apiKey}`);
+                this.connections.delete(apiKey);
+                connection.close();
+            });
         });
 
         this.app.post('/ack', async (req, res) => {
@@ -346,25 +454,24 @@ export class Server {
     }
 
     async send<T extends Blank, Name extends string>(struct: Struct<T, Name>, event: keyof StructEvent, data: Omit<StructEvent[keyof StructEvent], 'timestamp'>) {
-            return resolveAll(await Promise.all(Array.from(this.connections.values()).map(async c => attemptAsync(async () => {
-                if (await this.checkEvent({
-                    apiKey: c.apiKey,
-                    event,
-                    data,
-                    timestamp: Date.now(),
+        return resolveAll(await Promise.all(Array.from(this.connections.values()).map(async c => attemptAsync(async () => {
+            if (await this.checkEvent({
+                apiKey: c.apiKey,
+                event,
+                data,
+                timestamp: Date.now(),
+                struct: struct.name,
+            })) {
+                c.send(event, {
                     struct: struct.name,
-                })) {
-                    c.send(event, {
-                        struct: struct.name,
-                        data,
-                    });
-                }
-            }))));
+                    data,
+                });
+            }
+        }))));
     }
 }
 
 export class Client {
-
     constructor(
         public readonly apikey: string,
         public readonly host: string,
@@ -384,25 +491,39 @@ export class Client {
                 data,
             };
             (await CachedEvents.Events.new({
-                data: JSON.stringify(payload),
+                payload: JSON.stringify(payload),
                 timestamp,
                 eventId: id,
                 event,
                 apiKey: this.apikey,
                 tries: 1,
             })).unwrap();
-            fetch(`${this.url}/struct`, {
+            return this.sendEvent({
+                id,
+                event,
+                payload,
+                timestamp,
+            });
+        });
+    }
+
+    private sendEvent(event: {
+        id: number;
+        event: keyof StructEvent;
+        payload: {
+            struct: string;
+            data: Omit<StructEvent[keyof StructEvent], 'timestamp'>;
+        },
+        timestamp: number;
+    }) {
+        return attemptAsync(async () => {
+            return fetch(`${this.url}/struct`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     'x-api-key': this.apikey,
                 },
-                body: JSON.stringify({
-                    event,
-                    data: payload,
-                    timestamp,
-                    struct: struct.name,
-                }),
+                body: JSON.stringify(event),
             });
         });
     }
@@ -486,6 +607,117 @@ export class Client {
             return newEmitter;
         }
         return emitter as EventEmitter<StructEvent<T>>;
+    }
+
+    public start() {
+        return attemptAsync(async () => {
+            const reconnectDelay = 1000; // Initial reconnection delay (1 second)
+            let reconnectAttempts = 0;
+    
+            const connect = async () => {
+                return new Promise<void>((resolve, reject) => {
+                    const req = http.request({
+                        hostname: this.host,
+                        port: this.port,
+                        path: '/sse',
+                        method: 'GET',
+                        headers: {
+                            'x-api-key': this.apikey,
+                            'Accept': 'text/event-stream',
+                        }
+                    }, res => {
+                        if (res.statusCode !== 200) {
+                            return reject(new APIError('API Server Error'));
+                        }
+    
+                        res.on('data', (chunk: Buffer) => {
+                            try {
+                                const data = chunk.toString().trim();
+                                if (data.startsWith('data: ') && data.endsWith('\n\n')) {
+                                    const unsafe = JSON.parse(decode(data.slice(6, -2)));
+                                    const parsed = z.object({
+                                        event: z.enum(['create', 'update', 'delete', 'delete-version', 'restore-version', 'archive', 'restore', 'set-attributes', 'set-universes']),
+                                        payload: z.object({
+                                            struct: z.string(),
+                                            data: z.any(),
+                                        }),
+                                        timestamp: z.number(),
+                                        id: z.number(),
+                                    }).parse(unsafe);
+    
+                                    const em = this.structEmitters.get(parsed.payload.struct);
+                                    if (em) {
+                                        switch (parsed.event) {
+                                            case 'create': {
+                                                em.emit('create', { data: parsed.payload.data, timestamp: parsed.timestamp });
+                                            } break;
+                                            case 'update': {
+                                                em.emit('update', { data: parsed.payload.data, timestamp: parsed.timestamp });
+                                            } break;
+                                            case 'delete': {
+                                                em.emit('delete', { id: parsed.payload.data, timestamp: parsed.timestamp });
+                                            } break;
+                                            case 'archive': {
+                                                em.emit('archive', { id: parsed.payload.data, timestamp: parsed.timestamp });
+                                            } break;
+                                            case 'delete-version': {
+                                                em.emit('delete-version', { id: parsed.payload.data.id, vhId: parsed.payload.data.vhId, timestamp: parsed.timestamp });
+                                            } break;
+                                            case 'restore': {
+                                                em.emit('restore', { id: parsed.payload.data, timestamp: parsed.timestamp });
+                                            } break;
+                                            case 'restore-version': {
+                                                em.emit('restore-version', { id: parsed.payload.data.id, vhId: parsed.payload.data.vhId, timestamp: parsed.timestamp });
+                                            } break;
+                                            case 'set-attributes': {
+                                                em.emit('set-attributes', { id: parsed.payload.data.id, attributes: parsed.payload.data.attributes, timestamp: parsed.timestamp });
+                                            } break;
+                                            case 'set-universes': {
+                                                em.emit('set-universes', { id: parsed.payload.data.id, universes: parsed.payload.data.universes, timestamp: parsed.timestamp });
+                                            } break;
+                                        }
+                                    }
+    
+                                    this.ack(parsed.id);
+                                }
+                            } catch (error) {
+                                console.error(error);
+                            }
+                        });
+    
+                        res.on('error', (err) => {
+                            reject(err);
+                        });
+    
+                        res.on('end', () => {
+                            // In case of an end of stream (unexpected)
+                            reject(new APIError('Stream ended unexpectedly'));
+                        });
+    
+                        resolve(); // Successfully connected
+                    });
+    
+                    req.on('error', reject); // In case of request errors
+                    req.end();
+                });
+            };
+    
+            // Try to connect with exponential backoff
+            const attemptConnection = async () => {
+                try {
+                    await connect();
+                    reconnectAttempts = 0; // Reset on successful connection
+                } catch (error) {
+                    console.error('SSE connection failed:', error);
+                    reconnectAttempts++;
+                    const delay = Math.min(reconnectDelay * (2 ** reconnectAttempts), 30000); // Exponential backoff with max delay
+                    console.log(`Reconnecting in ${delay / 1000}s...`);
+                    setTimeout(attemptConnection, delay);
+                }
+            };
+    
+            await attemptConnection(); // Start connection
+        });
     }
 
     private ack(id: number) {
