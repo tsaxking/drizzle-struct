@@ -260,51 +260,39 @@ export class Server {
 
                 const { event, timestamp, payload: { data, struct } } = structEvent.parse(req.body);
                 const apiKey = req.headers['x-api-key'] as string;
-                if (!await checkEvent({
-                    apiKey,
-                    event,
-                    data,
-                    timestamp,
-                    struct,
-                })) {
-                    res.status(403).send('Forbidden');
-                    return;
+
+                const result = await this.handleStructEvent(apiKey, { event, timestamp, payload: { data, struct } });
+                res.status(result.status).send(result.message);
+            } catch (error) {
+                console.error(error);
+                res.status(500).send('Internal server error');
+            }
+        });
+
+        this.app.post('/batch', async (req, res) => {
+            try {
+                const structEvent = z.array(z.object({
+                    id: z.number(),
+                    event: z.enum(['create', 'update', 'delete', 'delete-version', 'restore-version', 'archive', 'restore', 'set-attributes', 'set-universes']),
+                    payload: z.object({
+                        struct: z.string(),
+                        data: z.any(),
+                    }),
+                    timestamp: z.number(),
+                }));
+
+                const events = structEvent.parse(req.body);
+                const apiKey = req.headers['x-api-key'] as string;
+
+                for (const event of events) {
+                    const result = await this.handleStructEvent(apiKey, event);
+                    if (result.status !== 200) {
+                        res.status(result.status).send(result.message);
+                        return;
+                    }
                 }
 
-                const emitter = this.structEmitters.get(struct);
-                if (!emitter) {
-                    return;
-                }
-
-                switch (event) {
-                    case 'create': {
-                        emitter.emit('create', { data, timestamp });
-                    } break;
-                    case 'update': {
-                        emitter.emit('update', { data, timestamp });
-                    } break;
-                    case 'delete': {
-                        emitter.emit('delete', { id: data, timestamp });
-                    } break;
-                    case 'archive': {
-                        emitter.emit('archive', { id: data, timestamp });
-                    } break;
-                    case 'delete-version': {
-                        emitter.emit('delete-version', { id: data.id, vhId: data.vhId, timestamp });
-                    } break;
-                    case 'restore': {
-                        emitter.emit('restore', { id: data, timestamp });
-                    } break;
-                    case 'restore-version': {
-                        emitter.emit('restore-version', { id: data.id, vhId: data.vhId, timestamp });
-                    } break;
-                    case 'set-attributes': {
-                        emitter.emit('set-attributes', { id: data.id, attributes: data.attributes, timestamp });
-                    } break;
-                    case 'set-universes': {
-                        emitter.emit('set-universes', { id: data.id, universes: data.universes, timestamp });
-                    } break;
-                }
+                res.status(200).send('Events processed successfully');
             } catch (error) {
                 console.error(error);
                 res.status(500).send('Internal server error');
@@ -439,6 +427,64 @@ export class Server {
         });
     }
 
+    async handleStructEvent(apiKey: string, structEvent: any) {
+        const { event, timestamp, payload: { data, struct } } = structEvent;
+    
+        // Check event authorization
+        if (!await this.checkEvent({ apiKey, event, data, timestamp, struct })) {
+            return { status: 403, message: 'Forbidden' };
+        }
+    
+        const emitter = this.structEmitters.get(struct);
+        if (!emitter) {
+            return { status: 404, message: 'Emitter not found' };
+        }
+    
+        // Switch case to handle different events
+        switch (event) {
+            case 'create': {
+                emitter.emit('create', { data, timestamp });
+                break;
+            }
+            case 'update': {
+                emitter.emit('update', { data, timestamp });
+                break;
+            }
+            case 'delete': {
+                emitter.emit('delete', { id: data, timestamp });
+                break;
+            }
+            case 'archive': {
+                emitter.emit('archive', { id: data, timestamp });
+                break;
+            }
+            case 'delete-version': {
+                emitter.emit('delete-version', { id: data.id, vhId: data.vhId, timestamp });
+                break;
+            }
+            case 'restore': {
+                emitter.emit('restore', { id: data, timestamp });
+                break;
+            }
+            case 'restore-version': {
+                emitter.emit('restore-version', { id: data.id, vhId: data.vhId, timestamp });
+                break;
+            }
+            case 'set-attributes': {
+                emitter.emit('set-attributes', { id: data.id, attributes: data.attributes, timestamp });
+                break;
+            }
+            case 'set-universes': {
+                emitter.emit('set-universes', { id: data.id, universes: data.universes, timestamp });
+                break;
+            }
+            default: {
+                return { status: 400, message: 'Invalid event' };
+            }
+        }
+    
+        return { status: 200, message: 'Event processed successfully' };
+    }
     public start(cb: () => void) {
         this.server.listen(this.port, cb);
     }
@@ -619,18 +665,18 @@ export class Client {
                             tries: e.data.tries + 1,
                         });
 
-                        // this.addToBatch({
-                        //     id: e.data.eventId,
-                        //     event: e.data.event as keyof StructEvent,
-                        //     payload: JSON.parse(e.data.payload),
-                        //     timestamp: e.data.timestamp,
-                        // });
-                        this.sendEvent({
+                        this.addToBatch({
                             id: e.data.eventId,
                             event: e.data.event as keyof StructEvent,
                             payload: JSON.parse(e.data.payload),
                             timestamp: e.data.timestamp,
                         });
+                        // this.sendEvent({
+                        //     id: e.data.eventId,
+                        //     event: e.data.event as keyof StructEvent,
+                        //     payload: JSON.parse(e.data.payload),
+                        //     timestamp: e.data.timestamp,
+                        // });
                     });
                 } catch (error) {
                     console.error(error);
