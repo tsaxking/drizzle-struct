@@ -723,6 +723,7 @@ type GlobalCols = {
  * @template {Blank} T 
  */
 export class Struct<T extends Blank> {
+    public static readonly headers = new Map<string, string>();
     /**
      * All structs that are accessible
      *
@@ -948,6 +949,7 @@ export class Struct<T extends Blank> {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
+                    ...Object.fromEntries(Struct.headers.entries())
                 },
                 body: JSON.stringify({
                     struct: this.data.name,
