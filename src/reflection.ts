@@ -49,7 +49,7 @@ const nextId = async () => attemptAsync(async () => {
     let id = -1;
 
     const { CachedEvents } = await import('./cached-events');
-    await CachedEvents.Events.all(true).pipe(e => {
+    await CachedEvents.Events.all(true).pipe((e: any) => {
         if (e.data.eventId > id) {
             id = e.data.eventId;
         }
@@ -272,7 +272,7 @@ export class Connection {
     ack(id: number) {
         return attemptAsync(async () => {
             const { CachedEvents } = await import('./cached-events');
-            CachedEvents.Events.fromProperty('eventId', id, true).pipe(e => e.delete());
+            CachedEvents.Events.fromProperty('eventId', id, true).pipe((e: any) => e.delete());
         });
     }
 
@@ -1011,7 +1011,7 @@ export class Client {
                 }
     
                 try {
-                    CachedEvents.Events.all(true).pipe(e => {
+                    CachedEvents.Events.all(true).pipe((e: any) => {
                         // Under 1 minute
                         if (e.data.timestamp + 60_000 > Date.now()) return;
                         e.update({
