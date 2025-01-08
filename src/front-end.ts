@@ -704,7 +704,7 @@ type ReadTypes = {
  *
  * @typedef {GlobalCols}
  */
-type GlobalCols = {
+export type GlobalCols = {
     id: 'string';
     created: 'string';
     updated: 'string';
