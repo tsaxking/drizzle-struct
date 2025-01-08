@@ -472,6 +472,8 @@ export class Server {
 }
 
 export class Client {
+    connected = false;
+
     constructor(
         public readonly apikey: string,
         public readonly host: string,
@@ -517,6 +519,9 @@ export class Client {
         timestamp: number;
     }) {
         return attemptAsync(async () => {
+            if (!this.connected) {
+                throw new Error('Not connected');
+            }
             return fetch(`${this.url}/struct`, {
                 method: 'POST',
                 headers: {
@@ -591,6 +596,85 @@ export class Client {
                     'Content-Type': 'application/json',
                     'x-api-key': this.apikey,
                 },
+            });
+        });
+    }
+
+    private startLoop() {
+        return attemptAsync(async () => {
+            const { CachedEvents } = await import('./cached-events');
+            const loop = new Loop(async () => {
+                const res = await this.ping();
+                if (res.isOk() && res.value.ok) {
+                    this.connected = true;
+                } else {
+                    this.connected = false;
+                }
+    
+                try {
+                    CachedEvents.Events.all(true).pipe(e => {
+                        // Under 1 minute
+                        if (e.data.timestamp + 60_000 > Date.now()) return;
+                        e.update({
+                            tries: e.data.tries + 1,
+                        });
+
+                        // this.addToBatch({
+                        //     id: e.data.eventId,
+                        //     event: e.data.event as keyof StructEvent,
+                        //     payload: JSON.parse(e.data.payload),
+                        //     timestamp: e.data.timestamp,
+                        // });
+                        this.sendEvent({
+                            id: e.data.eventId,
+                            event: e.data.event as keyof StructEvent,
+                            payload: JSON.parse(e.data.payload),
+                            timestamp: e.data.timestamp,
+                        });
+                    });
+                } catch (error) {
+                    console.error(error);
+                }
+            }, 60_000); // Ping every minute
+    
+            return loop.start();
+        });
+    }
+
+    private batch: { id: number, event: keyof StructEvent, payload: { struct: string, data: Omit<StructEvent[keyof StructEvent], 'timestamp'> }, timestamp: number }[] = [];
+    private batchTimeout: NodeJS.Timeout | undefined;
+    private addToBatch(event: {
+        id: number;
+        event: keyof StructEvent;
+        payload: {
+            struct: string;
+            data: Omit<StructEvent[keyof StructEvent], 'timestamp'>;
+        },
+        timestamp: number;
+    }) {
+        this.batch.push(event);
+        if (this.batch.length === 10) return this.sendBatch();
+        if (this.batchTimeout) clearTimeout(this.batchTimeout);
+        this.batchTimeout = setTimeout(() => {
+            this.sendBatch();
+        }, 1000);
+    }
+
+    private sendBatch() {
+        if (!this.batch.length) return;
+        const batch = this.batch;
+        this.batch = [];
+        return attemptAsync(async () => {
+            if (!this.connected) {
+                throw new Error('Not connected');
+            }
+            return fetch(`${this.url}/batch`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-api-key': this.apikey,
+                },
+                body: JSON.stringify(batch),
             });
         });
     }
@@ -717,6 +801,8 @@ export class Client {
             };
     
             await attemptConnection(); // Start connection
+
+            this.startLoop();
         });
     }
 
