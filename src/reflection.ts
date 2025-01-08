@@ -535,7 +535,7 @@ export class Client {
     private readonly structEmitters = new Map<string, EventEmitter<StructEvent>>();
 
     send<T extends Blank, Name extends string>(struct: Struct<T, Name>, event: keyof StructEvent<T>, data: Omit<StructEvent<T>[keyof StructEvent<T>], 'timestamp'>) {
-        return attemptAsync(async () => {
+        return attemptAsync<unknown>(async () => {
             const { CachedEvents } = await import('./cached-events');
             const id = (await nextId()).unwrap();
             const timestamp = Date.now();
@@ -551,12 +551,12 @@ export class Client {
                 apiKey: this.apikey,
                 tries: 1,
             })).unwrap();
-            return this.sendEvent({
+            return (await this.sendEvent({
                 id,
                 event,
                 payload,
                 timestamp,
-            });
+            })).unwrap();
         });
     }
 
@@ -580,7 +580,7 @@ export class Client {
                     'x-api-key': this.apikey,
                 },
                 body: JSON.stringify(event),
-            });
+            }).then(r => r.json());
         });
     }
 

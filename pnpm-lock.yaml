@@ -63,7 +63,7 @@ importers:
         specifier: ^10.9.2
         version: 10.9.2(@types/node@22.10.4)(typescript@5.7.2)
       ts-utils:
-        specifier: git+https://github.com/tsaxking/global-ts-utilities.git
+        specifier: github:tsaxking/global-ts-utilities
         version: https://codeload.github.com/tsaxking/global-ts-utilities/tar.gz/574e1bbb5ab19e4a380a88d06c50b510bb1f8bfb
       typescript:
         specifier: ^5.7.2

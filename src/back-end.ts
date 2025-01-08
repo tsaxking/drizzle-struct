@@ -219,6 +219,7 @@ export class StructData<T extends Blank = any, Name extends string = any> {
                 throw new DataError('Invalid Data');
             }
             this.makeVersion();
+            this.metadata.set('prev-state', JSON.stringify(this.safe()));
             const newData: any = { ...this.data, ...data };
 
             // Remove global columns
@@ -387,6 +388,11 @@ export class StructData<T extends Blank = any, Name extends string = any> {
             if (data[key] !== this.data[key]) return false;
         }
         return true;
+    }
+
+    // This is to handle states diverging between frontend and backend, or between servers
+    emitSelf() {
+        this.struct.eventEmitter.emit('update', this);
     }
 }
 
@@ -926,7 +932,17 @@ export class Struct<T extends Blank = any, Name extends string = any> {
                 const id = z.object({ id: z.string() }).parse(data).id;
                 const d = await this.fromId(id);
                 if (d.isErr()) return console.error(d.error);
-                d.value?.update(data, {
+                if (!d.value) {
+                    this.new(
+                        data,
+                        {
+                            ignoreGlobals: false,
+                            emit: false,
+                        }
+                    );
+                    return;
+                }
+                d.value.update(data, {
                     emit: false,
                 });
             });
@@ -942,45 +958,74 @@ export class Struct<T extends Blank = any, Name extends string = any> {
             // });
 
 
-            this.on('create', d => {
+            this.on('create', async d => {
                 if (d.metadata.get('no-emit')) return;
-                api.send(this, 'create', d.data);
-            });
-            this.on('update', d => {
-                if (d.metadata.get('no-emit')) return;
-                api.send(this, 'update', d.data);
-            });
-            this.on('archive', d => {
-                if (d.metadata.get('no-emit')) return;
-                api.send(this, 'archive', {
-                    id: d.id,
+                const res = await api.send(this, 'create', d.data);
+                if (res.isErr()) d.delete({
+                    emit: false,
                 });
             });
-            this.on('delete', d => {
+            this.on('update', async d => {
+                const prevState = d.metadata.get('prev-state'); // always read so it will delete
                 if (d.metadata.get('no-emit')) return;
-                api.send(this, 'delete', {
+                const res = await api.send(this, 'update', d.data);
+                if (res.isErr()) {
+                    if (prevState) {
+                        await d.update(JSON.parse(prevState as string), { emit: false });
+                    }
+                }
+            });
+            this.on('archive', async d => {
+                if (d.metadata.get('no-emit')) return;
+                const res = await api.send(this, 'archive', {
                     id: d.id,
                 });
+
+                if (res.isErr()) {
+                    d.setArchive(false, {
+                        emit: false,
+                    });
+                }
             });
-            this.on('delete-version', d => {
+            this.on('delete', async d => {
+                if (d.metadata.get('no-emit')) return;
+                const res = await api.send(this, 'delete', {
+                    id: d.id,
+                });
+                if(res.isErr()) {
+                    this.new(
+                        d.safe(),
+                        {
+                            ignoreGlobals: false,
+                            emit: false,
+                        }
+                    )
+                }
+            });
+            this.on('delete-version', async d => {
                 if (d.metadata.get('no-emit')) return;
                 api.send(this, 'delete-version', {
                     id: d.id,
                     vhId: d.vhId,
                 });
             });
-            this.on('restore-version', d => {
+            this.on('restore-version', async d => {
                 if (d.metadata.get('no-emit')) return;
                 api.send(this, 'restore-version', {
                     id: d.id,
                     vhId: d.vhId,
                 });
             });
-            this.on('restore', d => {
+            this.on('restore', async d => {
                 if (d.metadata.get('no-emit')) return;
-                api.send(this, 'restore', {
+                const res = await api.send(this, 'restore', {
                     id: d.id,
                 });
+                if (res.isErr()) {
+                    d.setArchive(true, {
+                        emit: false,
+                    });
+                }
             });
         });
     }
