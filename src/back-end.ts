@@ -592,29 +592,11 @@ export class Struct<T extends Blank = any, Name extends string = any> {
     fromIds(ids: string[], asStream: false): Promise<Result<StructData<T, Name>[], Error>>;
     fromIds(ids: string[], asStream: boolean) {
         const get = () => {
-            let result: (Structable<T & typeof globalCols> | undefined)[] = [];
-            if (this._api) {
-                const lastRead = this._api.getLastRead(this.name, 'from-ids');
-                if (lastRead && Date.now() - lastRead < (this.data.reflection?.queryThreshold ?? 1000 * 60 * 60)) {
-                    this._api.query(this, 'from-ids', {
-                        ids,
-                    }).then(r => {
-                        if (r.isOk()) r.value.pipe(d => {
-                            if (!result.find(i => i?.id === d.id)) {
-                                // Because it's not found in the database, we can assume it's new data that needs to be added
-                                // We'll just use the event system to add it so everything is consistent
-                                this.new(d, {
-                                    ignoreGlobals: false,
-                                    emit: false,
-                                });
-                            }
-                        })
-                    });
-                }
-            }
+            this.apiQuery('from-ids', {
+                ids,
+            });
 
-            result = this.database.select().from(this.table).where(sql`${this.table.id} IN (${ids})`) as any;
-            return result;
+            return this.database.select().from(this.table).where(sql`${this.table.id} IN (${ids})`);
         }
         if (asStream) {
             const stream = new StructStream(this);
@@ -639,26 +621,9 @@ export class Struct<T extends Blank = any, Name extends string = any> {
     all(asStream: false, includeArchived?: boolean): Promise<Result<StructData<T, Name>[], Error>>;
     all(asStream: boolean, includeArchived = false){
         const get = async () => {
-            if (this._api) {
-                const lastRead = this._api.getLastRead(this.name, 'all');
-                if (lastRead && Date.now() - lastRead < (this.data.reflection?.queryThreshold ?? 1000 * 60 * 60)) {
-                    this._api.query(this, 'all', {
-                        includeArchived,
-                    }).then(r => {
-                        if (r.isOk()) r.value.pipe(d => {
-                            if (!result.find(i => i?.id === d.id)) {
-                                this.new(d, {
-                                    ignoreGlobals: false,
-                                    emit: false,
-                                });
-                            }
-                        })
-                    });
-                }
-            }
+            this.apiQuery('all', {});
 
-            const result: Structable<T & typeof globalCols>[] = await this.database.select().from(this.table).where(sql`${this.table.archived} = ${includeArchived}`) as any;
-            return result;
+            return this.database.select().from(this.table).where(sql`${this.table.archived} = ${includeArchived}`);
         }
         if (asStream) {
             const stream = new StructStream(this);
@@ -681,7 +646,10 @@ export class Struct<T extends Blank = any, Name extends string = any> {
     archived(asStream: true): StructStream<T, Name>;
     archived(asStream: false): Promise<Result<StructData<T, Name>[], Error>>;
     archived(asStream: boolean) {
-        const get = () => this.database.select().from(this.table).where(sql`${this.table.archived} = ${true}`);
+        const get = () => {
+            this.apiQuery('archived', {});
+            return this.database.select().from(this.table).where(sql`${this.table.archived} = ${true}`);
+        }
         if (asStream) {
             const stream = new StructStream(this);
             (async () => {
@@ -700,10 +668,16 @@ export class Struct<T extends Blank = any, Name extends string = any> {
         }
     }
 
-    fromProperty<K extends keyof T>(key: K, value: TsType<T[K]['_']['dataType']>, asStream: true): StructStream<T, Name>;
-    fromProperty<K extends keyof T>(key: K, value: TsType<T[K]['_']['dataType']>, asStream: false): Promise<Result<StructData<T, Name>[], Error>>;
-    fromProperty<K extends keyof T>(key: K, value: TsType<T[K]['_']['dataType']>, asStream: boolean) {
-        const get = () => this.database.select().from(this.table).where(sql`${this.table[key]} = ${value} AND ${this.table.archived} = ${false}`);
+    fromProperty<K extends keyof T>(property: K, value: TsType<T[K]['_']['dataType']>, asStream: true): StructStream<T, Name>;
+    fromProperty<K extends keyof T>(property: K, value: TsType<T[K]['_']['dataType']>, asStream: false): Promise<Result<StructData<T, Name>[], Error>>;
+    fromProperty<K extends keyof T>(property: K, value: TsType<T[K]['_']['dataType']>, asStream: boolean) {
+        const get = () => {
+            this.apiQuery('from-property', {
+                property: String(property),
+                value,
+            });
+            return this.database.select().from(this.table).where(sql`${this.table[property]} = ${value} AND ${this.table.archived} = ${false}`);
+        }
         if (asStream) {
             const stream = new StructStream(this);
             (async () => {
@@ -725,7 +699,12 @@ export class Struct<T extends Blank = any, Name extends string = any> {
     fromUniverse(universe: string, asStream: true): StructStream<T, Name>;
     fromUniverse(universe: string, asStream: false): Promise<Result<StructData<T, Name>[], Error>>;
     fromUniverse(universe: string, asStream: boolean) {
-        const get = () => this.database.select().from(this.table).where(sql`${this.table.universes} LIKE ${`%${universe}%`} AND ${this.table.archived} = ${false}`);
+        const get = () => {
+            this.apiQuery('from-universe', {
+                universe,
+            });
+            return this.database.select().from(this.table).where(sql`${this.table.universes} LIKE ${`%${universe}%`} AND ${this.table.archived} = ${false}`);
+        }
         if (asStream) {
             const stream = new StructStream(this);
             (async () => {
