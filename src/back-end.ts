@@ -1459,7 +1459,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
      */
     clear() {
         return attemptAsync(async () => {
-            return this.database.delete(this.table).where(sql`true`);
+            this.database.delete(this.table).where(sql`true`);
         });
     }
 
