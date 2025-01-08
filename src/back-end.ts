@@ -157,7 +157,8 @@ export class DataVersion<T extends Blank, Name extends string> {
         return attemptAsync(async () => {
             if (!this.struct.versionTable) throw new StructError(`Struct ${this.struct.name} does not have a version table`);
             await this.database.delete(this.struct.versionTable).where(sql`${this.struct.versionTable.vhId} = ${this.vhId}`);
-            if (config?.emit || config?.emit === undefined) this.struct.emit('delete-version', this);
+            if (config?.emit || config?.emit === undefined) this.metadata.set('no-emit', true);
+            this.struct.emit('delete-version', this);
         });
     }
 
@@ -168,7 +169,8 @@ export class DataVersion<T extends Blank, Name extends string> {
             const data = (await this.struct.fromId(this.id)).unwrap();
             if (!data) this.struct.new(this.data);
             else await data.update(this.data);
-            if (config?.emit || config?.emit === undefined) this.struct.emit('restore-version', this);
+            if (config?.emit || config?.emit === undefined) this.metadata.set('no-emit', true);
+            this.struct.emit('restore-version', this);
         });
     }
 }
@@ -232,7 +234,8 @@ export class StructData<T extends Blank = any, Name extends string = any> {
                 updated: new Date(),
             }).where(sql`${this.struct.table.id} = ${this.id}`);
 
-            if (config?.emit || config?.emit === undefined) this.struct.eventEmitter.emit('update', this);
+            if (config?.emit || config?.emit === undefined) this.metadata.set('no-emit', true);
+            this.struct.eventEmitter.emit('update', this);
         });
     }
 
@@ -245,7 +248,8 @@ export class StructData<T extends Blank = any, Name extends string = any> {
                 updated: new Date(),
             } as any).where(sql`${this.struct.table.id} = ${this.id}`);
 
-            if (config?.emit || config?.emit === undefined) this.struct.eventEmitter.emit(archived ? 'archive' : 'restore', this);
+            if (config?.emit || config?.emit === undefined) this.metadata.set('no-emit', true);
+            this.struct.eventEmitter.emit(archived ? 'archive' : 'restore', this);
         });
     }
 
@@ -255,7 +259,8 @@ export class StructData<T extends Blank = any, Name extends string = any> {
         return attemptAsync(async () => {
             this.makeVersion();
             await this.database.delete(this.struct.table).where(sql`${this.struct.table.id} = ${this.id}`);
-            if (config?.emit || config?.emit === undefined) this.struct.eventEmitter.emit('delete', this);
+            if (config?.emit || config?.emit === undefined) this.metadata.set('no-emit', true);
+            this.struct.eventEmitter.emit('delete', this);
         });
     }
 
@@ -555,7 +560,8 @@ export class Struct<T extends Blank = any, Name extends string = any> {
             await this.database.insert(this.table).values(newData as any);
 
             const d = this.Generator(newData);
-            if (config?.emit || config?.emit === undefined) this.eventEmitter.emit('create', d);
+            if (config?.emit || config?.emit === undefined) d.metadata.set('no-emit', true);
+            this.eventEmitter.emit('create', d);
 
             return d;
         });
@@ -1011,33 +1017,60 @@ export class Struct<T extends Blank = any, Name extends string = any> {
             if (lastRead === undefined || Date.now() - lastRead > (this.data.reflection?.queryThreshold ?? 1000 * 60 * 60)) {
                 const result = (await this._api.query(this, type, data)).unwrap();
                 if (result instanceof Stream) {
+                    const updates: Promise<void>[] = [];
                     let timeout: NodeJS.Timeout;
                     let batch: Structable<T & typeof globalCols>[] = [];
+                    let isProcessing = false;
+    
+                    const save = async () => {
+                        if (isProcessing) return; // Prevent overlapping saves
+                        isProcessing = true;
+    
+                        try {
+                            await Promise.all(updates);
+                            updates.length = 0;
+    
+                            const cache = [...batch];
+                            batch = [];
+                            for (const d of cache) {
+                                try {
+                                    const has = await this.fromId(d.id);
+                                    if (has.isErr()) throw has.error;
+    
+                                    if (!has.value) {
+                                        await this.new(d, { ignoreGlobals: false, emit: false });
+                                    } else if (!has.value.isSimilar(d)) {
+                                        await has.value.update(d, { emit: false });
+                                    }
+                                } catch (err) {
+                                    console.error("Error processing item:", err);
+                                }
+                            }
+                        } catch (err) {
+                            console.error("Error in save():", err);
+                        } finally {
+                            isProcessing = false;
+                        }
+                    };
+    
                     result.pipe(d => {
                         if (!d) return;
-                        // set timeout to prevent stack overflow
-                        setTimeout(async () => {
-                            const has = (await this.fromId(d.id)).unwrap();
-                            if (has) {
-                                // if it exists and they don't match, update
-                                const data = this.Generator(d);
-                                if (!has.isSimilar(data.data)) {
-                                    await has.update(d, {
-                                        emit: false,
-                                    });
-                                }
-                            } else {
-                                this.new(d, {
-                                    ignoreGlobals: false,
-                                    emit: false,
-                                });
-                            }
-                        });
+                        batch.push(d);
+                        if (timeout) clearTimeout(timeout);
+    
+                        if (batch.length >= 100) {
+                            updates.push(save());
+                        } else {
+                            timeout = setTimeout(() => {
+                                updates.push(save());
+                            }, 100);
+                        }
                     });
                 }
             }
         });
     }
+    
 
     public readonly bypasses: {
         action: DataAction | PropertyAction | '*';
