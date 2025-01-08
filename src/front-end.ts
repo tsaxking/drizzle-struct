@@ -10,39 +10,115 @@ import { type ColType } from "./types";
 
 // TODO: Batching?
 
+/**
+ * Error if the data is an invalid state
+ *
+ * @export
+ * @class DataError
+ * @typedef {DataError}
+ * @extends {Error}
+ */
 export class DataError extends Error {
+    /**
+     * Creates an instance of DataError.
+     *
+     * @constructor
+     * @param {string} message 
+     */
     constructor(message: string) {
         super(message);
         this.name = 'DataError';
     }
 }
 
+/**
+ * Error if the struct is an invalid state
+ *
+ * @export
+ * @class StructError
+ * @typedef {StructError}
+ * @extends {Error}
+ */
 export class StructError extends Error {
+    /**
+     * Creates an instance of StructError.
+     *
+     * @constructor
+     * @param {string} message 
+     */
     constructor(message: string) {
         super(message);
         this.name = 'StructError';
     }
 }
 
+/**
+ * Error if the data is an invalid state, this should crash the application so use sparingly
+ *
+ * @export
+ * @class FatalDataError
+ * @typedef {FatalDataError}
+ * @extends {Error}
+ */
 export class FatalDataError extends Error {
+    /**
+     * Creates an instance of FatalDataError.
+     *
+     * @constructor
+     * @param {string} message 
+     */
     constructor(message: string) {
         super(message);
         this.name = 'FatalDataError';
     }
 }
 
+/**
+ * Error if the struct is an invalid state, this should crash the application so use sparingly
+ *
+ * @export
+ * @class FatalStructError
+ * @typedef {FatalStructError}
+ * @extends {Error}
+ */
 export class FatalStructError extends Error {
+    /**
+     * Creates an instance of FatalStructError.
+     *
+     * @constructor
+     * @param {string} message 
+     */
     constructor(message: string) {
         super(message);
         this.name = 'FatalStructError';
     }
 }
 
+/**
+ * Websocket/SSE connection to the server
+ *
+ * @export
+ * @interface Socket
+ * @typedef {Socket}
+ */
 export interface Socket {
+    /**
+     * Description placeholder
+     *
+     * @param {string} event 
+     * @param {(data: unknown) => void} lisener 
+     */
     on(event: string, lisener: (data: unknown) => void): void;
 }
 
 
+/**
+ * Generates a type from a column type
+ *
+ * @export
+ * @typedef {ColTsType}
+ * @template {ColType} t 
+ */
 export type ColTsType<t extends ColType> = t extends 'string' ? string :
     t extends 'number' ? number :
     t extends 'boolean' ? boolean :
@@ -54,68 +130,186 @@ export type ColTsType<t extends ColType> = t extends 'string' ? string :
     t extends 'buffer' ? Buffer :
     never;
 
+/**
+ * Blank struct type
+ *
+ * @export
+ * @typedef {Blank}
+ */
 export type Blank = Record<string, ColType>;
 
+/**
+ * Configuration for a struct
+ *
+ * @export
+ * @typedef {StructBuilder}
+ * @template {Blank} T 
+ */
 export type StructBuilder<T extends Blank> = {
+    /**
+     * Name of the struct, this is used to identify the struct between the front and back ends
+     */
     name: string;
+    /**
+     * Structure of the struct, this is used to validate the data and typing
+     */
     structure: T;
+    /**
+     * Websocket/SSE connection to the server, must be present if the struct is to be used
+     */
     socket: Socket;
+    /**
+     * Log all actions to the console (only use for development because this could log sensitive data and may slow down the application)
+     */
     log?: boolean;
 };
 
+/**
+ * Not all users may have full read access to data, so all properties will be optional
+ *
+ * @export
+ * @typedef {PartialStructable}
+ * @template {Blank} T 
+ */
 export type PartialStructable<T extends Blank> = {
     [K in keyof T]?: ColTsType<T[K]>;
 }
 
+/**
+ * All users may have full read access to some data, so all properties will be required from this type
+ *
+ * @export
+ * @typedef {Structable}
+ * @template {Blank} T 
+ */
 export type Structable<T extends Blank> = {
     [K in keyof T]: ColTsType<T[K]>;
 };
 
+/**
+ * General status message for all actions. Use this format when generating your eventHandler() on the back end
+ *
+ * @export
+ * @typedef {StatusMessage}
+ * @template [T=void] 
+ */
 export type StatusMessage<T = void> = {
     success: boolean;
     data?: T;
     message?: string;
 }
 
+/**
+ * Version history of a data, requiring global columns and a version history id and created date
+ *
+ * @export
+ * @typedef {VersionStructable}
+ * @template {Blank} T 
+ */
 export type VersionStructable<T extends Blank> = Structable<{
     vhId: 'string';
     vhCreated: 'date';
 }> & PartialStructable<T> & Structable<GlobalCols>;
 
+/**
+ * Version history point of a data.
+ *
+ * @export
+ * @class StructDataVersion
+ * @typedef {StructDataVersion}
+ * @template {Blank} T 
+ */
 export class StructDataVersion<T extends Blank> {
+    /**
+     * Creates an instance of StructDataVersion.
+     *
+     * @constructor
+     * @param {Struct<T>} struct 
+     * @param {PartialStructable<T> & Structable<GlobalCols> & Structable<{
+     *         vhId: 'string';
+     *         vhCreated: 'date';
+     *     }>} data 
+     */
     constructor(public readonly struct: Struct<T>, public readonly data: PartialStructable<T> & Structable<GlobalCols> & Structable<{
         vhId: 'string';
         vhCreated: 'date';
     }>) {}
 
+    /**
+     * unique version history id
+     *
+     * @readonly
+     * @type {string}
+     */
     get vhId() {
         return this.data.vhId;
     }
 
+    /**
+     * Id of the data this relates to
+     *
+     * @readonly
+     * @type {string}
+     */
     get id() {
         return this.data.id;
     }
 
+    /**
+     * Date the version was created
+     *
+     * @readonly
+     * @type {Date}
+     */
     get vhCreated() {   
         return this.data.vhCreated;
     }
 
+    /**
+     * Date the data was created
+     *
+     * @readonly
+     * @type {string}
+     */
     get created() {
         return this.data.created;
     }
 
+    /**
+     * Date the data was last updated
+     *
+     * @readonly
+     * @type {string}
+     */
     get updated() {
         return this.data.updated;
     }
 
+    /**
+     * Whether the data is archived
+     *
+     * @readonly
+     * @type {boolean}
+     */
     get archived() {
         return this.data.archived;
     }
 
+    /**
+     *  Lifespan of the data in milliseconds
+     *
+     * @readonly
+     * @type {number}
+     */
     get lifetime() {
         return this.data.lifetime;
     }
 
+    /**
+     * Delete the version
+     *
+     * @returns {*} 
+     */
     delete() {
         return attemptAsync<StatusMessage>(async () => {
             return this.struct.post(DataAction.DeleteVersion, {
@@ -125,6 +319,11 @@ export class StructDataVersion<T extends Blank> {
         });
     }
 
+    /**
+     * Restore the version
+     *
+     * @returns {*} 
+     */
     restore() {
         return attemptAsync<StatusMessage>(async () => {
             return this.struct.post(DataAction.RestoreVersion, {
@@ -136,11 +335,40 @@ export class StructDataVersion<T extends Blank> {
 }
 
 
+/**
+ * Struct data for a single data point
+ *
+ * @export
+ * @class StructData
+ * @typedef {StructData}
+ * @template {Blank} T 
+ * @implements {Writable<PartialStructable<T> & Structable<GlobalCols>>}
+ */
 export class StructData<T extends Blank> implements Writable< PartialStructable<T> & Structable<GlobalCols>> {
+    /**
+     * Creates an instance of StructData.
+     *
+     * @constructor
+     * @param {Struct<T>} struct 
+     * @param {(PartialStructable<T> & Structable<GlobalCols>)} data 
+     */
     constructor(public readonly struct: Struct<T>, public data: PartialStructable<T> & Structable<GlobalCols>) {}
 
+    /**
+     * Svelte store subscribers, used to automatically update the view
+     *
+     * @private
+     * @type {*}
+     */
     private subscribers = new Set<(value: PartialStructable<T> & Structable<GlobalCols>) => void>();
 
+    /**
+     * Subscribe to the data
+     *
+     * @public
+     * @param {(value:  PartialStructable<T> & Structable<GlobalCols>) => void} fn 
+     * @returns {() => void} 
+     */
     public subscribe(fn: (value:  PartialStructable<T> & Structable<GlobalCols>) => void): () => void {
         this.subscribers.add(fn);
         fn(this.data);
@@ -150,12 +378,28 @@ export class StructData<T extends Blank> implements Writable< PartialStructable<
     }
 
     // this is what will set in the store
+    /**
+     * Sets the data and updates the subscribers, this will not update the backend
+     *
+     * @public
+     * @param {(PartialStructable<T> & Structable<GlobalCols>)} value 
+     */
     public set(value: PartialStructable<T> & Structable<GlobalCols>): void {
         this.data = value;
         this.subscribers.forEach((fn) => fn(value));
     }
 
     // this is what will send to the backend
+    /**
+     * Update the data in the backend, this will not update the subscribers as the backend will send the update back
+     *
+     * @public
+     * @async
+     * @param {(value: PartialStructable<T> & Structable<GlobalCols>) => PartialStructable<T> & Structable<{
+     *         id: 'string';
+     *     }>} fn 
+     * @returns {(PartialStructable<T> & Structable<{ id: "string"; }>) => unknown)} 
+     */
     public async update(fn: (value: PartialStructable<T> & Structable<GlobalCols>) => PartialStructable<T> & Structable<{
         id: 'string';
     }>) {
@@ -178,6 +422,11 @@ export class StructData<T extends Blank> implements Writable< PartialStructable<
         });
     }
 
+    /**
+     * Delete the data
+     *
+     * @returns {*} 
+     */
     delete() {
         return attemptAsync<StatusMessage>(async () => {
             return this.struct.post(DataAction.Delete, {
@@ -186,6 +435,12 @@ export class StructData<T extends Blank> implements Writable< PartialStructable<
         });
     }
 
+    /**
+     * Archive or restore the data
+     *
+     * @param {boolean} archive 
+     * @returns {*} 
+     */
     setArchive(archive: boolean) {
         return attemptAsync<StatusMessage>(async () => {
             if (archive) {
@@ -199,8 +454,14 @@ export class StructData<T extends Blank> implements Writable< PartialStructable<
         });
     }
 
-    // getVersionHistory() {}
-
+    /**
+     * Pull specific properties from the data, if the user does not have permission to read the property it will throw an error.
+     * This is not wrapped in an attempt(() => {}), so you will need to handle errors yourself. This will return a svelte store.
+     *
+     * @template {keyof T} Key 
+     * @param {...Key[]} keys 
+     * @returns {*} 
+     */
     pull<Key extends keyof T>(...keys: Key[]) {
         const o = {} as Structable<{
             [Property in Key]: T[Property];
@@ -239,6 +500,11 @@ export class StructData<T extends Blank> implements Writable< PartialStructable<
         return w;
     }
 
+    /**
+     * Retrieves all universes the data is in
+     *
+     * @returns {*} 
+     */
     getUniverses() {
         return attempt(() => {
             const a = JSON.parse(this.data.universes);
@@ -251,6 +517,11 @@ export class StructData<T extends Blank> implements Writable< PartialStructable<
     // removeUniverses(...universes: string[]) {}
     // setUniverses(...universes: string[]) {}
 
+    /**
+     * Retrieves all attributes the data has
+     *
+     * @returns {*} 
+     */
     getAttributes() {
         return attempt(() => {
             const a = JSON.parse(this.data.attributes);
@@ -263,6 +534,11 @@ export class StructData<T extends Blank> implements Writable< PartialStructable<
     // removeAttributes(...attributes: string[]) {}
     // setAttributes(...attributes: string[]) {}
 
+    /**
+     * Retrieves all versions of the data
+     *
+     * @returns {*} 
+     */
     getVersions() {
         return attemptAsync(async () => {
             const versions = await this.struct.post(DataAction.ReadVersionHistory, {
@@ -278,11 +554,40 @@ export class StructData<T extends Blank> implements Writable< PartialStructable<
     }
 }
 
+/**
+ * Svelte store data array, used to store multiple data points and automatically update the view
+ *
+ * @export
+ * @class DataArr
+ * @typedef {DataArr}
+ * @template {Blank} T 
+ * @implements {Readable<StructData<T>[]>}
+ */
 export class DataArr<T extends Blank> implements Readable<StructData<T>[]> {
+    /**
+     * Creates an instance of DataArr.
+     *
+     * @constructor
+     * @param {Struct<T>} struct 
+     * @param {StructData<T>[]} data 
+     */
     constructor(public readonly struct: Struct<T>, public data: StructData<T>[]) {}
 
-    private subscribers = new Set<(value: StructData<T>[]) => void>();
+    /**
+     * All subscribers to the data array
+     *
+     * @private
+     * @type {*}
+     */
+    private readonly subscribers = new Set<(value: StructData<T>[]) => void>();
 
+    /**
+     * Subscribe to the data array
+     *
+     * @public
+     * @param {(value: StructData<T>[]) => void} fn 
+     * @returns {() => void} 
+     */
     public subscribe(fn: (value: StructData<T>[]) => void): () => void {
         this.subscribers.add(fn);
         fn(this.data);
@@ -294,35 +599,83 @@ export class DataArr<T extends Blank> implements Readable<StructData<T>[]> {
         };
     }
 
+    /**
+     * Applies the new state to the data array and updates the subscribers
+     *
+     * @private
+     * @param {StructData<T>[]} value 
+     */
     private apply(value: StructData<T>[]): void {
         this.data = value.filter((v, i, a) => a.indexOf(v) === i);
         this.subscribers.forEach((fn) => fn(value));
     }
 
-    // public update(fn: (value: StructData<T>[]) => StructData<T>[]): void {
-    //     this.set(fn(this.data));
-    // }
-
+    /**
+     * Adds data to the array and updates the subscribers
+     *
+     * @public
+     * @param {...StructData<T>[]} values 
+     */
     public add(...values: StructData<T>[]): void {
         this.apply([...this.data, ...values]);
     }
 
+    /**
+     *Removes data from the array and updates the subscribers
+     *
+     * @public
+     * @param {...StructData<T>[]} values 
+     */
     public remove(...values: StructData<T>[]): void {
         this.apply(this.data.filter((value) => !values.includes(value)));
     }
 
+    /**
+     * Runs when all subscribers have been removed
+     *
+     * @private
+     * @type {(() => void) | undefined}
+     */
     private _onAllUnsubscribe: (() => void) | undefined;
+    /**
+     * Add listener for when all subscribers have been removed
+     *
+     * @public
+     * @param {() => void} fn 
+     */
     public onAllUnsubscribe(fn: () => void): void {
         this._onAllUnsubscribe = fn;
     }
 }
 
+/**
+ * Stream of StructData
+ *
+ * @export
+ * @class StructStream
+ * @typedef {StructStream}
+ * @template {Blank} T 
+ * @extends {Stream<StructData<T>>}
+ */
 export class StructStream<T extends Blank> extends Stream<StructData<T>> {
+    /**
+     * Creates an instance of StructStream.
+     *
+     * @constructor
+     * @param {Struct<T>} struct 
+     */
     constructor(public readonly struct: Struct<T>) {
         super();
     }
 }
 
+/**
+ * All events that can be received from the server
+ *
+ * @export
+ * @typedef {StructEvents}
+ * @template {Blank} T 
+ */
 export type StructEvents<T extends Blank> = {
     new: StructData<T>;
     update: StructData<T>;
@@ -331,6 +684,11 @@ export type StructEvents<T extends Blank> = {
     restore: StructData<T>;
 };
 
+/**
+ * All read types that can be used to query data
+ *
+ * @typedef {ReadTypes}
+ */
 type ReadTypes = {
     all: void;
     archived: void;
@@ -341,6 +699,11 @@ type ReadTypes = {
     universe: string;
 }
 
+/**
+ * Global columns that are required for all data
+ *
+ * @typedef {GlobalCols}
+ */
 type GlobalCols = {
     id: 'string';
     created: 'string';
@@ -351,34 +714,111 @@ type GlobalCols = {
     lifetime: 'number';
 }
 
+/**
+ * Struct class that communicates with the server
+ *
+ * @export
+ * @class Struct
+ * @typedef {Struct}
+ * @template {Blank} T 
+ */
 export class Struct<T extends Blank> {
-    public static route = '/api';
-
+    /**
+     * All structs that are accessible
+     *
+     * @public
+     * @static
+     * @readonly
+     * @type {*}
+     */
     public static readonly structs = new Map<string, Struct<Blank>>();
 
+    /**
+     * Cached writables for automatic updating
+     *
+     * @private
+     * @readonly
+     * @type {*}
+     */
     private readonly writables = new Map<string, DataArr<T>>();
 
+    /**
+     * Event emitter for all events
+     *
+     * @private
+     * @readonly
+     * @type {*}
+     */
     private readonly emitter = new EventEmitter<StructEvents<T>>();
 
-    public on = this.emitter.on.bind(this.emitter);
-    public off = this.emitter.off.bind(this.emitter);
-    public once = this.emitter.once.bind(this.emitter);
-    public emit = this.emitter.emit.bind(this.emitter);
+    /**
+     * Listens to an event
+     *
+     * @public
+     * @type {*}
+     */
+    public readonly on = this.emitter.on.bind(this.emitter);
+    /**
+     * Stops listening to an event
+     *
+     * @public
+     * @type {*}
+     */
+    public readonly off = this.emitter.off.bind(this.emitter);
+    /**
+     * Listens to an event once
+     *
+     * @public
+     * @type {*}
+     */
+    public readonly once = this.emitter.once.bind(this.emitter);
+    /**
+     * Emits an event
+     *
+     * @public
+     * @type {*}
+     */
+    public readonly emit = this.emitter.emit.bind(this.emitter);
 
+    /**
+     * Cache of StructData, used for updates and optimziations
+     *
+     * @private
+     * @readonly
+     * @type {*}
+     */
     private readonly cache = new Map<string, StructData<T>>();
 
+    /**
+     * Creates an instance of Struct.
+     *
+     * @constructor
+     * @param {StructBuilder<T>} data 
+     */
     constructor(public readonly data: StructBuilder<T>) {
         Struct.structs.set(data.name, this as any);
 
 
     }
 
+    /**
+     * Creates a new data point, if permitted
+     *
+     * @param {Structable<T>} data 
+     * @returns {*} 
+     */
     new(data: Structable<T>) {
         return attemptAsync<StatusMessage>(async () => {
             return this.post(DataAction.Create, data).then(r => r.unwrap().json()) ;
         });
     }
 
+    /**
+     * Sets listeners for the struct. Runs when the struct is built
+     *
+     * @private
+     * @returns {*} 
+     */
     private setListeners() {
         return attempt(() => {
             this.data.socket.on(`struct:${this.data.name}`, (data) => {
@@ -454,7 +894,17 @@ export class Struct<T extends Blank> {
         });
     }
 
+    /**
+     * Generates a new StructData or returns the cached version, if exists
+     *
+     * @param {(PartialStructable<T> & Structable<GlobalCols>)} data 
+     * @returns {StructData<T>} 
+     */
     Generator(data: PartialStructable<T> & Structable<GlobalCols>): StructData<T> {
+        if (this.cache.has(data.id)) {
+            return this.cache.get(data.id) as StructData<T>;
+        }
+
         // TODO: Data validation
         const d = new StructData(this, data);
         
@@ -465,12 +915,19 @@ export class Struct<T extends Blank> {
         return d;
     }
 
+    /**
+     * Validates the data
+     *
+     * @param {unknown} data 
+     * @returns {(data is PartialStructable<T> & Structable<GlobalCols>)} 
+     */
     validate(data: unknown): data is PartialStructable<T> & Structable<GlobalCols> {
         if (typeof data !== 'object' || data === null) return false;
         for (const key in data) {
             if (!Object.hasOwn(this.data.structure, key)) return false;
             const type = this.data.structure[key];
             const value = (data as any)[key];
+            if (typeof value === 'undefined') continue; // likely does not have permission to read
             if (typeof value !== type) return false;
         }
 
@@ -478,6 +935,13 @@ export class Struct<T extends Blank> {
     }
 
 
+    /**
+     * Sends a post request to the server
+     *
+     * @param {(DataAction | PropertyAction)} action 
+     * @param {unknown} data 
+     * @returns {*} 
+     */
     post(action: DataAction | PropertyAction, data: unknown) {
         return attemptAsync(async () => {
             const res = await fetch('/struct', {
@@ -496,6 +960,11 @@ export class Struct<T extends Blank> {
         });
     }
 
+    /**
+     * Builds the struct
+     *
+     * @returns {*} 
+     */
     build() {
         return attemptAsync(async () => {
             this.log('Building struct:', this.data.name);
@@ -508,13 +977,18 @@ export class Struct<T extends Blank> {
         });
     }
 
+    /**
+     * Connects to the backend struct, confirming the front end and backend types are valid
+     *
+     * @returns {*} 
+     */
     connect() {
         return attemptAsync<{
             success: boolean;
             message: string;
         }>(async () => {
             this.log('Connecting to struct:', this.data.name);
-            return fetch('/struct/connect', {
+            const res = await fetch('/struct/connect', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -524,9 +998,22 @@ export class Struct<T extends Blank> {
                     structure: this.data.structure, 
                 }),
             }).then(r => r.json());
+            if (!res.success) {
+                throw new FatalStructError(res.message);
+            }
+            return res;
         });
     }
 
+    /**
+     * Retrieves a stream of data from the server, used for querying data
+     *
+     * @private
+     * @template {keyof ReadTypes} K 
+     * @param {K} type 
+     * @param {ReadTypes[K]} args 
+     * @returns {StructStream<T>} 
+     */
     private getStream<K extends keyof ReadTypes>(type: K, args: ReadTypes[K]): StructStream<T> {
         this.log('Stream:', type, args);
         const s = new StructStream(this);
@@ -588,8 +1075,26 @@ export class Struct<T extends Blank> {
         return s;
     }
 
+    /**
+     * Gets all data as a stream
+     *
+     * @param {true} asStream If true, returns a stream
+     * @returns {StructStream<T>} 
+     */
     all(asStream: true): StructStream<T>;
+    /**
+     * Gets all data as an svelte store
+     *
+     * @param {false} asStream If false, returns a svelte store
+     * @returns {DataArr<T>} 
+     */
     all(asStream: false): DataArr<T>;
+    /**
+     * Gets all data as a stream or svelte store
+     *
+     * @param {boolean} asStream Returns a stream if true, svelte store if false
+     * @returns 
+     */
     all(asStream: boolean) {
         const getStream = () => this.getStream('all', undefined);
         if (asStream) return getStream();
@@ -620,8 +1125,26 @@ export class Struct<T extends Blank> {
         return newArr;
     }
 
+    /**
+     * Gets all archived data
+     *
+     * @param {true} asStream If true, returns a stream
+     * @returns {StructStream<T>} 
+     */
     archived(asStream: true): StructStream<T>;
+    /**
+     * Gets all archived data
+     *
+     * @param {false} asStream If false, returns a svelte store
+     * @returns {DataArr<T>} 
+     */
     archived(asStream: false): DataArr<T>;
+    /**
+     * Gets all archived data
+     *
+     * @param {boolean} asStream Returns a stream if true, svelte store if false
+     * @returns 
+     */
     archived(asStream: boolean) {
         const getStream = () => this.getStream('archived', undefined);
         if (asStream) return getStream();
@@ -652,8 +1175,32 @@ export class Struct<T extends Blank> {
         return newArr;
     }
 
+    /**
+     * Gets all data with a specific property value
+     *
+     * @param {string} key Property key
+     * @param {unknown} value Property value
+     * @param {true} asStream If true, returns a stream
+     * @returns {StructStream<T>} 
+     */
     fromProperty(key: string, value: unknown, asStream: true): StructStream<T>;
+    /**
+     * Gets all data with a specific property value
+     *
+     * @param {string} key Property key
+     * @param {unknown} value Property value
+     * @param {false} asStream If false, returns a svelte store
+     * @returns {DataArr<T>} 
+     */
     fromProperty(key: string, value: unknown, asStream: false): DataArr<T>;
+    /**
+     * Gets all data with a specific property value
+     *
+     * @param {string} key Property key
+     * @param {unknown} value Property value
+     * @param {boolean} asStream Returns a stream if true, svelte store if false
+     * @returns 
+     */
     fromProperty(key: string, value: unknown, asStream: boolean) {
         const s = this.getStream('property', { key, value });
         if (asStream) return s;
@@ -685,8 +1232,29 @@ export class Struct<T extends Blank> {
         return arr;
     }
 
+    /**
+     * Gets all data in a specific universe
+     *
+     * @param {string} universe Universe id
+     * @param {true} asStream If true, returns a stream
+     * @returns {StructStream<T>} 
+     */
     fromUniverse(universe: string, asStream: true): StructStream<T>;
+    /**
+     * Gets all data in a specific universe
+     *
+     * @param {string} universe Universe id
+     * @param {false} asStream If false, returns a svelte store
+     * @returns {DataArr<T>} 
+     */
     fromUniverse(universe: string, asStream: false): DataArr<T>;
+    /**
+     * Gets all data in a specific universe
+     *
+     * @param {string} universe Universe id
+     * @param {boolean} asStream Returns a stream if true, svelte store if false
+     * @returns 
+     */
     fromUniverse(universe: string, asStream: boolean) {
         const s = this.getStream('universe', universe);
         if (asStream) return s;
@@ -722,6 +1290,12 @@ export class Struct<T extends Blank> {
         return arr;
     }
 
+    /**
+     * Gets data from a specific id
+     *
+     * @param {string} id  Id of the data
+     * @returns {*} 
+     */
     fromId(id: string) {
         return attemptAsync(async () => {
             const has = this.cache.get(id);
@@ -733,6 +1307,12 @@ export class Struct<T extends Blank> {
     }
 
 
+    /**
+     * Logs to the console
+     *
+     * @private
+     * @param {...any[]} args 
+     */
     private log(...args: any[]) {
         if (this.data.log) {
             console.log(this.data.name + ':', ...args);

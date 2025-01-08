@@ -11,16 +11,38 @@ import fs from 'fs';
 
 const { Server: HTTPServer } = http;
 
+/**
+ * Error class for API errors
+ *
+ * @class APIError
+ * @typedef {APIError}
+ * @extends {Error}
+ */
 class APIError extends Error {
+    /**
+     * Creates an instance of APIError.
+     *
+     * @constructor
+     * @param {string} message 
+     */
     constructor(message: string) {
         super(message);
         this.name = 'APIError';
     }
 }
 
-type SseStream = ReadableStreamDefaultController<string>;
-
+/**
+ * Cached current ID for optimization
+ *
+ * @type {(number | undefined)}
+ */
 let currentId: number | undefined;
+/**
+ * Gets the next available id for an event
+ *
+ * @async
+ * @returns {unknown} 
+ */
 const nextId = async () => attemptAsync(async () => {
     if (currentId !== undefined) return currentId++;
 
@@ -37,15 +59,75 @@ const nextId = async () => attemptAsync(async () => {
     return currentId;
 });
 
+/**
+ * Connection between two servers
+ *
+ * @export
+ * @class Connection
+ * @typedef {Connection}
+ */
 export class Connection {
-    private buffer: string[] = []; // Buffer for pending messages
-    private isPaused = false; // Indicates if the connection is paused
-    private readonly maxBufferSize = 100; // Maximum allowed buffer size
-    private readonly heartbeatIntervalMs = 30_000; // Interval to send heartbeats
-    private readonly heartbeatTimeoutMs = 60_000; // Timeout to detect stale connections
+    /**
+     * Buffer of data to prevent memory leaks on the socket
+     *
+     * @private
+     * @type {string[]}
+     */
+    private buffer: string[] = [];
+    /**
+     * If the connection is draining and not accepting new data
+     *
+     * @private
+     * @type {boolean}
+     */
+    private isPaused = false;
+    /**
+     * Maximum buffer size before dropping old messages
+     *
+     * @private
+     * @readonly
+     * @type {100}
+     */
+    private readonly maxBufferSize = 100;
+    /**
+     * Maximum time between heartbeats before closing the connection
+     *
+     * @private
+     * @readonly
+     * @type {30000}
+     */
+    private readonly heartbeatIntervalMs = 30_000;
+    /**
+     * Base time for the heartbeat timeout
+     *
+     * @private
+     * @readonly
+     * @type {60000}
+     */
+    private readonly heartbeatTimeoutMs = 60_000;
+    /**
+     * Last time the heartbeat was sent
+     *
+     * @private
+     * @type {number}
+     */
     private lastHeartbeat: number = Date.now();
+    /**
+     * Heartbeat timer
+     *
+     * @private
+     * @type {(NodeJS.Timeout | undefined)}
+     */
     private heartbeatTimer: NodeJS.Timeout | undefined;
 
+    /**
+     * Creates an instance of Connection.
+     *
+     * @constructor
+     * @param {string} apiKey The API key for the connection
+     * @param {Server} server The server instance
+     * @param {express.Response} req The request object
+     */
     constructor(
         public readonly apiKey: string,
         public readonly server: Server,
@@ -53,8 +135,18 @@ export class Connection {
     ) {
         // Start the heartbeat mechanism
         this.startHeartbeat();
+
+        this.req.on('drain', () => this.resume());
     }
 
+    /**
+     * Send an event to the connection
+     *
+     * @async
+     * @param {string} event 
+     * @param {unknown} data 
+     * @returns {unknown} 
+     */
     async send(event: string, data: unknown) {
         return attemptAsync(async () => {
             const { CachedEvents } = await import('./cached-events');
@@ -85,6 +177,12 @@ export class Connection {
         });
     }
 
+    /**
+     * Write a message to the connection
+     *
+     * @private
+     * @param {string} message 
+     */
     private enqueueMessage(message: string) {
         if (this.isPaused) {
             this.buffer.push(message);
@@ -107,6 +205,11 @@ export class Connection {
         }
     }
 
+    /**
+     * Drains the buffer to the connection if not paused
+     *
+     * @private
+     */
     private flushBuffer() {
         while (this.buffer.length > 0 && !this.isPaused) {
             const message = this.buffer.shift();
@@ -125,11 +228,19 @@ export class Connection {
         }
     }
 
+    /** 
+     * Drains the buffer and resumes the connection
+     */
     resume() {
         this.isPaused = false;
         this.flushBuffer();
     }
 
+    /**
+     * Start the heartbeat mechanism
+     *
+     * @private
+     */
     private startHeartbeat() {
         this.heartbeatTimer = setInterval(() => {
             const now = Date.now();
@@ -143,10 +254,21 @@ export class Connection {
         }, this.heartbeatIntervalMs);
     }
 
+    /**
+     * Send a heartbeat to the connection
+     *
+     * @private
+     */
     private sendHeartbeat() {
         this.enqueueMessage(`event: heartbeat\ndata: ${JSON.stringify({ timestamp: Date.now() })}\n\n`);
     }
 
+    /**
+     * Acknowledge an event
+     *
+     * @param {number} id 
+     * @returns {*} 
+     */
     ack(id: number) {
         return attemptAsync(async () => {
             const { CachedEvents } = await import('./cached-events');
@@ -154,6 +276,11 @@ export class Connection {
         });
     }
 
+    /**
+     * Close the connection
+     *
+     * @returns {*} 
+     */
     close() {
         return attempt(() => {
             if (this.heartbeatTimer) clearInterval(this.heartbeatTimer); // Stop heartbeat timer
@@ -162,6 +289,9 @@ export class Connection {
         });
     }
 
+    /** 
+     * Update the heartbeat timestamp
+    */
     updateHeartbeat() {
         this.lastHeartbeat = Date.now();
     }
@@ -170,6 +300,12 @@ export class Connection {
 
 
 
+/**
+ * Struct events and their payload types
+ *
+ * @typedef {StructEvent}
+ * @template {Blank} [T=Blank] 
+ */
 type StructEvent<T extends Blank = Blank> = {
     'create': { data: Structable<T>, timestamp: number },
     'update': { data: Structable<T>, timestamp: number },
@@ -182,6 +318,12 @@ type StructEvent<T extends Blank = Blank> = {
     'set-universes': { id: string, universes: string[], timestamp: number },
 };
 
+/**
+ * Query types and their arguments
+ *
+ * @export
+ * @typedef {QueryType}
+ */
 export type QueryType = {
     'all': {},
     'from-id': { id: string },
@@ -192,6 +334,12 @@ export type QueryType = {
     'versions': { id: string },
 }
 
+/**
+ * Query response types
+ *
+ * @typedef {QueryResponse}
+ * @template {Blank} T 
+ */
 type QueryResponse<T extends Blank> = {
     'all': Stream<Structable<T & typeof globalCols>>,
     'from-id': Structable<T> | undefined,
@@ -202,14 +350,64 @@ type QueryResponse<T extends Blank> = {
     'versions': Stream<Structable<T & typeof globalCols>>,
 };
 
+/**
+ * API Server
+ *
+ * @export
+ * @class Server
+ * @typedef {Server}
+ */
 export class Server {
+    /**
+     * All active connections
+     *
+     * @public
+     * @readonly
+     * @type {*}
+     */
     public readonly connections = new Map<string, Connection>();
 
+    /**
+     * Cached struct emitters
+     *
+     * @private
+     * @readonly
+     * @type {*}
+     */
     private readonly structEmitters = new Map<string, EventEmitter<StructEvent>>();
 
+    /**
+     * Express app instance
+     *
+     * @private
+     * @readonly
+     * @type {*}
+     */
     private readonly app = express();
+    /**
+     * The server instance
+     *
+     * @private
+     * @readonly
+     * @type {*}
+     */
     private readonly server = new HTTPServer(this.app);
 
+    /**
+     * Creates an instance of Server.
+     *
+     * @constructor
+     * @param {number} port 
+     * @param {(key: string) => boolean | Promise<boolean>} checkAPI 
+     * @param {(event: {
+     *             apiKey: string;
+     *             event: keyof StructEvent;
+     *             data: Omit<StructEvent[keyof StructEvent], 'timestamp'>;
+     *             timestamp: number;
+     *             struct: string;
+     *         }) => boolean | Promise<boolean>} checkEvent 
+     * @param {string} logFile Output log file
+     */
     constructor(
         public readonly port: number, 
         public readonly checkAPI: (key: string) => boolean | Promise<boolean>,
@@ -220,7 +418,7 @@ export class Server {
             timestamp: number;
             struct: string;
         }) => boolean | Promise<boolean>,
-        public readonly logFile: string,
+        public readonly logFile?: string,
     ) {
         this.app.use(express.json());
 
@@ -429,6 +627,14 @@ export class Server {
         });
     }
 
+    /**
+     * Handler for struct events, separated for batching or streaming
+     *
+     * @async
+     * @param {string} apiKey 
+     * @param {*} structEvent 
+     * @returns {unknown} 
+     */
     async handleStructEvent(apiKey: string, structEvent: any) {
         const { event, timestamp, payload: { data, struct } } = structEvent;
     
@@ -487,10 +693,26 @@ export class Server {
     
         return { status: 200, message: 'Event processed successfully' };
     }
-    public start(cb: () => void) {
+    /**
+     * Stars the server
+     *
+     * @public
+     * @param {() => void} cb 
+     * @returns {void) => void} 
+     */
+    public start(cb?: () => void) {
         this.server.listen(this.port, cb);
     }
 
+    /**
+     * Retrieves an emitter for a struct
+     *
+     * @public
+     * @template {Blank} T 
+     * @template {string} Name 
+     * @param {Struct<T, Name>} struct 
+     * @returns {*} 
+     */
     public getEmitter<T extends Blank, Name extends string>(struct: Struct<T, Name>) {
         const emitter = this.structEmitters.get(struct.name);
         if (!emitter) {
@@ -501,6 +723,17 @@ export class Server {
         return emitter as EventEmitter<StructEvent<T>>;
     }
 
+    /**
+     * Sends an event to all connections
+     *
+     * @async
+     * @template {Blank} T 
+     * @template {string} Name 
+     * @param {Struct<T, Name>} struct 
+     * @param {keyof StructEvent} event 
+     * @param {Omit<StructEvent[keyof StructEvent], 'timestamp'>} data 
+     * @returns 
+     */
     async send<T extends Blank, Name extends string>(struct: Struct<T, Name>, event: keyof StructEvent, data: Omit<StructEvent[keyof StructEvent], 'timestamp'>) {
         return resolveAll(await Promise.all(Array.from(this.connections.values()).map(async c => attemptAsync(async () => {
             if (await this.checkEvent({
@@ -519,11 +752,47 @@ export class Server {
     }
 }
 
+/**
+ * API Client
+ *
+ * @export
+ * @class Client
+ * @typedef {Client}
+ */
 export class Client {
+    /**
+     * History of queries, used for rate limiting
+     *
+     * @public
+     * @readonly
+     * @type {*}
+     */
     public readonly queryHistory = new Map<string, Map<keyof QueryType, number>>();
+    /**
+     * Last time the client disconnected
+     *
+     * @public
+     * @type {*}
+     */
     public lastDisconnect = Date.now();
+    /**
+     * If the client is connected to the server
+     *
+     * @public
+     * @type {boolean}
+     */
     public connected = false;
 
+    /**
+     * Creates an instance of Client.
+     *
+     * @constructor
+     * @param {string} apikey API key for the client
+     * @param {string} host Hostname of the server
+     * @param {number} port Port of the server
+     * @param {boolean} https If the server uses HTTPS
+     * @param {string} logFile Output log file
+     */
     constructor(
         public readonly apikey: string,
         public readonly host: string,
@@ -532,8 +801,25 @@ export class Client {
         public readonly logFile: string,
     ) {}
 
+    /**
+     * Cached struct emitters
+     *
+     * @private
+     * @readonly
+     * @type {*}
+     */
     private readonly structEmitters = new Map<string, EventEmitter<StructEvent>>();
 
+    /**
+     * Sends an event to the server
+     *
+     * @template {Blank} T 
+     * @template {string} Name 
+     * @param {Struct<T, Name>} struct 
+     * @param {keyof StructEvent<T>} event 
+     * @param {Omit<StructEvent<T>[keyof StructEvent<T>], 'timestamp'>} data 
+     * @returns {*} 
+     */
     send<T extends Blank, Name extends string>(struct: Struct<T, Name>, event: keyof StructEvent<T>, data: Omit<StructEvent<T>[keyof StructEvent<T>], 'timestamp'>) {
         return attemptAsync<unknown>(async () => {
             const { CachedEvents } = await import('./cached-events');
@@ -560,6 +846,21 @@ export class Client {
         });
     }
 
+    /**
+     * Actual send event, separated for caching
+     *
+     * @private
+     * @param {{
+     *         id: number;
+     *         event: keyof StructEvent;
+     *         payload: {
+     *             struct: string;
+     *             data: Omit<StructEvent[keyof StructEvent], 'timestamp'>;
+     *         },
+     *         timestamp: number;
+     *     }} event 
+     * @returns 
+     */
     private sendEvent(event: {
         id: number;
         event: keyof StructEvent;
@@ -584,6 +885,17 @@ export class Client {
         });
     }
 
+    /**
+     * Queries the server for data
+     *
+     * @template {Blank} T 
+     * @template {string} N 
+     * @template {keyof QueryType} Q 
+     * @param {Struct<T, N>} struct 
+     * @param {Q} type 
+     * @param {QueryType[Q]} args 
+     * @returns {Promise<Result<QueryResponse<T>[Q], Error>>} 
+     */
     query<T extends Blank, N extends string, Q extends keyof QueryType>(struct: Struct<T, N>, type: Q, args: QueryType[Q]): Promise<Result<QueryResponse<T>[Q], Error>> {
         return attemptAsync(async () => {
             log(this.logFile, {
@@ -649,6 +961,11 @@ export class Client {
         }) as any;
     }
 
+    /**
+     * Pings the server to check connection
+     *
+     * @returns {*} 
+     */
     ping() {
         return attemptAsync(async () => {
             return fetch(`${this.url}/ping`, {
@@ -661,6 +978,12 @@ export class Client {
         });
     }
 
+    /**
+     * Starts pinging loop to emit connect/disconnect events and handle batch updates
+     *
+     * @private
+     * @returns {*} 
+     */
     private startLoop() { 
         return attemptAsync(async () => {
             const { CachedEvents } = await import('./cached-events');
@@ -717,8 +1040,35 @@ export class Client {
         });
     }
 
+    /**
+     * Batch update events to the server
+     *
+     * @private
+     * @type {{ id: number, event: keyof StructEvent, payload: { struct: string, data: Omit<StructEvent[keyof StructEvent], 'timestamp'> }, timestamp: number }[]}
+     */
     private batch: { id: number, event: keyof StructEvent, payload: { struct: string, data: Omit<StructEvent[keyof StructEvent], 'timestamp'> }, timestamp: number }[] = [];
+    /**
+     * Timeout for batching events
+     *
+     * @private
+     * @type {(NodeJS.Timeout | undefined)}
+     */
     private batchTimeout: NodeJS.Timeout | undefined;
+    /**
+     * Adds a new event to the batch, and sends if full
+     *
+     * @private
+     * @param {{
+     *         id: number;
+     *         event: keyof StructEvent;
+     *         payload: {
+     *             struct: string;
+     *             data: Omit<StructEvent[keyof StructEvent], 'timestamp'>;
+     *         },
+     *         timestamp: number;
+     *     }} event 
+     * @returns 
+     */
     private addToBatch(event: {
         id: number;
         event: keyof StructEvent;
@@ -736,6 +1086,12 @@ export class Client {
         }, 1000);
     }
 
+    /**
+     * Sends a batch of events to the server
+     *
+     * @private
+     * @returns {*} 
+     */
     private sendBatch() {
         if (!this.batch.length) return;
         const batch = this.batch;
@@ -760,10 +1116,25 @@ export class Client {
         });
     }
 
+    /**
+     * Url of the server
+     *
+     * @readonly
+     * @type {string}
+     */
     get url() {
         return `${this.https ? 'https' : 'http'}://${this.host}:${this.port}`;
     }
 
+    /**
+     * Retrieves an emitter for a struct
+     *
+     * @public
+     * @template {Blank} T 
+     * @template {string} Name 
+     * @param {Struct<T, Name>} struct 
+     * @returns {*} 
+     */
     public getEmitter<T extends Blank, Name extends string>(struct: Struct<T, Name>) {
         const emitter = this.structEmitters.get(struct.name);
         if (!emitter) {
@@ -774,6 +1145,12 @@ export class Client {
         return emitter as EventEmitter<StructEvent<T>>;
     }
 
+    /**
+     * Starts the client
+     *
+     * @public
+     * @returns {*} 
+     */
     public start() {
         return attemptAsync(async () => {
             const reconnectDelay = 1000; // Initial reconnection delay (1 second)
@@ -887,6 +1264,13 @@ export class Client {
         });
     }
 
+    /**
+     * Acknowledge an event
+     *
+     * @private
+     * @param {number} id 
+     * @returns {*} 
+     */
     private ack(id: number) {
         return attemptAsync(async () => {
             return fetch(`${this.url}/ack`, {
@@ -900,6 +1284,13 @@ export class Client {
         });
     }
 
+    /**
+     * Retrieves the last time a query was made
+     *
+     * @param {string} struct 
+     * @param {keyof QueryType} type 
+     * @returns {*} 
+     */
     getLastRead(struct: string, type: keyof QueryType) {
         const s = this.queryHistory.get(struct);
         if (!s) return undefined;
@@ -907,12 +1298,24 @@ export class Client {
     }
 }
 
-const log = (logFile: string, data: {
+/**
+ * Logs an event to a file
+ *
+ * @param {string} logFile 
+ * @param {{
+ *     event: string;
+ *     type: 'info' | 'warn' | 'error';
+ *     message: string;
+ * }} data 
+ * @returns {*} 
+ */
+const log = (logFile: string | undefined, data: {
     event: string;
     type: 'info' | 'warn' | 'error';
     message: string;
 }) => {
     return attemptAsync(async () => {
+        if (!logFile) return;
         const timestamp = Date.now();
         const line = `${timestamp} [${data.event}] ${data.type.toUpperCase()}: ${data.message}\n`;
         return fs.promises.appendFile(logFile, line);
