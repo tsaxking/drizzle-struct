@@ -942,7 +942,7 @@ export class Struct<T extends Blank> {
      * @param {unknown} data 
      * @returns {*} 
      */
-    post(action: DataAction | PropertyAction, data: unknown) {
+    post(action: DataAction | PropertyAction | string, data: unknown) {
         return attemptAsync(async () => {
             const res = await fetch('/struct', {
                 method: 'POST',
@@ -1014,7 +1014,7 @@ export class Struct<T extends Blank> {
      * @param {ReadTypes[K]} args 
      * @returns {StructStream<T>} 
      */
-    private getStream<K extends keyof ReadTypes>(type: K, args: ReadTypes[K]): StructStream<T> {
+    public getStream<K extends keyof ReadTypes>(type: K, args: ReadTypes[K]): StructStream<T> {
         this.log('Stream:', type, args);
         const s = new StructStream(this);
         this.post(PropertyAction.Read, {

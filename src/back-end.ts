@@ -884,7 +884,7 @@ export interface RequestEvent {
  * @typedef {RequestAction}
  */
 export type RequestAction = {
-    action: DataAction | PropertyAction;
+    action: DataAction | PropertyAction | string;
     data: unknown;
     request: RequestEvent;
     struct: Struct;
@@ -950,7 +950,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
             if (!Object.hasOwn(body, 'action')) return new Response('Missing action', { status: 400 });
             if (!Object.hasOwn(body, 'data')) return new Response('Missing data', { status: 400 });
 
-            const B = body as { struct: string; action: DataAction | PropertyAction; data: unknown };
+            const B = body as { struct: string; action: DataAction | PropertyAction | string; data: unknown };
 
             const struct = Struct.structs.get(B.struct);
             if (!struct) return new Response('Struct not found', { status: 404 });
