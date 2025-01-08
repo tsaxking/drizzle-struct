@@ -35,12 +35,13 @@
     "proper-lockfile": "^4.1.2",
     "svelte": "^5.16.0",
     "ts-node": "^10.9.2",
-    "ts-utils": "github:tsaxking/global-ts-utilities",
+    "ts-utils": "git+https://github.com/tsaxking/global-ts-utilities.git",
     "typescript": "^5.7.2",
     "uuid": "^11.0.3",
     "zod": "^3.24.1"
   },
   "devDependencies": {
+    "@esbuild-kit/esm-loader": "^2.6.5",
     "@types/express": "^5.0.0",
     "@types/pg": "^8.11.10",
     "drizzle-kit": "^0.22.0",

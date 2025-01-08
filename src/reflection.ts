@@ -1,12 +1,13 @@
 import http from 'http';
 import express from 'express';
-import { Blank, Struct, StructData, StructStream } from './back-end';
+import { Blank, globalCols, Struct, Structable, StructData, StructStream } from './back-end';
 import { EventEmitter } from 'ts-utils/event-emitter';
 import { z } from 'zod';
 import { decode, encode } from 'ts-utils/text';
 import { attempt, attemptAsync, resolveAll, type Result } from 'ts-utils/check';
 import { Stream } from 'ts-utils/stream';
 import { Loop } from 'ts-utils/loop';
+import fs from 'fs';
 
 const { Server: HTTPServer } = http;
 
@@ -170,8 +171,8 @@ export class Connection {
 
 
 type StructEvent<T extends Blank = Blank> = {
-    'create': { data: T, timestamp: number },
-    'update': { data: T, timestamp: number },
+    'create': { data: Structable<T>, timestamp: number },
+    'update': { data: Structable<T>, timestamp: number },
     'delete': { id: string, timestamp: number },
     'delete-version': { id: string, vhId: number, timestamp: number },
     'restore-version': { id: string, vhId: number, timestamp: number },
@@ -181,7 +182,7 @@ type StructEvent<T extends Blank = Blank> = {
     'set-universes': { id: string, universes: string[], timestamp: number },
 };
 
-type QueryType = {
+export type QueryType = {
     'all': {},
     'from-id': { id: string },
     'from-ids': { ids: string[] },
@@ -191,14 +192,14 @@ type QueryType = {
     'versions': { id: string },
 }
 
-type QueryResponse<T extends Blank, Name extends string> = {
-    'all': Stream<StructData<T, Name>>,
-    'from-id': StructData<T, Name> | undefined,
-    'from-ids': Stream<StructData<T, Name>>,
-    'from-property': Stream<StructData<T, Name>>,
-    'from-universe': Stream<StructData<T, Name>>,
-    'archived': Stream<StructData<T, Name>>,
-    'versions': Stream<StructData<T, Name>>,
+type QueryResponse<T extends Blank> = {
+    'all': Stream<Structable<T & typeof globalCols>>,
+    'from-id': Structable<T> | undefined,
+    'from-ids': Stream<Structable<T & typeof globalCols>>,
+    'from-property': Stream<Structable<T & typeof globalCols>>,
+    'from-universe': Stream<Structable<T & typeof globalCols>>,
+    'archived': Stream<Structable<T & typeof globalCols>>,
+    'versions': Stream<Structable<T & typeof globalCols>>,
 };
 
 export class Server {
@@ -219,6 +220,7 @@ export class Server {
             timestamp: number;
             struct: string;
         }) => boolean | Promise<boolean>,
+        public readonly logFile: string,
     ) {
         this.app.use(express.json());
 
@@ -518,13 +520,16 @@ export class Server {
 }
 
 export class Client {
-    connected = false;
+    public readonly queryHistory = new Map<string, Map<keyof QueryType, number>>();
+    public lastDisconnect = Date.now();
+    public connected = false;
 
     constructor(
         public readonly apikey: string,
         public readonly host: string,
         public readonly port: number,
         public readonly https: boolean,
+        public readonly logFile: string,
     ) {}
 
     private readonly structEmitters = new Map<string, EventEmitter<StructEvent>>();
@@ -579,8 +584,18 @@ export class Client {
         });
     }
 
-    query<T extends Blank, N extends string, Q extends keyof QueryType>(struct: Struct<T, N>, type: Q, args: QueryType[Q]): Promise<Result<QueryResponse<T, N>[Q], Error>> {
+    query<T extends Blank, N extends string, Q extends keyof QueryType>(struct: Struct<T, N>, type: Q, args: QueryType[Q]): Promise<Result<QueryResponse<T>[Q], Error>> {
         return attemptAsync(async () => {
+            log(this.logFile, {
+                event: 'query',
+                type: 'info',
+                message: `Querying ${struct.name} with type ${type}`,
+            });
+            {
+                const s = this.queryHistory.get(struct.name) || new Map<keyof QueryType, number>();
+                s.set(type, Date.now());
+                this.queryHistory.set(struct.name, s);
+            }
             return fetch(`${this.url}/query`, {
                 method: 'POST',
                 headers: {
@@ -646,14 +661,29 @@ export class Client {
         });
     }
 
-    private startLoop() {
+    private startLoop() { 
         return attemptAsync(async () => {
             const { CachedEvents } = await import('./cached-events');
             const loop = new Loop(async () => {
                 const res = await this.ping();
                 if (res.isOk() && res.value.ok) {
+                    if (!this.connected) {
+                        log(this.logFile, {
+                            event: 'connection',
+                            type: 'info',
+                            message: 'Connected to API server',
+                        });
+                    }
                     this.connected = true;
                 } else {
+                    if (this.connected) {
+                        log(this.logFile, {
+                            event: 'connection',
+                            type: 'warn',
+                            message: 'Disconnected from API server',
+                        });
+                        this.lastDisconnect = Date.now();
+                    }
                     this.connected = false;
                 }
     
@@ -714,6 +744,11 @@ export class Client {
             if (!this.connected) {
                 throw new Error('Not connected');
             }
+            log(this.logFile, {
+                event: 'batch',
+                type: 'info',
+                message: `Sending batch of ${batch.length} events`,
+            });
             return fetch(`${this.url}/batch`, {
                 method: 'POST',
                 headers: {
@@ -864,4 +899,22 @@ export class Client {
             });
         });
     }
+
+    getLastRead(struct: string, type: keyof QueryType) {
+        const s = this.queryHistory.get(struct);
+        if (!s) return undefined;
+        return s.get(type);
+    }
 }
+
+const log = (logFile: string, data: {
+    event: string;
+    type: 'info' | 'warn' | 'error';
+    message: string;
+}) => {
+    return attemptAsync(async () => {
+        const timestamp = Date.now();
+        const line = `${timestamp} [${data.event}] ${data.type.toUpperCase()}: ${data.message}\n`;
+        return fs.promises.appendFile(logFile, line);
+    });
+};

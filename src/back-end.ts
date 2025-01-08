@@ -11,7 +11,8 @@ import { Stream } from 'ts-utils/stream';
 import { z } from 'zod';
 import { v4 as uuid } from 'uuid';
 import { DataAction, PropertyAction } from './types';
-import { Client, Server } from './reflection';
+import { Client, QueryType, Server } from './reflection';
+import { OnceReadMap } from 'ts-utils/map';
 
 export class StructError extends Error {
     constructor(message: string) {
@@ -67,13 +68,16 @@ export type StructBuilder<T extends Blank, Name extends string> = {
     // If there are merge conflicts, it will always prioritize the other server's data
     // It will still save in the local database for optimization purposes
     // If there are type conflicts, they are incompatible, so it will throw an error
-    reflect?: {
-        address: string;
-        port: number;
-        key: string;
-        // How often it should sync with the other server
-        // it will first send a hash of the data, and if the other server doesn't have that hash, the other server will pipe the data
-        interval: number;
+    // reflect?: {
+    //     address: string;
+    //     port: number;
+    //     key: string;
+    //     // How often it should sync with the other server
+    //     // it will first send a hash of the data, and if the other server doesn't have that hash, the other server will pipe the data
+    //     interval: number;
+    // };
+    reflection?: {
+        queryThreshold: number;
     };
 };
 
@@ -115,6 +119,8 @@ export const versionGlobalCols = {
 };
 
 export class DataVersion<T extends Blank, Name extends string> {
+    public readonly metadata = new OnceReadMap<string, string|boolean|number>();
+
     constructor(public readonly struct: Struct<T, Name>, public readonly data: Structable<T & typeof globalCols & typeof versionGlobalCols>) {}
 
     get vhId() {
@@ -168,6 +174,13 @@ export class DataVersion<T extends Blank, Name extends string> {
 }
 
 export class StructData<T extends Blank = any, Name extends string = any> {
+    // Used only for local handling
+    // Will not be transmitted to the front end
+    // Will not be saved in the database
+    // Can be used to inform event emitters where the source of the data is
+    // This is meant to be short lived
+    public readonly metadata = new OnceReadMap<string, string|boolean|number>();
+
     constructor(public readonly data: Readonly<Structable<T & typeof globalCols>>, public readonly struct: Struct<T, Name>) {}
 
     get id() {
@@ -363,6 +376,13 @@ export class StructData<T extends Blank = any, Name extends string = any> {
         }
         return data;
     }
+
+    isSimilar(data: Structable<T>) {
+        for (const key in data) {
+            if (data[key] !== this.data[key]) return false;
+        }
+        return true;
+    }
 }
 
 export const toJson = <T extends Blank>(struct: Struct<T, string>, data: Structable<T & typeof globalCols>) => {
@@ -549,7 +569,15 @@ export class Struct<T extends Blank = any, Name extends string = any> {
         return attemptAsync(async () => {
             const data = await this.database.select().from(this.table).where(sql`${this.table.id} = ${id}`);
             const a = data[0];
-            if (!a) return undefined;
+            if (!a) {
+                if (this._api) {
+                    const apiQueryResult = (await this._api.query(this, 'from-id', {
+                        id
+                    })).unwrap();
+                    if (!apiQueryResult) return;
+                    return this.Generator(apiQueryResult as any);
+                }
+            }
             return this.Generator(a as any);
         });
     }
@@ -557,7 +585,31 @@ export class Struct<T extends Blank = any, Name extends string = any> {
     fromIds(ids: string[], asStream: true): StructStream<T, Name>;
     fromIds(ids: string[], asStream: false): Promise<Result<StructData<T, Name>[], Error>>;
     fromIds(ids: string[], asStream: boolean) {
-        const get = () => this.database.select().from(this.table).where(sql`${this.table.id} IN (${ids})`);
+        const get = () => {
+            let result: (Structable<T & typeof globalCols> | undefined)[] = [];
+            if (this._api) {
+                const lastRead = this._api.getLastRead(this.name, 'from-ids');
+                if (lastRead && Date.now() - lastRead < (this.data.reflection?.queryThreshold ?? 1000 * 60 * 60)) {
+                    this._api.query(this, 'from-ids', {
+                        ids,
+                    }).then(r => {
+                        if (r.isOk()) r.value.pipe(d => {
+                            if (!result.find(i => i?.id === d.id)) {
+                                // Because it's not found in the database, we can assume it's new data that needs to be added
+                                // We'll just use the event system to add it so everything is consistent
+                                this.new(d, {
+                                    ignoreGlobals: false,
+                                    emit: false,
+                                });
+                            }
+                        })
+                    });
+                }
+            }
+
+            result = this.database.select().from(this.table).where(sql`${this.table.id} IN (${ids})`) as any;
+            return result;
+        }
         if (asStream) {
             const stream = new StructStream(this);
             (async () => {
@@ -580,7 +632,28 @@ export class Struct<T extends Blank = any, Name extends string = any> {
     all(asStream: true, includeArchived?: boolean): StructStream<T, Name>;
     all(asStream: false, includeArchived?: boolean): Promise<Result<StructData<T, Name>[], Error>>;
     all(asStream: boolean, includeArchived = false){
-        const get = () => this.database.select().from(this.table).where(sql`${this.table.archived} = ${includeArchived}`);
+        const get = async () => {
+            if (this._api) {
+                const lastRead = this._api.getLastRead(this.name, 'all');
+                if (lastRead && Date.now() - lastRead < (this.data.reflection?.queryThreshold ?? 1000 * 60 * 60)) {
+                    this._api.query(this, 'all', {
+                        includeArchived,
+                    }).then(r => {
+                        if (r.isOk()) r.value.pipe(d => {
+                            if (!result.find(i => i?.id === d.id)) {
+                                this.new(d, {
+                                    ignoreGlobals: false,
+                                    emit: false,
+                                });
+                            }
+                        })
+                    });
+                }
+            }
+
+            const result: Structable<T & typeof globalCols>[] = await this.database.select().from(this.table).where(sql`${this.table.archived} = ${includeArchived}`) as any;
+            return result;
+        }
         if (asStream) {
             const stream = new StructStream(this);
             (async () => {
@@ -624,7 +697,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
     fromProperty<K extends keyof T>(key: K, value: TsType<T[K]['_']['dataType']>, asStream: true): StructStream<T, Name>;
     fromProperty<K extends keyof T>(key: K, value: TsType<T[K]['_']['dataType']>, asStream: false): Promise<Result<StructData<T, Name>[], Error>>;
     fromProperty<K extends keyof T>(key: K, value: TsType<T[K]['_']['dataType']>, asStream: boolean) {
-        const get = () => this.database.select().from(this.table).where(sql`${this.table[key] as any} = ${value} AND ${this.table.archived} = ${false}`);
+        const get = () => this.database.select().from(this.table).where(sql`${this.table[key]} = ${value} AND ${this.table.archived} = ${false}`);
         if (asStream) {
             const stream = new StructStream(this);
             (async () => {
@@ -802,9 +875,167 @@ export class Struct<T extends Blank = any, Name extends string = any> {
         });
     }
 
-    startReflection(server: Server | Client) {
+    private _api: Client | undefined = undefined;
+
+    startReflection(api: Server | Client) {
         return attempt(() => {
-            const em = server.getEmitter(this);
+            if (this.data.reflection && api instanceof Client) {
+                // this property is only used for querying the data
+                // Because of this, we don't need it for the central server
+                this._api = api;
+            }
+            const em = api.getEmitter<T, Name>(this);
+
+            em.on('archive', async ({ id, timestamp }) => {
+                const data = await this.fromId(id);
+                if (data.isErr()) return console.error(data.error);
+                data.value?.setArchive(true, {
+                    emit: false,
+                });
+            });
+            em.on('restore', async ({ id, timestamp }) => {
+                const data = await this.fromId(id);
+                if (data.isErr()) return console.error(data.error);
+                data.value?.setArchive(false, {
+                    emit: false,
+                });
+            });
+            em.on('delete', async ({ id, timestamp }) => {
+                const data = await this.fromId(id);
+                if (data.isErr()) return console.error(data.error);
+                data.value?.delete({
+                    emit: false,
+                });
+            });
+            em.on('delete-version', async ({ id, timestamp, vhId }) => {
+                const data = await this.fromId(id);
+                if (data.isErr()) return console.error(data.error);
+                if (!data) return;
+                const versions = await data.value?.getVersions();
+                if (!versions) return;
+                if (versions.isErr()) return console.error(versions.error);
+                const version = versions.value.find(v => v.vhId === vhId);
+                version?.delete({
+                    emit: false,
+                });
+            });
+            em.on('restore-version', async ({ id, timestamp, vhId }) => {
+                const data = await this.fromId(id);
+                if (data.isErr()) return console.error(data.error);
+                if (!data) return;
+                const versions = await data.value?.getVersions();
+                if (!versions) return;
+                if (versions.isErr()) return console.error(versions.error);
+                const version = versions.value.find(v => v.vhId === vhId);
+                version?.restore({
+                    emit: false,
+                });
+            });
+            em.on('create', async ({ data, timestamp }) => {
+                this.new(data, {
+                    ignoreGlobals: false,
+                    emit: false,
+                });
+            });
+            em.on('update', async ({ data, timestamp }) => {
+                const id = z.object({ id: z.string() }).parse(data).id;
+                const d = await this.fromId(id);
+                if (d.isErr()) return console.error(d.error);
+                d.value?.update(data, {
+                    emit: false,
+                });
+            });
+            // em.on('set-attributes', async ({ id, attributes, timestamp }) => {
+            //     const data = await this.fromId(id);
+            //     if (data.isErr()) return console.error(data.error);
+            //     data.value?.setAttributes(attributes);
+            // });
+            // em.on('set-universes', async ({ id, universes, timestamp }) => {
+            //     const data = await this.fromId(id);
+            //     if (data.isErr()) return console.error(data.error);
+            //     data.value?.setUniverses(universes);
+            // });
+
+
+            this.on('create', d => {
+                if (d.metadata.get('no-emit')) return;
+                api.send(this, 'create', d.data);
+            });
+            this.on('update', d => {
+                if (d.metadata.get('no-emit')) return;
+                api.send(this, 'update', d.data);
+            });
+            this.on('archive', d => {
+                if (d.metadata.get('no-emit')) return;
+                api.send(this, 'archive', {
+                    id: d.id,
+                });
+            });
+            this.on('delete', d => {
+                if (d.metadata.get('no-emit')) return;
+                api.send(this, 'delete', {
+                    id: d.id,
+                });
+            });
+            this.on('delete-version', d => {
+                if (d.metadata.get('no-emit')) return;
+                api.send(this, 'delete-version', {
+                    id: d.id,
+                    vhId: d.vhId,
+                });
+            });
+            this.on('restore-version', d => {
+                if (d.metadata.get('no-emit')) return;
+                api.send(this, 'restore-version', {
+                    id: d.id,
+                    vhId: d.vhId,
+                });
+            });
+            this.on('restore', d => {
+                if (d.metadata.get('no-emit')) return;
+                api.send(this, 'restore', {
+                    id: d.id,
+                });
+            });
+        });
+    }
+    // TODO: Batching
+    // If the data is not found in the database, it will be added after the query to the server
+    // I'm guessing this function will cause some overhead, but it's necessary for the reflection system
+    // I don't know how to make it more efficient
+    private apiQuery<K extends keyof QueryType>(type: K, data: QueryType[K]) {
+        return attemptAsync(async () => {
+            if (!this._api) throw new StructError('API not set');
+            const lastRead = this._api.getLastRead(this.name, type);
+            // Default to 1 hour
+            if (lastRead === undefined || Date.now() - lastRead > (this.data.reflection?.queryThreshold ?? 1000 * 60 * 60)) {
+                const result = (await this._api.query(this, type, data)).unwrap();
+                if (result instanceof Stream) {
+                    let timeout: NodeJS.Timeout;
+                    let batch: Structable<T & typeof globalCols>[] = [];
+                    result.pipe(d => {
+                        if (!d) return;
+                        // set timeout to prevent stack overflow
+                        setTimeout(async () => {
+                            const has = (await this.fromId(d.id)).unwrap();
+                            if (has) {
+                                // if it exists and they don't match, update
+                                const data = this.Generator(d);
+                                if (!has.isSimilar(data.data)) {
+                                    await has.update(d, {
+                                        emit: false,
+                                    });
+                                }
+                            } else {
+                                this.new(d, {
+                                    ignoreGlobals: false,
+                                    emit: false,
+                                });
+                            }
+                        });
+                    });
+                }
+            }
         });
     }
 
