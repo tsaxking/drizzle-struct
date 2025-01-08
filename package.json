@@ -52,10 +52,6 @@
       "import": "./lib/esm/index.js",
       "require": "./lib/index.js"
     },
-    "./api": {
-      "import": "./lib/esm/api.js",
-      "require": "./lib/cjs/api.js"
-    },
     "./back-end": {
       "import": "./lib/esm/back-end.js",
       "require": "./lib/cjs/back-end.js"
@@ -63,10 +59,6 @@
     "./front-end": {
       "import": "./lib/esm/front-end.js",
       "require": "./lib/cjs/front-end.js"
-    },
-    "./tcp": {
-      "import": "./lib/esm/tcp.js",
-      "require": "./lib/cjs/tcp.js"
     },
     "./types": {
       "import": "./lib/esm/types.js",
@@ -79,6 +71,10 @@
     "./unit-tests": {
       "import": "./lib/esm/unit-tests.js",
       "require": "./lib/cjs/unit-test.js"
+    },
+    "./reflection": {
+      "import": "./lib/esm/reflection.js",
+      "require": "./lib/cjs/reflection.js"
     }
   }
 }
