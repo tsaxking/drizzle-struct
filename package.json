@@ -8,29 +8,41 @@
   "scripts": {
     "build": "tsc && tsc -p tsconfig.commonjs.json && node ./scripts/post-build.js",
     "install": "npm run build",
-    "test": "vitest"
+    "test": "vitest",
+    "format": "prettier --write .",
+    "lint": "eslint . --ext .ts",
+    "lint:fix": "eslint . --ext .ts --fix"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@eslint/compat": "^1.2.4",
     "@types/proper-lockfile": "^4.1.4",
     "dotenv": "^16.4.7",
     "drizzle-orm": "^0.36.0",
     "drizzle-zod": "^0.6.1",
+    "eslint": "^9.17.0",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-plugin-svelte": "^2.46.1",
+    "express": "^4.21.2",
     "fuzzy-search": "^3.2.1",
     "math": "git+https://github.com/tsaxking/calculations.git",
     "pg": "^8.13.1",
     "postgres": "^3.4.5",
+    "prettier": "^3.4.2",
+    "prettier-plugin-svelte": "^3.3.2",
     "proper-lockfile": "^4.1.2",
     "svelte": "^5.16.0",
     "ts-node": "^10.9.2",
-		"ts-utils": "github:tsaxking/global-ts-utilities",
+    "ts-utils": "github:tsaxking/global-ts-utilities",
     "typescript": "^5.7.2",
     "uuid": "^11.0.3",
     "zod": "^3.24.1"
   },
   "devDependencies": {
+    "@esbuild-kit/esm-loader": "^2.6.5",
+    "@types/express": "^5.0.0",
     "@types/pg": "^8.11.10",
     "drizzle-kit": "^0.22.0",
     "vitest": "^2.1.8"

@@ -8,10 +8,11 @@ import { type ColumnDataType } from 'drizzle-orm';
 import { EventEmitter } from 'ts-utils/event-emitter';
 import { Loop } from 'ts-utils/loop';
 import { Stream } from 'ts-utils/stream';
-import { ClientAPI, ServerAPI } from './api';
 import { z } from 'zod';
 import { v4 as uuid } from 'uuid';
 import { DataAction, PropertyAction } from './types';
+import { Client, QueryType, Server } from './reflection';
+import { OnceReadMap } from 'ts-utils/map';
 
 export class StructError extends Error {
     constructor(message: string) {
@@ -56,6 +57,7 @@ export type StructBuilder<T extends Blank, Name extends string> = {
     generators?: Partial<{
         id: () => string;
         attributes: () => string[];
+        lifetime: () => number;
     }>;
     versionHistory?: {
         type: 'days' | 'versions';
@@ -66,13 +68,16 @@ export type StructBuilder<T extends Blank, Name extends string> = {
     // If there are merge conflicts, it will always prioritize the other server's data
     // It will still save in the local database for optimization purposes
     // If there are type conflicts, they are incompatible, so it will throw an error
-    reflect?: {
-        address: string;
-        port: number;
-        key: string;
-        // How often it should sync with the other server
-        // it will first send a hash of the data, and if the other server doesn't have that hash, the other server will pipe the data
-        interval: number;
+    // reflect?: {
+    //     address: string;
+    //     port: number;
+    //     key: string;
+    //     // How often it should sync with the other server
+    //     // it will first send a hash of the data, and if the other server doesn't have that hash, the other server will pipe the data
+    //     interval: number;
+    // };
+    reflection?: {
+        queryThreshold: number;
     };
 };
 
@@ -114,6 +119,8 @@ export const versionGlobalCols = {
 };
 
 export class DataVersion<T extends Blank, Name extends string> {
+    public readonly metadata = new OnceReadMap<string, string|boolean|number>();
+
     constructor(public readonly struct: Struct<T, Name>, public readonly data: Structable<T & typeof globalCols & typeof versionGlobalCols>) {}
 
     get vhId() {
@@ -150,7 +157,8 @@ export class DataVersion<T extends Blank, Name extends string> {
         return attemptAsync(async () => {
             if (!this.struct.versionTable) throw new StructError(`Struct ${this.struct.name} does not have a version table`);
             await this.database.delete(this.struct.versionTable).where(sql`${this.struct.versionTable.vhId} = ${this.vhId}`);
-            if (config?.emit || config?.emit === undefined) this.struct.emit('delete-version', this);
+            if (config?.emit || config?.emit === undefined) this.metadata.set('no-emit', true);
+            this.struct.emit('delete-version', this);
         });
     }
 
@@ -161,12 +169,20 @@ export class DataVersion<T extends Blank, Name extends string> {
             const data = (await this.struct.fromId(this.id)).unwrap();
             if (!data) this.struct.new(this.data);
             else await data.update(this.data);
-            if (config?.emit || config?.emit === undefined) this.struct.emit('restore-version', this);
+            if (config?.emit || config?.emit === undefined) this.metadata.set('no-emit', true);
+            this.struct.emit('restore-version', this);
         });
     }
 }
 
 export class StructData<T extends Blank = any, Name extends string = any> {
+    // Used only for local handling
+    // Will not be transmitted to the front end
+    // Will not be saved in the database
+    // Can be used to inform event emitters where the source of the data is
+    // This is meant to be short lived
+    public readonly metadata = new OnceReadMap<string, string|boolean|number>();
+
     constructor(public readonly data: Readonly<Structable<T & typeof globalCols>>, public readonly struct: Struct<T, Name>) {}
 
     get id() {
@@ -203,6 +219,7 @@ export class StructData<T extends Blank = any, Name extends string = any> {
                 throw new DataError('Invalid Data');
             }
             this.makeVersion();
+            this.metadata.set('prev-state', JSON.stringify(this.safe()));
             const newData: any = { ...this.data, ...data };
 
             // Remove global columns
@@ -218,7 +235,8 @@ export class StructData<T extends Blank = any, Name extends string = any> {
                 updated: new Date(),
             }).where(sql`${this.struct.table.id} = ${this.id}`);
 
-            if (config?.emit || config?.emit === undefined) this.struct.eventEmitter.emit('update', this);
+            if (config?.emit || config?.emit === undefined) this.metadata.set('no-emit', true);
+            this.struct.eventEmitter.emit('update', this);
         });
     }
 
@@ -231,7 +249,8 @@ export class StructData<T extends Blank = any, Name extends string = any> {
                 updated: new Date(),
             } as any).where(sql`${this.struct.table.id} = ${this.id}`);
 
-            if (config?.emit || config?.emit === undefined) this.struct.eventEmitter.emit(archived ? 'archive' : 'restore', this);
+            if (config?.emit || config?.emit === undefined) this.metadata.set('no-emit', true);
+            this.struct.eventEmitter.emit(archived ? 'archive' : 'restore', this);
         });
     }
 
@@ -241,7 +260,8 @@ export class StructData<T extends Blank = any, Name extends string = any> {
         return attemptAsync(async () => {
             this.makeVersion();
             await this.database.delete(this.struct.table).where(sql`${this.struct.table.id} = ${this.id}`);
-            if (config?.emit || config?.emit === undefined) this.struct.eventEmitter.emit('delete', this);
+            if (config?.emit || config?.emit === undefined) this.metadata.set('no-emit', true);
+            this.struct.eventEmitter.emit('delete', this);
         });
     }
 
@@ -361,6 +381,18 @@ export class StructData<T extends Blank = any, Name extends string = any> {
             }
         }
         return data;
+    }
+
+    isSimilar(data: Structable<T>) {
+        for (const key in data) {
+            if (data[key] !== this.data[key]) return false;
+        }
+        return true;
+    }
+
+    // This is to handle states diverging between frontend and backend, or between servers
+    emitSelf() {
+        this.struct.eventEmitter.emit('update', this);
     }
 }
 
@@ -524,7 +556,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
                 archived: false,
                 universes: '',
                 attributes: JSON.stringify(this.data.generators?.attributes?.() ?? []),
-                lifetime: 0,
+                lifetime: this.data.generators?.lifetime?.() || 0,
             }
             const newData: Structable<T & typeof globalCols> = {
                 ...data,
@@ -534,7 +566,8 @@ export class Struct<T extends Blank = any, Name extends string = any> {
             await this.database.insert(this.table).values(newData as any);
 
             const d = this.Generator(newData);
-            if (config?.emit || config?.emit === undefined) this.eventEmitter.emit('create', d);
+            if (config?.emit || config?.emit === undefined) d.metadata.set('no-emit', true);
+            this.eventEmitter.emit('create', d);
 
             return d;
         });
@@ -548,16 +581,56 @@ export class Struct<T extends Blank = any, Name extends string = any> {
         return attemptAsync(async () => {
             const data = await this.database.select().from(this.table).where(sql`${this.table.id} = ${id}`);
             const a = data[0];
-            if (!a) return undefined;
+            if (!a) {
+                if (this._api) {
+                    const apiQueryResult = (await this._api.query(this, 'from-id', {
+                        id
+                    })).unwrap();
+                    if (!apiQueryResult) return;
+                    return this.Generator(apiQueryResult as any);
+                }
+            }
             return this.Generator(a as any);
         });
+    }
+
+    fromIds(ids: string[], asStream: true): StructStream<T, Name>;
+    fromIds(ids: string[], asStream: false): Promise<Result<StructData<T, Name>[], Error>>;
+    fromIds(ids: string[], asStream: boolean) {
+        const get = () => {
+            this.apiQuery('from-ids', {
+                ids,
+            });
+
+            return this.database.select().from(this.table).where(sql`${this.table.id} IN (${ids})`);
+        }
+        if (asStream) {
+            const stream = new StructStream(this);
+            (async () => {
+                const dataStream = await get();
+                for (let i = 0; i < dataStream.length; i++) {
+                    stream.add(this.Generator(dataStream[i] as any));
+                }
+                stream.end();
+            })();
+            return stream;
+        } else {
+            return attemptAsync(async () => {
+                const data = await get();
+                return data.map(d => this.Generator(d as any));
+            });
+        }
     }
 
     // TODO: Integrate limits
     all(asStream: true, includeArchived?: boolean): StructStream<T, Name>;
     all(asStream: false, includeArchived?: boolean): Promise<Result<StructData<T, Name>[], Error>>;
     all(asStream: boolean, includeArchived = false){
-        const get = () => this.database.select().from(this.table).where(sql`${this.table.archived} = ${includeArchived}`);
+        const get = async () => {
+            this.apiQuery('all', {});
+
+            return this.database.select().from(this.table).where(sql`${this.table.archived} = ${includeArchived}`);
+        }
         if (asStream) {
             const stream = new StructStream(this);
             (async () => {
@@ -579,7 +652,10 @@ export class Struct<T extends Blank = any, Name extends string = any> {
     archived(asStream: true): StructStream<T, Name>;
     archived(asStream: false): Promise<Result<StructData<T, Name>[], Error>>;
     archived(asStream: boolean) {
-        const get = () => this.database.select().from(this.table).where(sql`${this.table.archived} = ${true}`);
+        const get = () => {
+            this.apiQuery('archived', {});
+            return this.database.select().from(this.table).where(sql`${this.table.archived} = ${true}`);
+        }
         if (asStream) {
             const stream = new StructStream(this);
             (async () => {
@@ -598,10 +674,16 @@ export class Struct<T extends Blank = any, Name extends string = any> {
         }
     }
 
-    fromProperty<K extends keyof T>(key: K, value: TsType<T[K]['_']['dataType']>, asStream: true): StructStream<T, Name>;
-    fromProperty<K extends keyof T>(key: K, value: TsType<T[K]['_']['dataType']>, asStream: false): Promise<Result<StructData<T, Name>[], Error>>;
-    fromProperty<K extends keyof T>(key: K, value: TsType<T[K]['_']['dataType']>, asStream: boolean) {
-        const get = () => this.database.select().from(this.table).where(sql`${this.table[key] as any} = ${value} AND ${this.table.archived} = ${false}`);
+    fromProperty<K extends keyof T>(property: K, value: TsType<T[K]['_']['dataType']>, asStream: true): StructStream<T, Name>;
+    fromProperty<K extends keyof T>(property: K, value: TsType<T[K]['_']['dataType']>, asStream: false): Promise<Result<StructData<T, Name>[], Error>>;
+    fromProperty<K extends keyof T>(property: K, value: TsType<T[K]['_']['dataType']>, asStream: boolean) {
+        const get = () => {
+            this.apiQuery('from-property', {
+                property: String(property),
+                value,
+            });
+            return this.database.select().from(this.table).where(sql`${this.table[property]} = ${value} AND ${this.table.archived} = ${false}`);
+        }
         if (asStream) {
             const stream = new StructStream(this);
             (async () => {
@@ -623,7 +705,12 @@ export class Struct<T extends Blank = any, Name extends string = any> {
     fromUniverse(universe: string, asStream: true): StructStream<T, Name>;
     fromUniverse(universe: string, asStream: false): Promise<Result<StructData<T, Name>[], Error>>;
     fromUniverse(universe: string, asStream: boolean) {
-        const get = () => this.database.select().from(this.table).where(sql`${this.table.universes} LIKE ${`%${universe}%`} AND ${this.table.archived} = ${false}`);
+        const get = () => {
+            this.apiQuery('from-universe', {
+                universe,
+            });
+            return this.database.select().from(this.table).where(sql`${this.table.universes} LIKE ${`%${universe}%`} AND ${this.table.archived} = ${false}`);
+        }
         if (asStream) {
             const stream = new StructStream(this);
             (async () => {
@@ -779,97 +866,235 @@ export class Struct<T extends Blank = any, Name extends string = any> {
         });
     }
 
-    startReflection(API: ClientAPI | ServerAPI) {
+    private _api: Client | undefined = undefined;
+
+    startReflection(api: Server | Client) {
         return attempt(() => {
-            let connected = false;
-            if (API instanceof ClientAPI) {
-                const { reflect } = this.data;
-                if (!reflect) return;
-
-                API.client.listen('connect', () => connected = true);
-                API.client.listen('disconnect', () => {
-                    connected = false;
-                });
-            } else {
-                // ServerAPI
+            if (this.data.reflection && api instanceof Client) {
+                // this property is only used for querying the data
+                // Because of this, we don't need it for the central server
+                this._api = api;
             }
+            const em = api.getEmitter<T, Name>(this);
 
-            this.on('archive', (d) => API.send('archive', d.id));
-            // this.on('build', (d) => API.send('build'));
-            this.on('create', (d) => API.send('create', d.safe()));
-            this.on('delete', (d) => API.send('delete', d.id));
-            this.on('delete-version', (d) => API.send('delete-version', d.vhId));
-            this.on('restore', (d) => API.send('restore', d.id));
-            this.on('restore-version', (d) => API.send('restore-version', d.vhId));
-            this.on('update', (d) => API.send('update', d.safe()));
+            em.on('archive', async ({ id, timestamp }) => {
+                const data = await this.fromId(id);
+                if (data.isErr()) return console.error(data.error);
+                data.value?.setArchive(true, {
+                    emit: false,
+                });
+            });
+            em.on('restore', async ({ id, timestamp }) => {
+                const data = await this.fromId(id);
+                if (data.isErr()) return console.error(data.error);
+                data.value?.setArchive(false, {
+                    emit: false,
+                });
+            });
+            em.on('delete', async ({ id, timestamp }) => {
+                const data = await this.fromId(id);
+                if (data.isErr()) return console.error(data.error);
+                data.value?.delete({
+                    emit: false,
+                });
+            });
+            em.on('delete-version', async ({ id, timestamp, vhId }) => {
+                const data = await this.fromId(id);
+                if (data.isErr()) return console.error(data.error);
+                if (!data) return;
+                const versions = await data.value?.getVersions();
+                if (!versions) return;
+                if (versions.isErr()) return console.error(versions.error);
+                const version = versions.value.find(v => v.vhId === vhId);
+                version?.delete({
+                    emit: false,
+                });
+            });
+            em.on('restore-version', async ({ id, timestamp, vhId }) => {
+                const data = await this.fromId(id);
+                if (data.isErr()) return console.error(data.error);
+                if (!data) return;
+                const versions = await data.value?.getVersions();
+                if (!versions) return;
+                if (versions.isErr()) return console.error(versions.error);
+                const version = versions.value.find(v => v.vhId === vhId);
+                version?.restore({
+                    emit: false,
+                });
+            });
+            em.on('create', async ({ data, timestamp }) => {
+                this.new(data, {
+                    ignoreGlobals: false,
+                    emit: false,
+                });
+            });
+            em.on('update', async ({ data, timestamp }) => {
+                const id = z.object({ id: z.string() }).parse(data).id;
+                const d = await this.fromId(id);
+                if (d.isErr()) return console.error(d.error);
+                if (!d.value) {
+                    this.new(
+                        data,
+                        {
+                            ignoreGlobals: false,
+                            emit: false,
+                        }
+                    );
+                    return;
+                }
+                d.value.update(data, {
+                    emit: false,
+                });
+            });
+            // em.on('set-attributes', async ({ id, attributes, timestamp }) => {
+            //     const data = await this.fromId(id);
+            //     if (data.isErr()) return console.error(data.error);
+            //     data.value?.setAttributes(attributes);
+            // });
+            // em.on('set-universes', async ({ id, universes, timestamp }) => {
+            //     const data = await this.fromId(id);
+            //     if (data.isErr()) return console.error(data.error);
+            //     data.value?.setUniverses(universes);
+            // });
 
 
-            // TODO: handle outdated events, i've only done the updated event so vfar
-            const em = API.createEmitter<Structable<T>>(this.name);
+            this.on('create', async d => {
+                if (d.metadata.get('no-emit')) return;
+                const res = await api.send(this, 'create', d.data);
+                if (res.isErr()) d.delete({
+                    emit: false,
+                });
+            });
+            this.on('update', async d => {
+                const prevState = d.metadata.get('prev-state'); // always read so it will delete
+                if (d.metadata.get('no-emit')) return;
+                const res = await api.send(this, 'update', d.data);
+                if (res.isErr()) {
+                    if (prevState) {
+                        await d.update(JSON.parse(prevState as string), { emit: false });
+                    }
+                }
+            });
+            this.on('archive', async d => {
+                if (d.metadata.get('no-emit')) return;
+                const res = await api.send(this, 'archive', {
+                    id: d.id,
+                });
 
-            em.on('archive', async (event) => {
-                const { id } = event.data;
-                const data = (await this.fromId(id)).unwrap();
-                if (!data) return;
-                await data.setArchive(true);
+                if (res.isErr()) {
+                    d.setArchive(false, {
+                        emit: false,
+                    });
+                }
             });
-            // em.on('build', async ({ struct }) => built = true);
-            em.on('create', async (data) => {
-                (await (this.new(data.data, {
-                    emit: false,
-                    ignoreGlobals: true,
-                }))).unwrap();
+            this.on('delete', async d => {
+                if (d.metadata.get('no-emit')) return;
+                const res = await api.send(this, 'delete', {
+                    id: d.id,
+                });
+                if(res.isErr()) {
+                    this.new(
+                        d.safe(),
+                        {
+                            ignoreGlobals: false,
+                            emit: false,
+                        }
+                    )
+                }
             });
-            em.on('delete', async (event) => {
-                const { id } = event.data;
-                const data = (await this.fromId(id)).unwrap();
-                if (!data) return;
-                (await data.delete({
-                    emit: false,
-                })).unwrap();
+            this.on('delete-version', async d => {
+                if (d.metadata.get('no-emit')) return;
+                api.send(this, 'delete-version', {
+                    id: d.id,
+                    vhId: d.vhId,
+                });
             });
-            em.on('delete-version', async (event) => {
-                const { vhId, id } = event.data;
-                const data = (await this.fromId(id)).unwrap();
-                if (!data) return;
-                const versions = (await data.getVersions()).unwrap();
-                const version = versions.find(v => v.vhId === vhId);
-                if (!version) return;
-                (await version.delete({
-                    emit: false,
-                })).unwrap();
+            this.on('restore-version', async d => {
+                if (d.metadata.get('no-emit')) return;
+                api.send(this, 'restore-version', {
+                    id: d.id,
+                    vhId: d.vhId,
+                });
             });
-            em.on('restore', async (event) => {
-                const { id } = event.data;
-                const data = (await this.fromId(id)).unwrap();
-                if (!data) return;
-                (await data.setArchive(false, {
-                    emit: false
-                })).unwrap();
-            });
-            em.on('restore-version', async (event) => {
-                const { vhId, id } = event.data;
-                const data = (await this.fromId(id)).unwrap();
-                if (!data) return;
-                const versions = (await data.getVersions()).unwrap();
-                const version = versions.find(v => v.vhId === vhId);
-                if (!version) return;
-                (await version.restore({
-                    emit: false,
-                })).unwrap();
-            });
-            em.on('update', async (event) => {
-                const id = z.string().parse(event.data.id);
-                const d = (await this.fromId(id)).unwrap();
-                if (!d) return;
-                console.log('Dropping outdated event', event);
-                if (d.updated.getTime() >= event.timestamp) return;
-                (await d.update(event.data, {
-                    emit: false,
-                })).unwrap();
+            this.on('restore', async d => {
+                if (d.metadata.get('no-emit')) return;
+                const res = await api.send(this, 'restore', {
+                    id: d.id,
+                });
+                if (res.isErr()) {
+                    d.setArchive(true, {
+                        emit: false,
+                    });
+                }
             });
         });
     }
+
+    // If the data is not found in the database, it will be added after the query to the server
+    // I'm guessing this function will cause some overhead, but it's necessary for the reflection system
+    // I don't know how to make it more efficient
+    private apiQuery<K extends keyof QueryType>(type: K, data: QueryType[K]) {
+        return attemptAsync(async () => {
+            if (!this._api) throw new StructError('API not set');
+            const lastRead = this._api.getLastRead(this.name, type);
+            // Default to 1 hour
+            if (lastRead === undefined || Date.now() - lastRead > (this.data.reflection?.queryThreshold ?? 1000 * 60 * 60)) {
+                const result = (await this._api.query(this, type, data)).unwrap();
+                if (result instanceof Stream) {
+                    const updates: Promise<void>[] = [];
+                    let timeout: NodeJS.Timeout;
+                    let batch: Structable<T & typeof globalCols>[] = [];
+                    let isProcessing = false;
+    
+                    const save = async () => {
+                        if (isProcessing) return; // Prevent overlapping saves
+                        isProcessing = true;
+    
+                        try {
+                            await Promise.all(updates);
+                            updates.length = 0;
+    
+                            const cache = [...batch];
+                            batch = [];
+                            for (const d of cache) {
+                                try {
+                                    const has = await this.fromId(d.id);
+                                    if (has.isErr()) throw has.error;
+    
+                                    if (!has.value) {
+                                        await this.new(d, { ignoreGlobals: false, emit: false });
+                                    } else if (!has.value.isSimilar(d)) {
+                                        await has.value.update(d, { emit: false });
+                                    }
+                                } catch (err) {
+                                    console.error("Error processing item:", err);
+                                }
+                            }
+                        } catch (err) {
+                            console.error("Error in save():", err);
+                        } finally {
+                            isProcessing = false;
+                        }
+                    };
+    
+                    result.pipe(d => {
+                        if (!d) return;
+                        batch.push(d);
+                        if (timeout) clearTimeout(timeout);
+    
+                        if (batch.length >= 100) {
+                            updates.push(save());
+                        } else {
+                            timeout = setTimeout(() => {
+                                updates.push(save());
+                            }, 100);
+                        }
+                    });
+                }
+            }
+        });
+    }
+    
 
     public readonly bypasses: {
         action: DataAction | PropertyAction | '*';
