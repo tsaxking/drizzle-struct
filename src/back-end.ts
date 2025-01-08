@@ -1029,7 +1029,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
             });
         });
     }
-    // TODO: Batching
+
     // If the data is not found in the database, it will be added after the query to the server
     // I'm guessing this function will cause some overhead, but it's necessary for the reflection system
     // I don't know how to make it more efficient
