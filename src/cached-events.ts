@@ -1,8 +1,8 @@
 import { integer, text } from "drizzle-orm/pg-core";
-import { Struct, StructData } from "./back-end";
+import { Blank, Struct, StructData } from "./back-end";
 
 export namespace CachedEvents {
-    export const Events = new Struct({
+    export const Events: any = new Struct({
         name: 'cached_events',
         structure: {
             timestamp: integer('timestamp').notNull(),
@@ -19,4 +19,4 @@ export namespace CachedEvents {
 }
 
 
-export const _events = CachedEvents.Events.table;
+export const _events: any = CachedEvents.Events.table;
