@@ -325,13 +325,14 @@ type StructEvent<T extends Blank = Blank> = {
  * @typedef {QueryType}
  */
 export type QueryType = {
-    'all': {},
-    'from-id': { id: string },
-    'from-ids': { ids: string[] },
-    'from-property': { property: string, value: any },
-    'from-universe': { universe: string },
-    'archived': {},
-    'versions': { id: string },
+    'all': {};
+    'from-id': { id: string };
+    'from-ids': { ids: string[] };
+    'from-property': { property: string, value: any };
+    'from-universe': { universe: string };
+    'archived': {};
+    'versions': { id: string };
+    'get': Record<string, unknown>;
 }
 
 /**
@@ -341,13 +342,14 @@ export type QueryType = {
  * @template {Blank} T 
  */
 type QueryResponse<T extends Blank> = {
-    'all': Stream<Structable<T & typeof globalCols>>,
-    'from-id': Structable<T> | undefined,
-    'from-ids': Stream<Structable<T & typeof globalCols>>,
-    'from-property': Stream<Structable<T & typeof globalCols>>,
-    'from-universe': Stream<Structable<T & typeof globalCols>>,
-    'archived': Stream<Structable<T & typeof globalCols>>,
-    'versions': Stream<Structable<T & typeof globalCols>>,
+    'all': Stream<Structable<T & typeof globalCols>>;
+    'from-id': Structable<T> | undefined;
+    'from-ids': Stream<Structable<T & typeof globalCols>>;
+    'from-property': Stream<Structable<T & typeof globalCols>>;
+    'from-universe': Stream<Structable<T & typeof globalCols>>;
+    'archived': Stream<Structable<T & typeof globalCols>>;
+    'versions': Stream<Structable<T & typeof globalCols>>;
+    'get': Stream<Structable<T & typeof globalCols>>;
 };
 
 /**
@@ -503,7 +505,7 @@ export class Server {
             try {
                 const { struct, query, args } = z.object({
                     struct: z.string(),
-                    query: z.enum(['all', 'from-id', 'from-ids', 'from-property', 'from-universe', 'archived', 'versions']),
+                    query: z.enum(['all', 'from-id', 'from-ids', 'from-property', 'from-universe', 'archived', 'versions', 'get']),
                     args: z.any(),
                 }).parse(req.body);
 
@@ -587,6 +589,10 @@ export class Server {
                         stream(s.fromIds(ids, true));
                     }
                     break;
+                    case 'get': {
+                        const data = s.get(args, true, true);
+                        stream(data);
+                    }
                     default:
                         res.status(400).send('Invalid query');
                         break;

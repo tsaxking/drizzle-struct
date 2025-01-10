@@ -1402,6 +1402,46 @@ export class Struct<T extends Blank = any, Name extends string = any> {
             });
         }
     }
+
+    get(props: {}, multiple: false): Promise<Result<StructData<T, Name> | undefined, Error>>;
+    get(props: {}, multiple: true, asStream: true): StructStream<T, Name>;
+    get(props: {}, multiple: true, asStream: false): Promise<Result<StructData<T, Name>[], Error>>;
+    get(props: {
+        [K in keyof T]?: TsType<T[K]['_']['dataType']>;
+    }, multiple: boolean, asStream?: boolean): Promise<Result<StructData<T, Name> | undefined, Error>> | StructStream<T, Name> | Promise<Result<StructData<T, Name>[], Error>> {
+        const get = async () => {
+            this.apiQuery('get', props);
+
+            return this.database.select().from(this.table).where(sql`
+                    ${Object.entries(props).map(([k, v]) => sql`${this.table[k as keyof T]} = ${v}`).join(' AND ')}
+                `);
+        }
+        
+        if (multiple) {
+            if (asStream) {
+                const stream = new StructStream(this);
+                (async () => {
+                    const dataStream = await get();
+                    for (let i = 0; i < dataStream.length; i++) {
+                        stream.add(this.Generator(dataStream[i] as any));
+                    }
+                    stream.end();
+                })();
+                return stream;
+            } else {
+                return attemptAsync(async () => {
+                    const data = await get();
+                    return data.map(d => this.Generator(d as any));
+                });
+            }
+        }
+        return attemptAsync(async () => {
+            const data = await get();
+            if (data.length === 0) return;
+            return this.Generator(data[0] as any);
+        });
+    }
+
     /**
      * Streams all data from the database that is not archived
      *
