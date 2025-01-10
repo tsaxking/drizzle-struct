@@ -1202,6 +1202,8 @@ export class Struct<T extends Blank = any, Name extends string = any> {
                     })).unwrap();
                     if (!apiQueryResult) return;
                     return this.Generator(apiQueryResult as any);
+                } else {
+                    return;
                 }
             }
             return this.Generator(a as any);
