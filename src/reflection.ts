@@ -332,7 +332,7 @@ export type QueryType = {
     'from-universe': { universe: string };
     'archived': {};
     'versions': { id: string };
-    'get': Record<string, unknown>;
+    // 'get': Record<string, unknown>;
 }
 
 /**
@@ -349,7 +349,7 @@ type QueryResponse<T extends Blank> = {
     'from-universe': Stream<Structable<T & typeof globalCols>>;
     'archived': Stream<Structable<T & typeof globalCols>>;
     'versions': Stream<Structable<T & typeof globalCols>>;
-    'get': Stream<Structable<T & typeof globalCols>>;
+    // 'get': Stream<Structable<T & typeof globalCols>>;
 };
 
 /**
@@ -589,10 +589,10 @@ export class Server {
                         stream(s.fromIds(ids, true));
                     }
                     break;
-                    case 'get': {
-                        const data = s.get(args, true, true);
-                        stream(data);
-                    }
+                    // case 'get': {
+                    //     const data = s.get(args, true, true);
+                    //     stream(data);
+                    // }
                     default:
                         res.status(400).send('Invalid query');
                         break;
