@@ -1265,7 +1265,7 @@ export class Struct<T extends Blank> {
             this.off('archive', remove);
             this.off('restore', add);
             this.off('delete', remove);
-            this.writables.delete(`property:${key}:${JSON.stringify(value)}`);
+            this.writables.delete(`property:${String(key)}:${JSON.stringify(value)}`);
         });
         return arr;
     }
