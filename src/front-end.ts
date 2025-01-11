@@ -1221,7 +1221,7 @@ export class Struct<T extends Blank> {
      * @param {true} asStream If true, returns a stream
      * @returns {StructStream<T>} 
      */
-    fromProperty(key: string, value: unknown, asStream: true): StructStream<T>;
+    fromProperty<K extends keyof T>(key: T, value: ColTsType<T[K]>, asStream: true): StructStream<T>;
     /**
      * Gets all data with a specific property value
      *
@@ -1230,7 +1230,7 @@ export class Struct<T extends Blank> {
      * @param {false} asStream If false, returns a svelte store
      * @returns {DataArr<T>} 
      */
-    fromProperty(key: string, value: unknown, asStream: false): DataArr<T>;
+    fromProperty<K extends keyof T>(key: T, value: ColTsType<T[K]>, asStream: false): DataArr<T>;
     /**
      * Gets all data with a specific property value
      *
@@ -1239,14 +1239,14 @@ export class Struct<T extends Blank> {
      * @param {boolean} asStream Returns a stream if true, svelte store if false
      * @returns 
      */
-    fromProperty(key: string, value: unknown, asStream: boolean) {
-        const s = this.getStream('property', { key, value });
+    fromProperty<K extends keyof T>(key: T, value: ColTsType<T[K]>, asStream: boolean) {
+        const s = this.getStream('property', { key: String(key), value });
         if (asStream) return s;
         const arr = this.writables.get(`property:${key}:${JSON.stringify(value)}`) || new DataArr(this, []);
         this.writables.set(`property:${key}:${JSON.stringify(value)}`, arr);
 
         const add = (d: StructData<T>) => {
-            if (d.data[key] === value) arr.add(d);
+            if ((d.data as any)[key] === value) arr.add(d);
         }
         const remove = (d: StructData<T>) => {
             arr.remove(d);

@@ -900,18 +900,10 @@ export type RequestAction = {
 export type TsType<T extends ColumnDataType> = T extends 'string' ? string : T extends 'number' ? number : T extends 'boolean' ? boolean : T extends 'timestamp' ? Date : never;
 
 export type MultiConfig = {
-    type: 'stream';
+    type: 'stream' | 'array' | 'single';
     includeArchived?: boolean;
     limit?: number;
     offset?: number;
-} | {
-    type: 'array';
-    includeArchived?: boolean;
-    limit: number;
-    offset: number;
-} | {
-    type: 'single';
-    includeArchived?: boolean;
 };
 
 /**
