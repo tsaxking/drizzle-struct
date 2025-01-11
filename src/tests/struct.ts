@@ -7,7 +7,14 @@ export class TestError extends Error {
     }
 }
 
-export const runTest = async (struct: Struct) => {
+export const runTest = async (struct: Struct): Promise<{
+    all: () => Promise<void>;
+    fromProperty: () => Promise<void>;
+    archived: () => Promise<void>;
+    generate: () => Promise<void>;
+    get: () => Promise<void>;
+    clear: () => Promise<void>;
+}> => {
     if (!Object.hasOwn(struct.data.structure, 'name')) {
         throw new Error('Test Struct: Name property is required (text)');
     }
@@ -157,8 +164,8 @@ export const runTest = async (struct: Struct) => {
                 throw new TestError('Test Struct: Get method did not return the correct data');
             }
         },
-        clear() {
-            return struct.clear();
+        async clear() {
+            await struct.clear();
         }
     }
 };
