@@ -1118,7 +1118,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
      * @type {PostgresJsDatabase}
      */
     get database(): PostgresJsDatabase {
-        if (!this._database) throw new FatalStructError('Struct database not set');
+        if (!this._database) throw new FatalStructError(`${this.name} Struct database not set`);
         return this._database;
     }
 
