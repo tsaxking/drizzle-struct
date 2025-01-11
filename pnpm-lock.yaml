@@ -18,11 +18,11 @@ importers:
         specifier: ^16.4.7
         version: 16.4.7
       drizzle-orm:
-        specifier: ^0.36.0
-        version: 0.36.4(@types/pg@8.11.10)(pg@8.13.1)(postgres@3.4.5)
+        specifier: ^0.38.3
+        version: 0.38.3(@types/pg@8.11.10)(pg@8.13.1)(postgres@3.4.5)
       drizzle-zod:
         specifier: ^0.6.1
-        version: 0.6.1(drizzle-orm@0.36.4(@types/pg@8.11.10)(pg@8.13.1)(postgres@3.4.5))(zod@3.24.1)
+        version: 0.6.1(drizzle-orm@0.38.3(@types/pg@8.11.10)(pg@8.13.1)(postgres@3.4.5))(zod@3.24.1)
       eslint:
         specifier: ^9.17.0
         version: 9.17.0
@@ -970,11 +970,11 @@ packages:
     resolution: {integrity: sha512-VjI4wsJjk3hSqHSa3TwBf+uvH6M6pRHyxyoVbt935GUzP9tUR/BRZ+MhEJNgryqbzN2Za1KP0eJMTgKEPsalYQ==}
     hasBin: true
 
-  drizzle-orm@0.36.4:
-    resolution: {integrity: sha512-1OZY3PXD7BR00Gl61UUOFihslDldfH4NFRH2MbP54Yxi0G/PKn4HfO65JYZ7c16DeP3SpM3Aw+VXVG9j6CRSXA==}
+  drizzle-orm@0.38.3:
+    resolution: {integrity: sha512-w41Y+PquMpSff/QDRGdItG0/aWca+/J3Sda9PPGkTxBtjWQvgU1jxlFBXdjog5tYvTu58uvi3PwR1NuCx0KeZg==}
     peerDependencies:
       '@aws-sdk/client-rds-data': '>=3'
-      '@cloudflare/workers-types': '>=3'
+      '@cloudflare/workers-types': '>=4'
       '@electric-sql/pglite': '>=0.2.0'
       '@libsql/client': '>=0.10.0'
       '@libsql/client-wasm': '>=0.10.0'
@@ -2565,15 +2565,15 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  drizzle-orm@0.36.4(@types/pg@8.11.10)(pg@8.13.1)(postgres@3.4.5):
+  drizzle-orm@0.38.3(@types/pg@8.11.10)(pg@8.13.1)(postgres@3.4.5):
     optionalDependencies:
       '@types/pg': 8.11.10
       pg: 8.13.1
       postgres: 3.4.5
 
-  drizzle-zod@0.6.1(drizzle-orm@0.36.4(@types/pg@8.11.10)(pg@8.13.1)(postgres@3.4.5))(zod@3.24.1):
+  drizzle-zod@0.6.1(drizzle-orm@0.38.3(@types/pg@8.11.10)(pg@8.13.1)(postgres@3.4.5))(zod@3.24.1):
     dependencies:
-      drizzle-orm: 0.36.4(@types/pg@8.11.10)(pg@8.13.1)(postgres@3.4.5)
+      drizzle-orm: 0.38.3(@types/pg@8.11.10)(pg@8.13.1)(postgres@3.4.5)
       zod: 3.24.1
 
   dunder-proto@1.0.1:
