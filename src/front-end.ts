@@ -648,6 +648,42 @@ export class DataArr<T extends Blank> implements Readable<StructData<T>[]> {
     }
 }
 
+export class SingleWritable<T extends Blank> implements Writable<Structable<T>> {
+    private data: Structable<T>;
+
+    constructor(defaultData: Structable<T>) {
+        this.data = defaultData;
+    }
+    private _onUnsubscribe?: () => void;
+    private readonly subscribers = new Set<(data: Structable<T>) => void>();
+
+    subscribe(fn: (data: Structable<T>) => void) {
+        this.subscribers.add(fn);
+        fn(this.data);
+        return () => {
+            this.subscribers.delete(fn);
+            if (!this.subscribers.size) this._onUnsubscribe?.();
+        };
+    }
+
+    onUnsubscribe(fn: () => void) {
+        this._onUnsubscribe = fn;
+    }
+
+    set(data: Structable<T>) {
+        this.data = data;
+        this.subscribers.forEach(fn => fn(data));
+    }
+
+    update(fn: (data: Structable<T>) => Structable<T>) {
+        this.set(fn(this.data));
+    }
+
+    get() {
+        return this.data;
+    }
+}
+
 /**
  * Stream of StructData
  *

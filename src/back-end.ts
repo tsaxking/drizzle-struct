@@ -1210,54 +1210,54 @@ export class Struct<T extends Blank = any, Name extends string = any> {
         });
     }
 
-    /**
-     * Streams all data requested by id from the database
-     *
-     * @param {string[]} ids IDs of the data to get
-     * @param {true} asStream If the data should be streamed
-     * @returns {StructStream<T, Name>} 
-     */
-    fromIds(ids: string[], asStream: true): StructStream<T, Name>;
-    /**
-     * Returns all data requested by id from the database
-     *
-     * @param {string[]} ids IDs of the data to get
-     * @param {false} asStream If the data should be streamed
-     * @returns {Promise<Result<StructData<T, Name>[], Error>>} 
-     */
-    fromIds(ids: string[], asStream: false): Promise<Result<StructData<T, Name>[], Error>>;
-    /**
-     * Streams/returns all data requested by id from the database
-     *
-     * @param {string[]} ids IDs of the data to get
-     * @param {boolean} asStream If the data should be streamed
-     * @returns 
-     */
-    fromIds(ids: string[], asStream: boolean) {
-        const get = () => {
-            this.apiQuery('from-ids', {
-                ids,
-            });
+    // /**
+    //  * Streams all data requested by id from the database
+    //  *
+    //  * @param {string[]} ids IDs of the data to get
+    //  * @param {true} asStream If the data should be streamed
+    //  * @returns {StructStream<T, Name>} 
+    //  */
+    // fromIds(ids: string[], asStream: true): StructStream<T, Name>;
+    // /**
+    //  * Returns all data requested by id from the database
+    //  *
+    //  * @param {string[]} ids IDs of the data to get
+    //  * @param {false} asStream If the data should be streamed
+    //  * @returns {Promise<Result<StructData<T, Name>[], Error>>} 
+    //  */
+    // fromIds(ids: string[], asStream: false): Promise<Result<StructData<T, Name>[], Error>>;
+    // /**
+    //  * Streams/returns all data requested by id from the database
+    //  *
+    //  * @param {string[]} ids IDs of the data to get
+    //  * @param {boolean} asStream If the data should be streamed
+    //  * @returns 
+    //  */
+    // fromIds(ids: string[], asStream: boolean) {
+    //     const get = () => {
+    //         this.apiQuery('from-ids', {
+    //             ids,
+    //         });
 
-            return this.database.select().from(this.table).where(sql`${this.table.id} IN (${ids})`);
-        }
-        if (asStream) {
-            const stream = new StructStream(this);
-            (async () => {
-                const dataStream = await get();
-                for (let i = 0; i < dataStream.length; i++) {
-                    stream.add(this.Generator(dataStream[i] as any));
-                }
-                stream.end();
-            })();
-            return stream;
-        } else {
-            return attemptAsync(async () => {
-                const data = await get();
-                return data.map(d => this.Generator(d as any));
-            });
-        }
-    }
+    //         return this.database.select().from(this.table).where(sql`${this.table.id} IN (${ids})`);
+    //     }
+    //     if (asStream) {
+    //         const stream = new StructStream(this);
+    //         (async () => {
+    //             const dataStream = await get();
+    //             for (let i = 0; i < dataStream.length; i++) {
+    //                 stream.add(this.Generator(dataStream[i] as any));
+    //             }
+    //             stream.end();
+    //         })();
+    //         return stream;
+    //     } else {
+    //         return attemptAsync(async () => {
+    //             const data = await get();
+    //             return data.map(d => this.Generator(d as any));
+    //         });
+    //     }
+    // }
 
     // TODO: Integrate limits
     /**
