@@ -539,24 +539,32 @@ export class Server {
 
                 switch (query) {
                     case 'all':
-                        stream(s.all(true));
+                        stream(s.all({
+                            type: 'stream',
+                        }));
                         break;
                     case 'archived':
-                        stream(s.archived(true));
+                        stream(s.archived({
+                            type: 'stream',
+                        }));
                         break;
                     case 'from-property': {
                         const { property, value } = z.object({
                             property: z.string(),
                             value: z.any(),
                         }).parse(args);
-                        stream(s.fromProperty(property, value, true));
+                        stream(s.fromProperty(property as any, value, {
+                            type: 'stream',
+                        }));
                     }
                         break;
                     case 'from-universe': {
                         const { universe } = z.object({
                             universe: z.string(),
                         }).parse(args);
-                        stream(s.fromUniverse(universe, true));
+                        stream(s.fromUniverse(universe, {
+                            type: 'stream',
+                        }));
                     }
                     break;
                     case 'versions': {

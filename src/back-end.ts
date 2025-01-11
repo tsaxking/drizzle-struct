@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { pgTable, text, timestamp, boolean, integer } from 'drizzle-orm/pg-core';
 import type { PgColumnBuilderBase, PgTableWithColumns } from 'drizzle-orm/pg-core';
-import { sql, type BuildColumns } from 'drizzle-orm';
+import { SQL, sql, type BuildColumns } from 'drizzle-orm';
 import { attempt, attemptAsync, resolveAll, type Result } from 'ts-utils/check';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import { type ColumnDataType } from 'drizzle-orm';
@@ -899,6 +899,21 @@ export type RequestAction = {
  */
 export type TsType<T extends ColumnDataType> = T extends 'string' ? string : T extends 'number' ? number : T extends 'boolean' ? boolean : T extends 'timestamp' ? Date : never;
 
+export type MultiConfig = {
+    type: 'stream';
+    includeArchived?: boolean;
+    limit?: number;
+    offset?: number;
+} | {
+    type: 'array';
+    includeArchived?: boolean;
+    limit: number;
+    offset: number;
+} | {
+    type: 'single';
+    includeArchived?: boolean;
+};
+
 /**
  * Struct class, this is the main class for creating and managing structs.
  *
@@ -973,7 +988,9 @@ export class Struct<T extends Blank = any, Name extends string = any> {
     public static generateLifetimeLoop(time: number) {
         return new Loop(async () => {
             Struct.each(async s => {
-                s.getLifetimeItems(true).pipe(async d => {
+                s.getLifetimeItems({
+                    type: 'stream',
+                }).pipe(async d => {
                     if (d.lifetime === 0) return;
                     if (d.created.getTime() + d.lifetime < Date.now()) {
                         (await d.delete()).unwrap();
@@ -1182,6 +1199,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
      * @returns {StructData<T, Name>} 
      */
     Generator(data: Structable<T & typeof globalCols>) {
+        if (!this.validate(data)) console.warn('Invalid data, there may be issues. If you see this, please fix your program, as this will become an error in the future');
         return new StructData(data, this);
     }
 
@@ -1259,40 +1277,42 @@ export class Struct<T extends Blank = any, Name extends string = any> {
     //     }
     // }
 
-    // TODO: Integrate limits
-    /**
-     * Streams all data from the database
-     *
-     * @param {true} asStream If the data should be streamed
-     * @param {?boolean} [includeArchived] If archived data should be included
-     * @returns {StructStream<T, Name>} 
-     */
-    all(asStream: true, includeArchived?: boolean): StructStream<T, Name>;
-    /**
-     * Returns all data from the database. Please be careful with this, it can be a lot of data.
-     *
-     * @param {false} asStream If the data should be streamed
-     * @param {?boolean} [includeArchived] If archived data should be included
-     * @returns {Promise<Result<StructData<T, Name>[], Error>>} 
-     */
-    all(asStream: false, includeArchived?: boolean): Promise<Result<StructData<T, Name>[], Error>>;
-    /**
-     * Streams/returns all data from the database
-     *
-     * @param {boolean} asStream If the data should be streamed
-     * @param {boolean} [includeArchived=false] If archived data should be included
-     * @returns 
-     */
-    all(asStream: boolean, includeArchived = false){
+    all(config: {
+        type: 'stream';
+        limit?: number;
+        offset?: number;
+    }): StructStream<T, Name>;
+    all(config: {
+        type: 'array';
+        limit: number;
+        offset: number;
+    }): Promise<Result<StructData<T, Name>[], Error>>;
+    all(config: {
+        type: 'single';
+    }): Promise<Result<StructData<T, Name>, Error>>;
+    all(config: MultiConfig) {
         const get = async () => {
             this.apiQuery('all', {});
 
-            return this.database.select().from(this.table).where(sql`${this.table.archived} = ${includeArchived}`);
+            const squeal = config.includeArchived ? sql`${this.table.archived} = ${config.includeArchived}` : sql``;
+
+            if (config.type === 'single') {
+                return (await this.database.select().from(this.table).where(squeal))[0];
+            }
+
+
+            const { offset, limit } = config;
+            if (offset && limit) {
+                return this.database.select().from(this.table).where(squeal).offset(offset).limit(limit);
+            } else {
+                return this.database.select().from(this.table).where(squeal);
+            }
         }
-        if (asStream) {
+
+        if (config.type === 'stream') {
             const stream = new StructStream(this);
             (async () => {
-                const dataStream = await get();
+                const dataStream = await get() as Structable<T & typeof globalCols>[];
                 for (let i = 0; i < dataStream.length; i++) {
                     stream.add(this.Generator(dataStream[i] as any));
                 }
@@ -1301,41 +1321,55 @@ export class Struct<T extends Blank = any, Name extends string = any> {
             return stream;
         } else {
             return attemptAsync(async () => {
-                const data = await get();
-                return data.map(d => this.Generator(d as any));
+                const data = await get() as Structable<T & typeof globalCols>[] | Structable<T & typeof globalCols>;
+                if (Array.isArray(data)) {
+                    return data.map(d => this.Generator(d));
+                } else {
+                    return this.Generator(data);
+                }
             });
         }
     }
 
-    /**
-     * Streams all data from the database that is archived
-     *
-     * @param {true} asStream If the data should be streamed
-     * @returns {StructStream<T, Name>} 
-     */
-    archived(asStream: true): StructStream<T, Name>;
-    /**
-     * Returns all data from the database that is archived
-     *
-     * @param {false} asStream If the data should be streamed
-     * @returns {Promise<Result<StructData<T, Name>[], Error>>} 
-     */
-    archived(asStream: false): Promise<Result<StructData<T, Name>[], Error>>;
-    /**
-     * Streams/returns all data from the database that is archived
-     *
-     * @param {boolean} asStream If the data should be streamed
-     * @returns 
-     */
-    archived(asStream: boolean) {
-        const get = () => {
+    archived(config: {
+        type: 'stream';
+        limit?: number;
+        offset?: number;
+    }): StructStream<T, Name>;
+    archived(config: {
+        type: 'array';
+        limit: number;
+        offset: number;
+    }): Promise<Result<StructData<T, Name>[], Error>>;
+    archived(config: {
+        type: 'single';
+    }): Promise<Result<StructData<T, Name>, Error>>;
+    archived(config: {
+        type: 'stream' | 'array' | 'single';
+        limit?: number;
+        offset?: number;
+    }) {
+        const get = async () => {
             this.apiQuery('archived', {});
-            return this.database.select().from(this.table).where(sql`${this.table.archived} = ${true}`);
+
+            const squeal = sql`${this.table.archived} = ${true}`;
+
+            if (config.type === 'single') {
+                return (await this.database.select().from(this.table).where(sql`${this.table.archived} = ${true}`))[0];
+            }
+
+            const { offset, limit } = config;
+            if (offset && limit) {
+                return this.database.select().from(this.table).where(sql`${this.table.archived} = ${true}`).offset(offset).limit(limit);
+            } else {
+                return this.database.select().from(this.table).where(sql`${this.table.archived} = ${true}`);
+            }
         }
-        if (asStream) {
+
+        if (config.type === 'stream') {
             const stream = new StructStream(this);
             (async () => {
-                const dataStream = await get();
+                const dataStream = await get() as Structable<T & typeof globalCols>[];
                 for (let i = 0; i < dataStream.length; i++) {
                     stream.add(this.Generator(dataStream[i] as any));
                 }
@@ -1344,53 +1378,57 @@ export class Struct<T extends Blank = any, Name extends string = any> {
             return stream;
         } else {
             return attemptAsync(async () => {
-                const data = await get();
-                return data.map(d => this.Generator(d as any));
+                const data = await get() as Structable<T & typeof globalCols>[] | Structable<T & typeof globalCols>;
+                if (Array.isArray(data)) {
+                    return data.map(d => this.Generator(d));
+                } else {
+                    return this.Generator(data);
+                }
             });
         }
     }
 
-    /**
-     * Streams all data from the database that is not archived
-     *
-     * @template {keyof T} K 
-     * @param {K} property  The property to search for
-     * @param {TsType<T[K]['_']['dataType']>} value The value to search for
-     * @param {true} asStream If the data should be streamed
-     * @returns {StructStream<T, Name>} 
-     */
-    fromProperty<K extends keyof T>(property: K, value: TsType<T[K]['_']['dataType']>, asStream: true): StructStream<T, Name>;
-    /**
-     * Returns all data from the database that is not archived
-     *
-     * @template {keyof T} K 
-     * @param {K} property The property to search for
-     * @param {TsType<T[K]['_']['dataType']>} value The value to search for
-     * @param {false} asStream If the data should be streamed
-     * @returns {Promise<Result<StructData<T, Name>[], Error>>} 
-     */
-    fromProperty<K extends keyof T>(property: K, value: TsType<T[K]['_']['dataType']>, asStream: false): Promise<Result<StructData<T, Name>[], Error>>;
-    /**
-     * Streams/returns all data from the database that is not archived
-     *
-     * @template {keyof T} K 
-     * @param {K} property The property to search for
-     * @param {TsType<T[K]['_']['dataType']>} value The value to search for
-     * @param {boolean} asStream If the data should be streamed
-     * @returns 
-     */
-    fromProperty<K extends keyof T>(property: K, value: TsType<T[K]['_']['dataType']>, asStream: boolean) {
-        const get = () => {
+    fromProperty<K extends keyof T>(property: keyof K, value: TsType<T[K]['_']['dataType']>, config: {
+        type: 'stream';
+        limit?: number;
+        offset?: number;
+        includeArchived?: boolean;
+    }): StructStream<T, Name>;
+    fromProperty<K extends keyof T>(property: keyof K, value: TsType<T[K]['_']['dataType']>, config: {
+        type: 'array';
+        limit: number;
+        offset: number;
+        includeArchived?: boolean;
+    }): Promise<Result<StructData<T, Name>[], Error>>;
+    fromProperty<K extends keyof T>(property: keyof K, value: TsType<T[K]['_']['dataType']>, config: {
+        type: 'single';
+        includeArchived?: boolean;
+    }): Promise<Result<StructData<T, Name>, Error>>;
+    fromProperty<K extends keyof T>(property: keyof K, value: TsType<T[K]['_']['dataType']>, config: MultiConfig) {
+        const get = async () => {
             this.apiQuery('from-property', {
                 property: String(property),
                 value,
             });
-            return this.database.select().from(this.table).where(sql`${this.table[property]} = ${value} AND ${this.table.archived} = ${false}`);
+
+            const squeal = config.includeArchived ? sql`${this.table[property]} = ${value} AND ${this.table.archived} = ${config.includeArchived}` : sql`${this.table[property]} = ${value}`;
+
+            if (config.type === 'single') {
+                return (await this.database.select().from(this.table).where(squeal))[0];
+            }
+
+            const { offset, limit } = config;
+            if (offset && limit) {
+                return this.database.select().from(this.table).where(squeal).offset(offset).limit(limit);
+            } else {
+                return this.database.select().from(this.table).where(squeal);
+            }
         }
-        if (asStream) {
+
+        if (config.type === 'stream') {
             const stream = new StructStream(this);
             (async () => {
-                const dataStream = await get();
+                const dataStream = await get() as Structable<T & typeof globalCols>[];
                 for (let i = 0; i < dataStream.length; i++) {
                     stream.add(this.Generator(dataStream[i] as any));
                 }
@@ -1399,85 +1437,64 @@ export class Struct<T extends Blank = any, Name extends string = any> {
             return stream;
         } else {
             return attemptAsync(async () => {
-                const data = await get();
-                return data.map(d => this.Generator(d as any));
+                const data = await get() as Structable<T & typeof globalCols>[] | Structable<T & typeof globalCols>;
+                if (Array.isArray(data)) {
+                    return data.map(d => this.Generator(d));
+                } else {
+                    return this.Generator(data);
+                }
             });
         }
     }
 
-    // get(props: {}, multiple: false): Promise<Result<StructData<T, Name> | undefined, Error>>;
-    // get(props: {}, multiple: true, asStream: true): StructStream<T, Name>;
-    // get(props: {}, multiple: true, asStream: false): Promise<Result<StructData<T, Name>[], Error>>;
-    // get(props: {
-    //     [K in keyof T]?: TsType<T[K]['_']['dataType']>;
-    // }, multiple: boolean, asStream?: boolean): Promise<Result<StructData<T, Name> | undefined, Error>> | StructStream<T, Name> | Promise<Result<StructData<T, Name>[], Error>> {
-    //     const get = async () => {
-    //         this.apiQuery('get', props);
+    get(props: {
+        [K in keyof T]?: TsType<T[K]['_']['dataType']>;
+    }, config: {
+        type: 'stream';
+        limit?: number;
+        offset?: number;
+    }): StructStream<T, Name>;
+    get(props: {
+        [K in keyof T]?: TsType<T[K]['_']['dataType']>;
+    }, config: {
+        type: 'array';
+        limit: number;
+        offset: number;
+    }): Promise<Result<StructData<T, Name>[], Error>>;
+    get(props: {
+        [K in keyof T]?: TsType<T[K]['_']['dataType']>;
+    }, config: {
+        type: 'single';
+    }): Promise<Result<StructData<T, Name>, Error>>;
+    get(props: {
+        [K in keyof T]?: TsType<T[K]['_']['dataType']>;
+    }, config: MultiConfig) {
+        console.warn(`Struct.get() This method is unstable, use with caution. fromProperty is recommended at this time`);
+        const get = async () => {
+            // this.apiQuery('get', {
+            //     props,
+            // });
 
-    //         return this.database.select().from(this.table).where(sql`
-    //                 ${Object.entries(props).map(([k, v]) => sql`${this.table[k as keyof T]} = ${v}`).join(' AND ')}
-    //             `);
-    //     }
-        
-    //     if (multiple) {
-    //         if (asStream) {
-    //             const stream = new StructStream(this);
-    //             (async () => {
-    //                 const dataStream = await get();
-    //                 for (let i = 0; i < dataStream.length; i++) {
-    //                     stream.add(this.Generator(dataStream[i] as any));
-    //                 }
-    //                 stream.end();
-    //             })();
-    //             return stream;
-    //         } else {
-    //             return attemptAsync(async () => {
-    //                 const data = await get();
-    //                 return data.map(d => this.Generator(d as any));
-    //             });
-    //         }
-    //     }
-    //     return attemptAsync(async () => {
-    //         const data = await get();
-    //         if (data.length === 0) return;
-    //         return this.Generator(data[0] as any);
-    //     });
-    // }
+            const squeal = Object.keys(props).reduce((acc, key) => {
+                return sql`${acc} AND ${this.table[key]} = ${props[key]}`;
+            }, sql``);
 
-    /**
-     * Streams all data from the database that is not archived
-     *
-     * @param {string} universe The universe to search for
-     * @param {true} asStream If the data should be streamed
-     * @returns {StructStream<T, Name>} 
-     */
-    fromUniverse(universe: string, asStream: true): StructStream<T, Name>;
-    /**
-     * Returns all data from the database that is not archived
-     *
-     * @param {string} universe The universe to search for
-     * @param {false} asStream If the data should be streamed
-     * @returns {Promise<Result<StructData<T, Name>[], Error>>} 
-     */
-    fromUniverse(universe: string, asStream: false): Promise<Result<StructData<T, Name>[], Error>>;
-    /**
-     * Streams/returns all data from the database that is not archived
-     *
-     * @param {string} universe The universe to search for
-     * @param {boolean} asStream If the data should be streamed
-     * @returns 
-     */
-    fromUniverse(universe: string, asStream: boolean) {
-        const get = () => {
-            this.apiQuery('from-universe', {
-                universe,
-            });
-            return this.database.select().from(this.table).where(sql`${this.table.universes} LIKE ${`%${universe}%`} AND ${this.table.archived} = ${false}`);
+            if (config.type === 'single') {
+                return (await this.database.select().from(this.table).where(squeal))[0];
+            }
+
+            const { offset, limit } = config;
+            if (offset && limit) {
+                return this.database.select().from(this.table).where(squeal).offset(offset).limit(limit);
+            } else {
+                return this.database.select().from(this.table).where(squeal);
+            }
         }
-        if (asStream) {
+
+        if (config.type === 'stream') {
             const stream = new StructStream(this);
             (async () => {
-                const dataStream = await get();
+                const dataStream = await get() as Structable<T & typeof globalCols>[];
                 for (let i = 0; i < dataStream.length; i++) {
                     stream.add(this.Generator(dataStream[i] as any));
                 }
@@ -1486,8 +1503,70 @@ export class Struct<T extends Blank = any, Name extends string = any> {
             return stream;
         } else {
             return attemptAsync(async () => {
-                const data = await get();
-                return data.map(d => this.Generator(d as any));
+                const data = await get() as Structable<T & typeof globalCols>[] | Structable<T & typeof globalCols>;
+                if (Array.isArray(data)) {
+                    return data.map(d => this.Generator(d));
+                } else {
+                    return this.Generator(data);
+                }
+            });
+        }
+    }
+
+    fromUniverse(universe: string, config: {
+        type: 'stream';
+        limit?: number;
+        offset?: number;
+        includeArchived?: boolean;
+    }): StructStream<T, Name>;
+    fromUniverse(universe: string, config: {
+        type: 'array';
+        limit: number;
+        offset: number;
+        includeArchived?: boolean;
+    }): Promise<Result<StructData<T, Name>[], Error>>;
+    fromUniverse(universe: string, config: {
+        type: 'single';
+        includeArchived?: boolean;
+    }): Promise<Result<StructData<T, Name>, Error>>;
+    fromUniverse(universe: string, config: MultiConfig) {
+        const get = async () => {
+            this.apiQuery('from-universe', {
+                universe,
+            });
+
+            const squeal = config.includeArchived ? sql`${this.table.universes} @> ${universe} AND ${this.table.archived} = ${config.includeArchived}` : sql`${this.table.universes} @> ${universe}`;
+
+            if (config.type === 'single') {
+                return (await this.database.select().from(this.table).where(squeal))[0];
+            }
+
+            const { offset, limit } = config;
+            if (offset && limit) {
+                return this.database.select().from(this.table).where(squeal).offset(offset).limit(limit);
+            } else {
+                return this.database.select().from(this.table).where(squeal);
+            }
+        }
+
+        if (config.type === 'stream') {
+            const stream = new StructStream(this);
+            (async () => {
+                const dataStream = await get() as Structable<T & typeof globalCols>[];
+                for (let i = 0; i < dataStream.length; i++) {
+                    stream.add(this.Generator(dataStream[i] as any));
+                }
+                stream.end();
+            })();
+            return stream;
+        } else {
+            return attemptAsync(async () => {
+                const data = await get() as Structable<T & typeof globalCols>[] | Structable<T & typeof globalCols>;
+                if (Array.isArray(data)) {
+                    return data.map(d => this.Generator(d));
+                } else {
+                    return this.Generator(data);
+                }
             });
         }
     }
@@ -1525,32 +1604,41 @@ export class Struct<T extends Blank = any, Name extends string = any> {
         this.defaults.push(...defaults);
     }
 
-    /**
-     * Streams all data from the database that has a lifetime
-     *
-     * @param {true} asStream If the data should be streamed
-     * @returns {StructStream<T, Name>} 
-     */
-    getLifetimeItems(asStream: true): StructStream<T, Name>;
-    /**
-     * Returns all data from the database that has a lifetime
-     *
-     * @param {false} asStream If the data should be streamed
-     * @returns {Promise<Result<StructData<T, Name>[], Error>>} 
-     */
-    getLifetimeItems(asStream: false): Promise<Result<StructData<T, Name>[], Error>>;
-    /**
-     * Streams/returns all data from the database that has a lifetime
-     *
-     * @param {boolean} asStream If the data should be streamed
-     * @returns 
-     */
-    getLifetimeItems(asStream: boolean) {
-        const get = () => this.database.select().from(this.table).where(sql`${this.table.lifetime} > 0`);
-        if (asStream) {
+    getLifetimeItems(config: {
+        type: 'stream';
+        limit?: number;
+        offset?: number;
+    }): StructStream<T, Name>;
+    getLifetimeItems(config: {
+        type: 'array';
+        limit: number;
+        offset: number;
+    }): Promise<Result<StructData<T, Name>[], Error>>;
+    getLifetimeItems(config: {
+        type: 'single';
+    }): Promise<Result<StructData<T, Name>, Error>>;
+    getLifetimeItems(config: MultiConfig) {
+        const get = async () => {
+            // this.apiQuery('lifetime-items', {});
+
+            const squeal = sql`${this.table.lifetime} > 0 AND ${this.table.archived} = ${false}`;
+
+            if (config.type === 'single') {
+                return (await this.database.select().from(this.table).where(squeal))[0];
+            }
+
+            const { offset, limit } = config;
+            if (offset && limit) {
+                return this.database.select().from(this.table).where(squeal).offset(offset).limit(limit);
+            } else {
+                return this.database.select().from(this.table).where(squeal);
+            }
+        }
+
+        if (config.type === 'stream') {
             const stream = new StructStream(this);
             (async () => {
-                const dataStream = await get();
+                const dataStream = await get() as Structable<T & typeof globalCols>[];
                 for (let i = 0; i < dataStream.length; i++) {
                     stream.add(this.Generator(dataStream[i] as any));
                 }
@@ -1559,8 +1647,12 @@ export class Struct<T extends Blank = any, Name extends string = any> {
             return stream;
         } else {
             return attemptAsync(async () => {
-                const data = await get();
-                return data.map(d => this.Generator(d as any));
+                const data = await get() as Structable<T & typeof globalCols>[] | Structable<T & typeof globalCols>;
+                if (Array.isArray(data)) {
+                    return data.map(d => this.Generator(d));
+                } else {
+                    return this.Generator(data);
+                }
             });
         }
     }
@@ -1572,7 +1664,9 @@ export class Struct<T extends Blank = any, Name extends string = any> {
      * @returns {void) => any} 
      */
     each(fn: (data: StructData<T, Name>, i: number) => void) {
-        return this.all(true).pipe(fn);
+        return this.all({
+            type: 'stream'
+        }).pipe(fn);
     }
 
     /**
@@ -1698,7 +1792,9 @@ export class Struct<T extends Blank = any, Name extends string = any> {
             //     .join('');
             let data: string = '';
             const promises: Promise<void>[] = [];
-            await this.all(true).pipe(async d => {
+            await this.all({
+                type: 'stream',
+            }).pipe(async d => {
                 const p = (async () => {
                     const buffer = encoder.encode(JSON.stringify(d.data));
                     const hashBuffer = await crypto.subtle.digest('SHA-256', buffer);
