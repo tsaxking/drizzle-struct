@@ -1290,7 +1290,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
     all(config: {
         type: 'single';
     }): Promise<Result<StructData<T, Name>, Error>>;
-    all(config: MultiConfig) {
+    all(config: MultiConfig): StructStream<T, Name> | Promise<Result<StructData<T, Name>[] | StructData<T, Name>, Error>> {
         const get = async () => {
             this.apiQuery('all', {});
 
@@ -1348,7 +1348,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
         type: 'stream' | 'array' | 'single';
         limit?: number;
         offset?: number;
-    }) {
+    }): StructStream<T, Name> | Promise<Result<StructData<T, Name>[] | StructData<T, Name>, Error>> {
         const get = async () => {
             this.apiQuery('archived', {});
 
@@ -1388,23 +1388,23 @@ export class Struct<T extends Blank = any, Name extends string = any> {
         }
     }
 
-    fromProperty<K extends keyof T>(property: keyof K, value: TsType<T[K]['_']['dataType']>, config: {
+    fromProperty<K extends keyof T>(property: K, value: TsType<T[K]['_']['dataType']>, config: {
         type: 'stream';
         limit?: number;
         offset?: number;
         includeArchived?: boolean;
     }): StructStream<T, Name>;
-    fromProperty<K extends keyof T>(property: keyof K, value: TsType<T[K]['_']['dataType']>, config: {
+    fromProperty<K extends keyof T>(property: K, value: TsType<T[K]['_']['dataType']>, config: {
         type: 'array';
         limit: number;
         offset: number;
         includeArchived?: boolean;
     }): Promise<Result<StructData<T, Name>[], Error>>;
-    fromProperty<K extends keyof T>(property: keyof K, value: TsType<T[K]['_']['dataType']>, config: {
+    fromProperty<K extends keyof T>(property: K, value: TsType<T[K]['_']['dataType']>, config: {
         type: 'single';
         includeArchived?: boolean;
     }): Promise<Result<StructData<T, Name>, Error>>;
-    fromProperty<K extends keyof T>(property: keyof K, value: TsType<T[K]['_']['dataType']>, config: MultiConfig) {
+    fromProperty<K extends keyof T>(property: K, value: TsType<T[K]['_']['dataType']>, config: MultiConfig): StructStream<T, Name> | Promise<Result<StructData<T, Name>[] | StructData<T, Name>, Error>> {
         const get = async () => {
             this.apiQuery('from-property', {
                 property: String(property),
@@ -1468,7 +1468,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
     }): Promise<Result<StructData<T, Name>, Error>>;
     get(props: {
         [K in keyof T]?: TsType<T[K]['_']['dataType']>;
-    }, config: MultiConfig) {
+    }, config: MultiConfig): StructStream<T, Name> | Promise<Result<StructData<T, Name>[] | StructData<T, Name>, Error>> {
         console.warn(`Struct.get() This method is unstable, use with caution. fromProperty is recommended at this time`);
         const get = async () => {
             // this.apiQuery('get', {
@@ -1529,7 +1529,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
         type: 'single';
         includeArchived?: boolean;
     }): Promise<Result<StructData<T, Name>, Error>>;
-    fromUniverse(universe: string, config: MultiConfig) {
+    fromUniverse(universe: string, config: MultiConfig): StructStream<T, Name> | Promise<Result<StructData<T, Name>[] | StructData<T, Name>, Error>> {
         const get = async () => {
             this.apiQuery('from-universe', {
                 universe,
@@ -1617,7 +1617,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
     getLifetimeItems(config: {
         type: 'single';
     }): Promise<Result<StructData<T, Name>, Error>>;
-    getLifetimeItems(config: MultiConfig) {
+    getLifetimeItems(config: MultiConfig): StructStream<T, Name> | Promise<Result<StructData<T, Name>[] | StructData<T, Name>, Error>> {
         const get = async () => {
             // this.apiQuery('lifetime-items', {});
 

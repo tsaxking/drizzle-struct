@@ -46,21 +46,21 @@ export const runTest = async (struct: Struct): Promise<{
                 throw new TestError('Test Struct: All method did not return a StructStream');
             }
 
-            const array = struct.all({
+            const array = (await struct.all({
                 type: 'array',
                 limit: 10,
                 offset: 0,
-            });
+            })).unwrap();
 
             if (!Array.isArray(array)) {
                 throw new TestError('Test Struct: All method did not return an array');
             }
 
-            const object = struct.all({
+            const object = (await struct.all({
                 type: 'single',
-            });
+            })).unwrap();
 
-            if (typeof object !== 'object') {
+            if (!(object instanceof StructData)) {
                 throw new TestError('Test Struct: All method did not return an object');
             }
         },
@@ -73,21 +73,22 @@ export const runTest = async (struct: Struct): Promise<{
                 throw new TestError('Test Struct: FromProperty method did not return a StructStream');
             }
 
-            const array = await struct.fromProperty('name' as any, 'John', {
+            const array = (await struct.fromProperty('name' as any, 'John', {
                 type: 'array',
                 limit: 10,
                 offset: 0,
-            });
+            })).unwrap();
+
 
             if (!Array.isArray(array)) {
                 throw new TestError('Test Struct: FromProperty method did not return an array');
             }
 
-            const object = await struct.fromProperty('name' as any, 'John', {
+            const object = (await struct.fromProperty('name', 'John', {
                 type: 'single',
-            });
+            })).unwrap();
 
-            if (typeof object !== 'object') {
+            if (!(object instanceof StructData)) {
                 throw new TestError('Test Struct: FromProperty method did not return an object');
             }
         },
@@ -100,21 +101,21 @@ export const runTest = async (struct: Struct): Promise<{
                 throw new TestError('Test Struct: Archived method did not return a StructStream');
             }
 
-            const array = struct.archived({
+            const array = (await struct.archived({
                 type: 'array',
                 limit: 10,
                 offset: 0,
-            });
+            })).unwrap();
 
             if (!Array.isArray(array)) {
                 throw new TestError('Test Struct: Archived method did not return an array');
             }
 
-            const object = struct.archived({
+            const object = (await struct.archived({
                 type: 'single',
-            });
+            })).unwrap();
 
-            if (typeof object !== 'object') {
+            if (!(object instanceof StructData)) {
                 throw new TestError('Test Struct: Archived method did not return an object');
             }
         },
