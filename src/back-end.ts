@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { pgTable, text, timestamp, boolean, integer } from 'drizzle-orm/pg-core';
 import type { PgColumnBuilderBase, PgTableWithColumns } from 'drizzle-orm/pg-core';
-import { SQL, sql, type BuildColumns } from 'drizzle-orm';
+import { count, SQL, sql, type BuildColumns } from 'drizzle-orm';
 import { attempt, attemptAsync, resolveAll, type Result } from 'ts-utils/check';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import { type ColumnDataType } from 'drizzle-orm';
@@ -900,7 +900,7 @@ export type RequestAction = {
 export type TsType<T extends ColumnDataType> = T extends 'string' ? string : T extends 'number' ? number : T extends 'boolean' ? boolean : T extends 'timestamp' ? Date : never;
 
 export type MultiConfig = {
-    type: 'stream' | 'array' | 'single';
+    type: 'stream' | 'array' | 'single' | 'count';
     includeArchived?: boolean;
     limit?: number;
     offset?: number;
@@ -1282,11 +1282,21 @@ export class Struct<T extends Blank = any, Name extends string = any> {
     all(config: {
         type: 'single';
     }): Promise<Result<StructData<T, Name>, Error>>;
-    all(config: MultiConfig): StructStream<T, Name> | Promise<Result<StructData<T, Name>[] | StructData<T, Name>, Error>> {
+    all(config: {
+        type: 'count';
+    }): Promise<Result<number>>;
+    all(config: MultiConfig): StructStream<T, Name> | Promise<Result<StructData<T, Name>[] | StructData<T, Name> | number, Error>> {
         const get = async () => {
             this.apiQuery('all', {});
 
             const squeal = config.includeArchived ? sql`${this.table.archived} = ${config.includeArchived}` : sql``;
+
+            if (config.type === 'count') {
+                const res = await this.database.select({
+                    count: count(),
+                }).from(this.table).where(squeal);
+                return res[0].count;
+            }
 
             if (config.type === 'single') {
                 return (await this.database.select().from(this.table).where(squeal))[0];
@@ -1313,11 +1323,13 @@ export class Struct<T extends Blank = any, Name extends string = any> {
             return stream;
         } else {
             return attemptAsync(async () => {
-                const data = await get() as Structable<T & typeof globalCols>[] | Structable<T & typeof globalCols>;
+                const data = await get() as Structable<T & typeof globalCols>[] | Structable<T & typeof globalCols> | number;
                 if (Array.isArray(data)) {
                     return data.map(d => this.Generator(d));
-                } else {
+                } else if (typeof data === 'object') {
                     return this.Generator(data);
+                } else {
+                    return data;
                 }
             });
         }
@@ -1337,24 +1349,34 @@ export class Struct<T extends Blank = any, Name extends string = any> {
         type: 'single';
     }): Promise<Result<StructData<T, Name>, Error>>;
     archived(config: {
-        type: 'stream' | 'array' | 'single';
+        type: 'count';
+    }): Promise<Result<number>>;
+    archived(config: {
+        type: 'stream' | 'array' | 'single' | 'count';
         limit?: number;
         offset?: number;
-    }): StructStream<T, Name> | Promise<Result<StructData<T, Name>[] | StructData<T, Name>, Error>> {
+    }): StructStream<T, Name> | Promise<Result<StructData<T, Name>[] | StructData<T, Name> | number, Error>> {
         const get = async () => {
             this.apiQuery('archived', {});
 
             const squeal = sql`${this.table.archived} = ${true}`;
 
+            if (config.type === 'count') {
+                const res = await this.database.select({
+                    count: count(),
+                }).from(this.table).where(squeal);
+                return res[0].count;
+            }
+
             if (config.type === 'single') {
-                return (await this.database.select().from(this.table).where(sql`${this.table.archived} = ${true}`))[0];
+                return (await this.database.select().from(this.table).where(squeal))[0];
             }
 
             const { offset, limit } = config;
             if (offset && limit) {
-                return this.database.select().from(this.table).where(sql`${this.table.archived} = ${true}`).offset(offset).limit(limit);
+                return this.database.select().from(this.table).where(squeal).offset(offset).limit(limit);
             } else {
-                return this.database.select().from(this.table).where(sql`${this.table.archived} = ${true}`);
+                return this.database.select().from(this.table).where(squeal);
             }
         }
 
@@ -1370,11 +1392,13 @@ export class Struct<T extends Blank = any, Name extends string = any> {
             return stream;
         } else {
             return attemptAsync(async () => {
-                const data = await get() as Structable<T & typeof globalCols>[] | Structable<T & typeof globalCols>;
+                const data = await get() as Structable<T & typeof globalCols>[] | Structable<T & typeof globalCols> | number;
                 if (Array.isArray(data)) {
                     return data.map(d => this.Generator(d));
-                } else {
+                } else if (typeof data === 'object') {
                     return this.Generator(data);
+                } else {
+                    return data;
                 }
             });
         }
@@ -1396,14 +1420,25 @@ export class Struct<T extends Blank = any, Name extends string = any> {
         type: 'single';
         includeArchived?: boolean;
     }): Promise<Result<StructData<T, Name>, Error>>;
-    fromProperty<K extends keyof T>(property: K, value: TsType<T[K]['_']['dataType']>, config: MultiConfig): StructStream<T, Name> | Promise<Result<StructData<T, Name>[] | StructData<T, Name>, Error>> {
+    fromProperty<K extends keyof T>(property: K, value: TsType<T[K]['_']['dataType']>, config: {
+        type: 'count';
+        includeArchived?: boolean;
+    }): Promise<Result<number>>;
+    fromProperty<K extends keyof T>(property: K, value: TsType<T[K]['_']['dataType']>, config: MultiConfig): StructStream<T, Name> | Promise<Result<StructData<T, Name>[] | StructData<T, Name> | number, Error>> {
         const get = async () => {
             this.apiQuery('from-property', {
                 property: String(property),
                 value,
             });
 
-            const squeal = config.includeArchived ? sql`${this.table[property]} = ${value} AND ${this.table.archived} = ${config.includeArchived}` : sql`${this.table[property]} = ${value}`;
+            const squeal = sql`${this.table[property]} = ${value}`;
+
+            if (config.type === 'count') {
+                const res = await this.database.select({
+                    count: count(),
+                }).from(this.table).where(squeal);
+                return res[0].count;
+            }
 
             if (config.type === 'single') {
                 return (await this.database.select().from(this.table).where(squeal))[0];
@@ -1429,11 +1464,13 @@ export class Struct<T extends Blank = any, Name extends string = any> {
             return stream;
         } else {
             return attemptAsync(async () => {
-                const data = await get() as Structable<T & typeof globalCols>[] | Structable<T & typeof globalCols>;
+                const data = await get() as Structable<T & typeof globalCols>[] | Structable<T & typeof globalCols> | number;
                 if (Array.isArray(data)) {
                     return data.map(d => this.Generator(d));
-                } else {
+                } else if (typeof data === 'object') {
                     return this.Generator(data);
+                } else {
+                    return data;
                 }
             });
         }
@@ -1460,16 +1497,26 @@ export class Struct<T extends Blank = any, Name extends string = any> {
     }): Promise<Result<StructData<T, Name>, Error>>;
     get(props: {
         [K in keyof T]?: TsType<T[K]['_']['dataType']>;
-    }, config: MultiConfig): StructStream<T, Name> | Promise<Result<StructData<T, Name>[] | StructData<T, Name>, Error>> {
+    }, config: {
+        type: 'count';
+    }): Promise<Result<number>>;
+    get(props: {
+        [K in keyof T]?: TsType<T[K]['_']['dataType']>;
+    }, config: MultiConfig): StructStream<T, Name> | Promise<Result<StructData<T, Name>[] | StructData<T, Name> | number, Error>> {
         console.warn(`Struct.get() This method is unstable, use with caution. fromProperty is recommended at this time`);
         const get = async () => {
             // this.apiQuery('get', {
             //     props,
             // });
 
-            const squeal = Object.keys(props).reduce((acc, key) => {
-                return sql`${acc} AND ${this.table[key]} = ${props[key]}`;
-            }, sql``);
+            const squeal = sql.join(Object.keys(props).map(k => sql`${this.table[k]} = ${props[k]}`), sql` AND `);
+
+            if (config.type === 'count') {
+                const res = await this.database.select({
+                    count: count(),
+                }).from(this.table).where(squeal);
+                return res[0].count;
+            }
 
             if (config.type === 'single') {
                 return (await this.database.select().from(this.table).where(squeal))[0];
@@ -1495,11 +1542,13 @@ export class Struct<T extends Blank = any, Name extends string = any> {
             return stream;
         } else {
             return attemptAsync(async () => {
-                const data = await get() as Structable<T & typeof globalCols>[] | Structable<T & typeof globalCols>;
+                const data = await get() as Structable<T & typeof globalCols>[] | Structable<T & typeof globalCols> | number;
                 if (Array.isArray(data)) {
                     return data.map(d => this.Generator(d));
-                } else {
+                } else if (typeof data === 'object') {
                     return this.Generator(data);
+                } else {
+                    return data;
                 }
             });
         }
@@ -1521,13 +1570,24 @@ export class Struct<T extends Blank = any, Name extends string = any> {
         type: 'single';
         includeArchived?: boolean;
     }): Promise<Result<StructData<T, Name>, Error>>;
-    fromUniverse(universe: string, config: MultiConfig): StructStream<T, Name> | Promise<Result<StructData<T, Name>[] | StructData<T, Name>, Error>> {
+    fromUniverse(universe: string, config: {
+        type: 'count';
+        includeArchived?: boolean;
+    }): Promise<Result<number>>;
+    fromUniverse(universe: string, config: MultiConfig): StructStream<T, Name> | Promise<Result<StructData<T, Name>[] | StructData<T, Name> | number, Error>> {
         const get = async () => {
             this.apiQuery('from-universe', {
                 universe,
             });
 
-            const squeal = config.includeArchived ? sql`${this.table.universes} @> ${universe} AND ${this.table.archived} = ${config.includeArchived}` : sql`${this.table.universes} @> ${universe}`;
+            const squeal = sql`${this.table.universes} @> ${universe} AND ${this.table.archived} = ${config.includeArchived ?? false}`;
+
+            if (config.type === 'count') {
+                const res = await this.database.select({
+                    count: count(),
+                }).from(this.table).where(squeal);
+                return res[0].count;
+            }
 
             if (config.type === 'single') {
                 return (await this.database.select().from(this.table).where(squeal))[0];
@@ -1553,11 +1613,13 @@ export class Struct<T extends Blank = any, Name extends string = any> {
             return stream;
         } else {
             return attemptAsync(async () => {
-                const data = await get() as Structable<T & typeof globalCols>[] | Structable<T & typeof globalCols>;
+                const data = await get() as Structable<T & typeof globalCols>[] | Structable<T & typeof globalCols> | number;
                 if (Array.isArray(data)) {
                     return data.map(d => this.Generator(d));
-                } else {
+                } else if (typeof data === 'object') {
                     return this.Generator(data);
+                } else {
+                    return data;
                 }
             });
         }
@@ -1609,11 +1671,21 @@ export class Struct<T extends Blank = any, Name extends string = any> {
     getLifetimeItems(config: {
         type: 'single';
     }): Promise<Result<StructData<T, Name>, Error>>;
-    getLifetimeItems(config: MultiConfig): StructStream<T, Name> | Promise<Result<StructData<T, Name>[] | StructData<T, Name>, Error>> {
+    getLifetimeItems(config: {
+        type: 'count';
+    }): Promise<Result<number>>;
+    getLifetimeItems(config: MultiConfig): StructStream<T, Name> | Promise<Result<StructData<T, Name>[] | StructData<T, Name> | number, Error>> {
         const get = async () => {
-            // this.apiQuery('lifetime-items', {});
+            // this.apiQuery('get-lifetime-items', {});
 
             const squeal = sql`${this.table.lifetime} > 0 AND ${this.table.archived} = ${false}`;
+
+            if (config.type === 'count') {
+                const res = await this.database.select({
+                    count: count(),
+                }).from(this.table).where(squeal);
+                return res[0].count;
+            }
 
             if (config.type === 'single') {
                 return (await this.database.select().from(this.table).where(squeal))[0];
@@ -1639,11 +1711,13 @@ export class Struct<T extends Blank = any, Name extends string = any> {
             return stream;
         } else {
             return attemptAsync(async () => {
-                const data = await get() as Structable<T & typeof globalCols>[] | Structable<T & typeof globalCols>;
+                const data = await get() as Structable<T & typeof globalCols>[] | Structable<T & typeof globalCols> | number;
                 if (Array.isArray(data)) {
                     return data.map(d => this.Generator(d));
-                } else {
+                } else if (typeof data === 'object') {
                     return this.Generator(data);
+                } else {
+                    return data;
                 }
             });
         }
