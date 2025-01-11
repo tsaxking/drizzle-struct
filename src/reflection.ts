@@ -327,7 +327,7 @@ type StructEvent<T extends Blank = Blank> = {
 export type QueryType = {
     'all': {};
     'from-id': { id: string };
-    'from-ids': { ids: string[] };
+    // 'from-ids': { ids: string[] };
     'from-property': { property: string, value: any };
     'from-universe': { universe: string };
     'archived': {};
@@ -344,7 +344,7 @@ export type QueryType = {
 type QueryResponse<T extends Blank> = {
     'all': Stream<Structable<T & typeof globalCols>>;
     'from-id': Structable<T> | undefined;
-    'from-ids': Stream<Structable<T & typeof globalCols>>;
+    // 'from-ids': Stream<Structable<T & typeof globalCols>>;
     'from-property': Stream<Structable<T & typeof globalCols>>;
     'from-universe': Stream<Structable<T & typeof globalCols>>;
     'archived': Stream<Structable<T & typeof globalCols>>;
@@ -582,13 +582,13 @@ export class Server {
                         }
                         send(data);
                     } break;
-                    case 'from-ids': {
-                        const { ids } = z.object({
-                            ids: z.array(z.string()),
-                        }).parse(args);
-                        stream(s.fromIds(ids, true));
-                    }
-                    break;
+                    // case 'from-ids': {
+                    //     const { ids } = z.object({
+                    //         ids: z.array(z.string()),
+                    //     }).parse(args);
+                    //     stream(s.fromIds(ids, true));
+                    // }
+                    // break;
                     // case 'get': {
                     //     const data = s.get(args, true, true);
                     //     stream(data);
