@@ -1289,7 +1289,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
         const get = async () => {
             this.apiQuery('all', {});
 
-            const squeal = config.includeArchived ? sql`${this.table.archived} = ${config.includeArchived}` : sql``;
+            const squeal = config.includeArchived ? sql`1 = 1` : sql`${this.table.archived} = ${false}`;
 
             if (config.type === 'count') {
                 const res = await this.database.select({
@@ -1304,7 +1304,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 
 
             const { offset, limit } = config;
-            if (offset && limit) {
+            if (offset !== undefined && limit !== undefined) {
                 return this.database.select().from(this.table).where(squeal).offset(offset).limit(limit);
             } else {
                 return this.database.select().from(this.table).where(squeal);
@@ -1431,7 +1431,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
                 value,
             });
 
-            const squeal = sql`${this.table[property]} = ${value}`;
+            const squeal = sql`${this.table[property]} = ${value} AND ${config.includeArchived ? sql`1 = 1` : sql`${this.table.archived} = ${false}`}`;
 
             if (config.type === 'count') {
                 const res = await this.database.select({
@@ -1580,7 +1580,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
                 universe,
             });
 
-            const squeal = sql`${this.table.universes} @> ${universe} AND ${this.table.archived} = ${config.includeArchived ?? false}`;
+            const squeal = sql`${this.table.universes} @> ${universe} AND ${config.includeArchived ? sql`1 = 1` : sql`${this.table.archived} = ${false}`}`;
 
             if (config.type === 'count') {
                 const res = await this.database.select({
