@@ -19,8 +19,9 @@
   "dependencies": {
     "@eslint/compat": "^1.2.4",
     "@types/proper-lockfile": "^4.1.4",
+    "axios": "^1.7.9",
     "dotenv": "^16.4.7",
-		"drizzle-orm": "^0.38.3",
+    "drizzle-orm": "^0.38.3",
     "drizzle-zod": "^0.6.1",
     "eslint": "^9.17.0",
     "eslint-config-prettier": "^9.1.0",

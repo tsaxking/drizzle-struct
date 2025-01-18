@@ -144,9 +144,9 @@ export type StructBuilder<T extends Blank, Name extends string> = {
     generators?: Partial<{
         id: () => string;
         attributes: () => string[];
-        lifetime: () => number;
         universes: () => string[];
     }>;
+    lifetime?: number;
     /**
      * Version history, if a data is updated, it will save the current state to a version table
      * If not set, there will be no version table
@@ -1167,7 +1167,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
                 archived: false,
                 universes: JSON.stringify(this.data.generators?.universes?.() ?? []),
                 attributes: JSON.stringify(this.data.generators?.attributes?.() ?? []),
-                lifetime: this.data.generators?.lifetime?.() || 0,
+                lifetime: this.data.lifetime || 0,
             }
             const newData: Structable<T & typeof globalCols> = {
                 ...data,
@@ -1281,11 +1281,11 @@ export class Struct<T extends Blank = any, Name extends string = any> {
     }): Promise<Result<StructData<T, Name>[], Error>>;
     all(config: {
         type: 'single';
-    }): Promise<Result<StructData<T, Name>, Error>>;
+    }): Promise<Result<StructData<T, Name> | undefined, Error>>;
     all(config: {
         type: 'count';
     }): Promise<Result<number>>;
-    all(config: MultiConfig): StructStream<T, Name> | Promise<Result<StructData<T, Name>[] | StructData<T, Name> | number, Error>> {
+    all(config: MultiConfig): StructStream<T, Name> | Promise<Result<StructData<T, Name>[] | undefined | StructData<T, Name> | number, Error>> {
         const get = async () => {
             this.apiQuery('all', {});
 
@@ -1347,7 +1347,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
     }): Promise<Result<StructData<T, Name>[], Error>>;
     archived(config: {
         type: 'single';
-    }): Promise<Result<StructData<T, Name>, Error>>;
+    }): Promise<Result<StructData<T, Name> | undefined, Error>>;
     archived(config: {
         type: 'count';
     }): Promise<Result<number>>;
@@ -1355,7 +1355,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
         type: 'stream' | 'array' | 'single' | 'count';
         limit?: number;
         offset?: number;
-    }): StructStream<T, Name> | Promise<Result<StructData<T, Name>[] | StructData<T, Name> | number, Error>> {
+    }): StructStream<T, Name> | Promise<Result<StructData<T, Name>[] | StructData<T, Name> | undefined | number, Error>> {
         const get = async () => {
             this.apiQuery('archived', {});
 
@@ -1419,19 +1419,24 @@ export class Struct<T extends Blank = any, Name extends string = any> {
     fromProperty<K extends keyof T>(property: K, value: TsType<T[K]['_']['dataType']>, config: {
         type: 'single';
         includeArchived?: boolean;
-    }): Promise<Result<StructData<T, Name>, Error>>;
+    }): Promise<Result<StructData<T, Name> | undefined, Error>>;
     fromProperty<K extends keyof T>(property: K, value: TsType<T[K]['_']['dataType']>, config: {
         type: 'count';
         includeArchived?: boolean;
     }): Promise<Result<number>>;
-    fromProperty<K extends keyof T>(property: K, value: TsType<T[K]['_']['dataType']>, config: MultiConfig): StructStream<T, Name> | Promise<Result<StructData<T, Name>[] | StructData<T, Name> | number, Error>> {
+    fromProperty<K extends keyof T>(property: K, value: TsType<T[K]['_']['dataType']>, config: MultiConfig): StructStream<T, Name> | Promise<Result<StructData<T, Name>[] | StructData<T, Name> | undefined | number, Error>> {
         const get = async () => {
             this.apiQuery('from-property', {
                 property: String(property),
                 value,
             });
 
-            const squeal = sql`${this.table[property]} = ${value} AND ${config.includeArchived ? sql`1 = 1` : sql`${this.table.archived} = ${false}`}`;
+            let squeal: SQL;
+            if (config.includeArchived) {
+                squeal = sql`${this.table[property]} = ${value}`;
+            } else {
+                squeal = sql`${this.table[property]} = ${value} AND ${this.table.archived} = ${false}`;
+            }
 
             if (config.type === 'count') {
                 const res = await this.database.select({
@@ -1494,7 +1499,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
         [K in keyof T]?: TsType<T[K]['_']['dataType']>;
     }, config: {
         type: 'single';
-    }): Promise<Result<StructData<T, Name>, Error>>;
+    }): Promise<Result<StructData<T, Name> | undefined, Error>>;
     get(props: {
         [K in keyof T]?: TsType<T[K]['_']['dataType']>;
     }, config: {
@@ -1502,14 +1507,22 @@ export class Struct<T extends Blank = any, Name extends string = any> {
     }): Promise<Result<number>>;
     get(props: {
         [K in keyof T]?: TsType<T[K]['_']['dataType']>;
-    }, config: MultiConfig): StructStream<T, Name> | Promise<Result<StructData<T, Name>[] | StructData<T, Name> | number, Error>> {
+    }, config: MultiConfig): StructStream<T, Name> | Promise<Result<StructData<T, Name>[] | StructData<T, Name> | undefined | number, Error>> {
         console.warn(`Struct.get() This method is unstable, use with caution. fromProperty is recommended at this time`);
         const get = async () => {
             // this.apiQuery('get', {
             //     props,
             // });
 
-            const squeal = sql.join(Object.keys(props).map(k => sql`${this.table[k]} = ${props[k]}`), sql` AND `);
+            // const squeal = sql.join(Object.keys(props).map(k => sql`${this.table[k]} = ${props[k]}`), sql` AND `);
+            let squeal = sql`1 = 1`;
+            for (const key in props) {
+                if (squeal) {
+                    squeal = sql`${squeal} AND ${this.table[key]} = ${props[key]}`;
+                } else {
+                    squeal = sql`${this.table[key]} = ${props[key]}`;
+                }
+            }
 
             if (config.type === 'count') {
                 const res = await this.database.select({
@@ -1569,18 +1582,24 @@ export class Struct<T extends Blank = any, Name extends string = any> {
     fromUniverse(universe: string, config: {
         type: 'single';
         includeArchived?: boolean;
-    }): Promise<Result<StructData<T, Name>, Error>>;
+    }): Promise<Result<StructData<T, Name> | undefined, Error>>;
     fromUniverse(universe: string, config: {
         type: 'count';
         includeArchived?: boolean;
     }): Promise<Result<number>>;
-    fromUniverse(universe: string, config: MultiConfig): StructStream<T, Name> | Promise<Result<StructData<T, Name>[] | StructData<T, Name> | number, Error>> {
+    fromUniverse(universe: string, config: MultiConfig): StructStream<T, Name> | Promise<Result<StructData<T, Name>[] | undefined | StructData<T, Name> | number, Error>> {
         const get = async () => {
             this.apiQuery('from-universe', {
                 universe,
             });
 
-            const squeal = sql`${this.table.universes} @> ${universe} AND ${config.includeArchived ? sql`1 = 1` : sql`${this.table.archived} = ${false}`}`;
+            // const squeal = sql`${this.table.universes} @> ${universe} AND ${config.includeArchived ? sql`1 = 1` : sql`${this.table.archived} = ${false}`}`;
+            let squeal: SQL;
+            if (config.includeArchived) {
+                squeal = sql`${this.table.universes} @> ${universe}`;
+            } else {
+                squeal = sql`${this.table.universes} @> ${universe} AND ${this.table.archived} = ${false}`;
+            }
 
             if (config.type === 'count') {
                 const res = await this.database.select({
@@ -1670,15 +1689,21 @@ export class Struct<T extends Blank = any, Name extends string = any> {
     }): Promise<Result<StructData<T, Name>[], Error>>;
     getLifetimeItems(config: {
         type: 'single';
-    }): Promise<Result<StructData<T, Name>, Error>>;
+    }): Promise<Result<StructData<T, Name> | undefined, Error>>;
     getLifetimeItems(config: {
         type: 'count';
     }): Promise<Result<number>>;
-    getLifetimeItems(config: MultiConfig): StructStream<T, Name> | Promise<Result<StructData<T, Name>[] | StructData<T, Name> | number, Error>> {
+    getLifetimeItems(config: MultiConfig): StructStream<T, Name> | Promise<Result<StructData<T, Name>[] | undefined | StructData<T, Name> | number, Error>> {
         const get = async () => {
             // this.apiQuery('get-lifetime-items', {});
 
-            const squeal = sql`${this.table.lifetime} > 0 AND ${this.table.archived} = ${false}`;
+            // const squeal = sql`${this.table.lifetime} > 0 AND ${this.table.archived} = ${false}`;
+            let squeal: SQL;
+            if (config.includeArchived) {
+                squeal = sql`${this.table.lifetime} > 0`;
+            } else {
+                squeal = sql`${this.table.lifetime} > 0 AND ${this.table.archived} = ${false}`;
+            }
 
             if (config.type === 'count') {
                 const res = await this.database.select({

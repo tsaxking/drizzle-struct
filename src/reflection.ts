@@ -8,6 +8,7 @@ import { attempt, attemptAsync, resolveAll, type Result } from 'ts-utils/check';
 import { Stream } from 'ts-utils/stream';
 import { Loop } from 'ts-utils/loop';
 import fs from 'fs';
+import axios from 'axios';
 
 const { Server: HTTPServer } = http;
 
@@ -352,6 +353,20 @@ type QueryResponse<T extends Blank> = {
     // 'get': Stream<Structable<T & typeof globalCols>>;
 };
 
+type ServerConfig = {
+    port: number;
+    checkEvent: (event: {
+        apiKey: string;
+        event: keyof StructEvent;
+        data: Omit<StructEvent[keyof StructEvent], 'timestamp'>;
+        timestamp: number;
+        struct: string;
+    }) => boolean | Promise<boolean>;
+    checkAPI: (key: string) => boolean | Promise<boolean>;
+    logFile?: string;
+    fileStreamDir: string;
+};
+
 /**
  * API Server
  *
@@ -411,16 +426,17 @@ export class Server {
      * @param {string} logFile Output log file
      */
     constructor(
-        public readonly port: number, 
-        public readonly checkAPI: (key: string) => boolean | Promise<boolean>,
-        public readonly checkEvent: (event: {
-            apiKey: string;
-            event: keyof StructEvent;
-            data: Omit<StructEvent[keyof StructEvent], 'timestamp'>;
-            timestamp: number;
-            struct: string;
-        }) => boolean | Promise<boolean>,
-        public readonly logFile?: string,
+        // public readonly port: number, 
+        // public readonly checkAPI: (key: string) => boolean | Promise<boolean>,
+        // public readonly checkEvent: (event: {
+        //     apiKey: string;
+        //     event: keyof StructEvent;
+        //     data: Omit<StructEvent[keyof StructEvent], 'timestamp'>;
+        //     timestamp: number;
+        //     struct: string;
+        // }) => boolean | Promise<boolean>,
+        // public readonly logFile?: string,
+        public readonly config: ServerConfig,
     ) {
         this.app.use(express.json());
 
@@ -432,7 +448,7 @@ export class Server {
                     return;
                 }
 
-                const result = await this.checkAPI(key);
+                const result = await this.config.checkAPI(key);
                 if (!result) {
                     res.status(403).send('Forbidden');
                     return;
@@ -639,6 +655,64 @@ export class Server {
                 res.status(500).send('Internal server error');
             }
         });
+
+        this.app.get('/file/:fileId', async (req, res) => {
+            const filePath = `${this.config.fileStreamDir}/${req.params.fileId}`;
+            res.setHeader('Content-Disposition', 'attachment; filename="file.txt"');
+            res.setHeader('Content-Type', 'application/octet-stream');
+            try {
+                const streamer = fs.createReadStream(filePath);
+                streamer.pipe(res);
+                streamer.on('end', () => {
+                    try {
+                        res.end();
+                    } catch (error) {
+                        console.error(error);
+                    }
+                });
+
+                streamer.on('error', (err) => {
+                    console.error(err);
+                    res.status(500).send('Internal server error');
+                });
+
+                res.on('error', (err) => {
+                    console.error(err);
+                    res.status(500).send('Internal server error');
+                });
+            } catch (error) {
+                console.error(error);
+                res.status(500).send('Internal server error');
+            }
+        });
+
+        this.app.post('/file/:fileId', async (req, res) => {
+            // saving the file
+            const filePath = `${this.config.fileStreamDir}/${req.params.fileId}`;
+            // check if the file exists
+
+            if (fs.existsSync(filePath)) {
+                res.status(409).send('File already exists');
+                return;
+            }
+
+            const streamer = fs.createWriteStream(filePath);
+            req.pipe(streamer);
+
+            streamer.on('finish', () => {
+                res.status(200).send('File uploaded successfully');
+            });
+
+            streamer.on('error', (err) => {
+                console.error(err);
+                res.status(500).send('Internal server error');
+            });
+
+            req.on('error', (err) => {
+                console.error(err);
+                res.status(500).send('Internal server error');
+            });
+        });
     }
 
     /**
@@ -653,7 +727,7 @@ export class Server {
         const { event, timestamp, payload: { data, struct } } = structEvent;
     
         // Check event authorization
-        if (!await this.checkEvent({ apiKey, event, data, timestamp, struct })) {
+        if (!await this.config.checkEvent({ apiKey, event, data, timestamp, struct })) {
             return { status: 403, message: 'Forbidden' };
         }
     
@@ -715,7 +789,7 @@ export class Server {
      * @returns {void) => void} 
      */
     public start(cb?: () => void) {
-        this.server.listen(this.port, cb);
+        this.server.listen(this.config.port, cb);
     }
 
     /**
@@ -750,7 +824,7 @@ export class Server {
      */
     async send<T extends Blank, Name extends string>(struct: Struct<T, Name>, event: keyof StructEvent, data: Omit<StructEvent[keyof StructEvent], 'timestamp'>) {
         return resolveAll(await Promise.all(Array.from(this.connections.values()).map(async c => attemptAsync(async () => {
-            if (await this.checkEvent({
+            if (await this.config.checkEvent({
                 apiKey: c.apiKey,
                 event,
                 data,
@@ -765,6 +839,15 @@ export class Server {
         }))));
     }
 }
+
+type ClientConfig = {
+    port: number;
+    host: string;
+    apikey: string;
+    https: boolean;
+    logFile?: string;
+    fileStreamDir: string;
+};
 
 /**
  * API Client
@@ -808,11 +891,12 @@ export class Client {
      * @param {string} logFile Output log file
      */
     constructor(
-        public readonly apikey: string,
-        public readonly host: string,
-        public readonly port: number,
-        public readonly https: boolean,
-        public readonly logFile: string,
+        // public readonly apikey: string,
+        // public readonly host: string,
+        // public readonly port: number,
+        // public readonly https: boolean,
+        // public readonly logFile: string,
+        public readonly config: ClientConfig,
     ) {}
 
     /**
@@ -848,7 +932,7 @@ export class Client {
                 timestamp,
                 eventId: id,
                 event,
-                apiKey: this.apikey,
+                apiKey: this.config.apikey,
                 tries: 1,
             })).unwrap();
             return (await this.sendEvent({
@@ -892,7 +976,7 @@ export class Client {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'x-api-key': this.apikey,
+                    'x-api-key': this.config.apikey,
                 },
                 body: JSON.stringify(event),
             }).then(r => r.json());
@@ -912,7 +996,7 @@ export class Client {
      */
     query<T extends Blank, N extends string, Q extends keyof QueryType>(struct: Struct<T, N>, type: Q, args: QueryType[Q]): Promise<Result<QueryResponse<T>[Q], Error>> {
         return attemptAsync(async () => {
-            log(this.logFile, {
+            log(this.config.logFile, {
                 event: 'query',
                 type: 'info',
                 message: `Querying ${struct.name} with type ${type}`,
@@ -926,7 +1010,7 @@ export class Client {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'x-api-key': this.apikey,
+                    'x-api-key': this.config.apikey,
                 },
                 body: JSON.stringify({
                     struct: struct.name,
@@ -986,7 +1070,7 @@ export class Client {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'x-api-key': this.apikey,
+                    'x-api-key': this.config.apikey,
                 },
             });
         });
@@ -1005,7 +1089,7 @@ export class Client {
                 const res = await this.ping();
                 if (res.isOk() && res.value.ok) {
                     if (!this.connected) {
-                        log(this.logFile, {
+                        log(this.config.logFile, {
                             event: 'connection',
                             type: 'info',
                             message: 'Connected to API server',
@@ -1014,7 +1098,7 @@ export class Client {
                     this.connected = true;
                 } else {
                     if (this.connected) {
-                        log(this.logFile, {
+                        log(this.config.logFile, {
                             event: 'connection',
                             type: 'warn',
                             message: 'Disconnected from API server',
@@ -1114,7 +1198,7 @@ export class Client {
             if (!this.connected) {
                 throw new Error('Not connected');
             }
-            log(this.logFile, {
+            log(this.config.logFile, {
                 event: 'batch',
                 type: 'info',
                 message: `Sending batch of ${batch.length} events`,
@@ -1123,7 +1207,7 @@ export class Client {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'x-api-key': this.apikey,
+                    'x-api-key': this.config.apikey,
                 },
                 body: JSON.stringify(batch),
             });
@@ -1137,7 +1221,7 @@ export class Client {
      * @type {string}
      */
     get url() {
-        return `${this.https ? 'https' : 'http'}://${this.host}:${this.port}`;
+        return `${this.config.https ? 'https' : 'http'}://${this.config.host}:${this.config.port}`;
     }
 
     /**
@@ -1173,12 +1257,12 @@ export class Client {
             const connect = async () => {
                 return new Promise<void>((resolve, reject) => {
                     const req = http.request({
-                        hostname: this.host,
-                        port: this.port,
+                        hostname: this.config.host,
+                        port: this.config.port,
                         path: '/sse',
                         method: 'GET',
                         headers: {
-                            'x-api-key': this.apikey,
+                            'x-api-key': this.config.apikey,
                             'Accept': 'text/event-stream',
                         }
                     }, res => {
@@ -1291,7 +1375,7 @@ export class Client {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'x-api-key': this.apikey,
+                    'x-api-key': this.config.apikey,
                 },
                 body: JSON.stringify({ id }),
             });
@@ -1309,6 +1393,46 @@ export class Client {
         const s = this.queryHistory.get(struct);
         if (!s) return undefined;
         return s.get(type);
+    }
+
+    getFile(fileId: string) {
+        return attemptAsync(() => {
+            return new Promise<void>((res, rej) => {
+                axios({
+                    url: `${this.url}/file/${fileId}`,
+                    headers: {
+                        'x-api-key': this.config.apikey,
+                    },
+                    method: 'GET',
+                    responseType: 'stream',
+                }).then(response => {
+                    const writeStream = fs.createWriteStream(`${this.config.fileStreamDir}/${fileId}`);
+                    response.data.pipe(writeStream);
+
+                    writeStream.on('finish', res);
+                    writeStream.on('error', rej);
+                }).catch(rej);
+            });
+        });
+    }
+
+    saveFile(fileId: string) {
+        return attemptAsync(() => {
+            return new Promise<void>((res, rej) => {
+                const readStream = fs.createReadStream(`${this.config.fileStreamDir}/${fileId}`);
+                axios({
+                    url: `${this.url}/file/${fileId}`,
+                    headers: {
+                        'x-api-key': this.config.apikey,
+                    },
+                    method: 'POST',
+                    data: readStream,
+                }).then((response) => {
+                    if (response.status >= 400) rej(new Error('Failed to save file'));
+                    else res();
+                }).catch(rej);
+            });
+        });
     }
 }
 
