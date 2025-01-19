@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { pgTable, text, timestamp, boolean, integer } from 'drizzle-orm/pg-core';
 import type { PgColumnBuilderBase, PgTableWithColumns } from 'drizzle-orm/pg-core';
-import { count, SQL, sql, type BuildColumns } from 'drizzle-orm';
+import { count, eq, SQL, sql, type BuildColumns } from 'drizzle-orm';
 import { attempt, attemptAsync, resolveAll, type Result } from 'ts-utils/check';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import { type ColumnDataType } from 'drizzle-orm';
@@ -1746,6 +1746,10 @@ export class Struct<T extends Blank = any, Name extends string = any> {
                 }
             });
         }
+    }
+
+    select() {
+        return this.database.select().from(this.table);
     }
 
     /**
