@@ -1748,9 +1748,9 @@ export class Struct<T extends Blank = any, Name extends string = any> {
         }
     }
 
-    select() {
-        return this.database.select().from(this.table);
-    }
+    // select() {
+    //     return this.database.select().from(this.table);
+    // }
 
     /**
      * Iterates over all data in the struct
