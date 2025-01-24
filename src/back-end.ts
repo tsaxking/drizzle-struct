@@ -15,6 +15,7 @@ import { Client, QueryType, Server } from './reflection';
 import { OnceReadMap } from 'ts-utils/map';
 import { log } from './utils';
 import path from 'path';
+import fs from 'fs';
 
 /**
  * Error thrown for invalid struct state
@@ -928,8 +929,14 @@ export type MultiConfig = {
  */
 export class Struct<T extends Blank = any, Name extends string = any> {
     private static loggingSet = false;
-    public static setupLogger(logDir: string) {
+    public static async setupLogger(logDir: string) {
         if (Struct.loggingSet) throw new Error('Logging already set up');
+
+        try {
+            await fs.promises.mkdir(logDir, { recursive: true });
+        } catch {
+            // do nothing
+        }
 
         Struct.each(s => {
             const file = path.join(logDir, `${s.name}.log`);
