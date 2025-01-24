@@ -9,6 +9,7 @@ import { Stream } from 'ts-utils/stream';
 import { Loop } from 'ts-utils/loop';
 import fs from 'fs';
 import axios from 'axios';
+import { log } from './utils';
 
 const { Server: HTTPServer } = http;
 
@@ -1439,27 +1440,3 @@ export class Client {
         });
     }
 }
-
-/**
- * Logs an event to a file
- *
- * @param {string} logFile 
- * @param {{
- *     event: string;
- *     type: 'info' | 'warn' | 'error';
- *     message: string;
- * }} data 
- * @returns {*} 
- */
-const log = (logFile: string | undefined, data: {
-    event: string;
-    type: 'info' | 'warn' | 'error';
-    message: string;
-}) => {
-    return attemptAsync(async () => {
-        if (!logFile) return;
-        const timestamp = Date.now();
-        const line = `${timestamp} [${data.event}] ${data.type.toUpperCase()}: ${data.message}\n`;
-        return fs.promises.appendFile(logFile, line);
-    });
-};

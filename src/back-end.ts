@@ -13,6 +13,8 @@ import { v4 as uuid } from 'uuid';
 import { DataAction, PropertyAction } from './types';
 import { Client, QueryType, Server } from './reflection';
 import { OnceReadMap } from 'ts-utils/map';
+import { log } from './utils';
+import path from 'path';
 
 /**
  * Error thrown for invalid struct state
@@ -29,9 +31,10 @@ export class StructError extends Error {
      * @constructor
      * @param {string} message 
      */
-    constructor(message: string) {
+    constructor(struct: Struct, message: string) {
         super(message);
-        this.name = 'StructError';
+        this.name = `StructError [${struct.name}]`;
+        struct.emit('error', this);
     }
 }
 
@@ -50,9 +53,10 @@ export class FatalStructError extends Error {
      * @constructor
      * @param {string} message 
      */
-    constructor(message: string) {
+    constructor(struct: Struct, message: string) {
         super(message);
-        this.name = 'FatalStructError';
+        this.name = `FatalStructError [${struct.name}]`;
+        struct.emit('error', this);
     }
 }
 
@@ -71,9 +75,10 @@ export class DataError extends Error {
      * @constructor
      * @param {string} message 
      */
-    constructor(message: string) {
+    constructor(struct: Struct, message: string) {
         super(message);
-        this.name = 'DataError';
+        this.name = `DataError [${struct.name}]`;
+        struct.emit('error', this);
     }
 }
 
@@ -92,9 +97,10 @@ export class FatalDataError extends Error {
      * @constructor
      * @param {string} message 
      */
-    constructor(message: string) {
+    constructor(struct: Struct, message: string) {
         super(message);
-        this.name = 'FatalDataError';
+        this.name = `FatalDataError [${struct.name}]`;
+        struct.emit('error', this);
     }
 }
 
@@ -388,7 +394,7 @@ export class DataVersion<T extends Blank, Name extends string> {
         emit?: boolean;
     }) {
         return attemptAsync(async () => {
-            if (!this.struct.versionTable) throw new StructError(`Struct ${this.struct.name} does not have a version table`);
+            if (!this.struct.versionTable) throw new StructError(this.struct, `Struct ${this.struct.name} does not have a version table`);
             await this.database.delete(this.struct.versionTable).where(sql`${this.struct.versionTable.vhId} = ${this.vhId}`);
             if (config?.emit === false) this.metadata.set('no-emit', true);
             this.struct.emit('delete-version', this);
@@ -527,7 +533,7 @@ export class StructData<T extends Blank = any, Name extends string = any> {
             if (!this.struct.validate(this.data, {
                 optionals: Object.keys(globalCols) as string[]
             })) {
-                throw new DataError('Invalid Data');
+                throw new DataError(this.struct, 'Invalid Data');
             }
             this.makeVersion();
             this.metadata.set('prev-state', JSON.stringify(this.safe()));
@@ -602,7 +608,7 @@ export class StructData<T extends Blank = any, Name extends string = any> {
      */
     makeVersion() {
         return attemptAsync(async () => {
-            if (!this.struct.versionTable) throw new StructError(`Struct ${this.struct.name} does not have a version table`);
+            if (!this.struct.versionTable) throw new StructError(this.struct, `Struct ${this.struct.name} does not have a version table`);
             const vhId = uuid();
             const vhCreated = new Date();
             const vhData = { ...this.data, vhId, vhCreated } as any;
@@ -640,7 +646,7 @@ export class StructData<T extends Blank = any, Name extends string = any> {
      */
     getVersions() {
         return attemptAsync(async () => {
-            if (!this.struct.versionTable) throw new StructError(`Struct ${this.struct.name} does not have a version table`);
+            if (!this.struct.versionTable) throw new StructError(this.struct, `Struct ${this.struct.name} does not have a version table`);
             const data = await this.database.select().from(this.struct.versionTable).where(sql`${this.struct.versionTable.id} = ${this.id}`);
             return data.map(d => new DataVersion(this.struct, d as any));
         });
@@ -655,8 +661,8 @@ export class StructData<T extends Blank = any, Name extends string = any> {
     getAttributes() {
         return attempt(() => {
             const a = JSON.parse(this.data.attributes);
-            if (!Array.isArray(a)) throw new DataError('Attributes must be an array');
-            if (!a.every(i => typeof i === 'string')) throw new DataError('Attributes must be an array of strings');
+            if (!Array.isArray(a)) throw new DataError(this.struct, 'Attributes must be an array');
+            if (!a.every(i => typeof i === 'string')) throw new DataError(this.struct, 'Attributes must be an array of strings');
             return a;
         });
     }
@@ -711,8 +717,8 @@ export class StructData<T extends Blank = any, Name extends string = any> {
     getUniverses() {
         return attempt(() => {
             const a = JSON.parse(this.data.universes);
-            if (!Array.isArray(a)) throw new DataError('Universes must be an array');
-            if (!a.every(i => typeof i === 'string')) throw new DataError('Universes must be an array of strings');
+            if (!Array.isArray(a)) throw new DataError(this.struct, 'Universes must be an array');
+            if (!a.every(i => typeof i === 'string')) throw new DataError(this.struct, 'Universes must be an array of strings');
             return a;
         });
     }
@@ -827,7 +833,7 @@ export const toJson = <T extends Blank>(struct: Struct<T, string>, data: Structa
                     }
                     break;
                 default:
-                    throw new DataError(`Invalid data type: ${type} in ${key} of ${struct.name}`);
+                    throw new DataError(struct, `Invalid data type: ${type} in ${key} of ${struct.name}`);
             }
         }
 
@@ -849,10 +855,15 @@ export type StructEvents<T extends Blank, Name extends string> = {
     delete: StructData<T, Name>;
     restore: StructData<T, Name>;
     create: StructData<T, Name>;
-    build: void;
-
     'delete-version': DataVersion<T, Name>;
     'restore-version': DataVersion<T, Name>;
+
+    build: void;
+    'error': StructError;
+    'fatal-error': FatalStructError;
+    'data-error': DataError;
+    'fatal-data-error': FatalDataError;
+
 };
 
 /**
@@ -916,6 +927,86 @@ export type MultiConfig = {
  * @template {string} [Name=any] 
  */
 export class Struct<T extends Blank = any, Name extends string = any> {
+    private static loggingSet = false;
+    public static setupLogger(logDir: string) {
+        if (Struct.loggingSet) throw new Error('Logging already set up');
+
+        Struct.each(s => {
+            const file = path.join(logDir, `${s.name}.log`);
+            s.on('archive', (d) => log(file, {
+                type: 'info',
+                event: 'archive',
+                message: `Archived ${d.id}`,
+            }));
+
+            s.on('create', (d) => log(file, {
+                type: 'info',
+                event: 'create',
+                message: `Created ${d.id}`,
+            }));
+
+            s.on('delete', (d) => log(file, {
+                type: 'info',
+                event: 'delete',
+                message: `Deleted ${d.id}`,
+            }));
+
+            s.on('restore', (d) => log(file, {
+                type: 'info',
+                event: 'restore',
+                message: `Restored ${d.id}`,
+            }));
+
+            s.on('update', (d) => log(file, {
+                type: 'info',
+                event: 'update',
+                message: `Updated ${d.id}`,
+            }));
+
+            s.on('delete-version', (d) => log(file, {
+                type: 'info',
+                event: 'delete-version',
+                message: `Deleted version ${d.vhId}`,
+            }));
+
+            s.on('restore-version', (d) => log(file, {
+                type: 'info',
+                event: 'restore-version',
+                message: `Restored version ${d.vhId}`,
+            }));
+
+            s.on('build', () => log(file, {
+                type: 'info',
+                event: 'build',
+                message: 'Built',
+            }));
+
+            s.on('error', (e) => log(file, {
+                type: 'error',
+                event: 'error',
+                message: e.message,
+            }));
+
+            s.on('fatal-error', (e) => log(file, {
+                type: 'error',
+                event: 'fatal-error',
+                message: e.message,
+            }));
+
+            s.on('data-error', (e) => log(file, {
+                type: 'error',
+                event: 'data-error',
+                message: e.message,
+            }));
+
+            s.on('fatal-data-error', (e) => log(file, {
+                type: 'error',
+                event: 'fatal-data-error',
+                message: e.message,
+            }));
+        });
+    }
+
     /**
      * Build all structs that the program has access to
      *
@@ -1118,7 +1209,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
      * @type {PostgresJsDatabase}
      */
     get database(): PostgresJsDatabase {
-        if (!this._database) throw new FatalStructError(`${this.name} Struct database not set`);
+        if (!this._database) throw new FatalStructError(this, `${this.name} Struct database not set`);
         return this._database;
     }
 
@@ -1672,7 +1763,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
      * @param {...Structable<T & typeof globalCols>[]} defaults 
      */
     addDefaults(...defaults: Structable<T & typeof globalCols>[]) {
-        if (this.built) throw new FatalStructError('Cannot add defaults after struct has been built. Those are applied during the build process.');
+        if (this.built) throw new FatalStructError(this, 'Cannot add defaults after struct has been built. Those are applied during the build process.');
 
         this.defaults.push(...defaults);
     }
@@ -1772,8 +1863,8 @@ export class Struct<T extends Blank = any, Name extends string = any> {
      * @returns {any) => any} 
      */
     build(database: PostgresJsDatabase, handler?: (event: RequestAction) => Promise<Response> | Response) {
-        if (this.built) throw new FatalStructError(`Struct ${this.name} has already been built`);
-        if (this.data.sample) throw new FatalStructError(`Struct ${this.name} is a sample struct and should never be built`);
+        if (this.built) throw new FatalStructError(this, `Struct ${this.name} has already been built`);
+        if (this.data.sample) throw new FatalStructError(this, `Struct ${this.name} is a sample struct and should never be built`);
         return attemptAsync(async () => {
             this._database = database;
 
@@ -1781,7 +1872,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
                 return attemptAsync(async () => {
                     const exists = (await this.fromId(d.id)).unwrap();
                     if (exists) return;
-                    if (!this.validate(d)) throw new FatalDataError('Invalid default data');
+                    if (!this.validate(d)) throw new FatalDataError(this, 'Invalid default data');
                     this.database.insert(this.table).values(d as any);
                 });
             }))).unwrap();
@@ -1853,7 +1944,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
                                     case 'string': return z.string();
                                     case 'boolean': return z.boolean();
                                     case 'date': return z.date();
-                                    default: throw new DataError(`Invalid data type: ${type} in ${k} of ${this.name}`);
+                                    default: throw new DataError(this, `Invalid data type: ${type} in ${k} of ${this.name}`);
                                 }
                             })();
                             return [k, createSchema(schemaType, k)];
@@ -2099,7 +2190,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
      */
     private apiQuery<K extends keyof QueryType>(type: K, data: QueryType[K]) {
         return attemptAsync(async () => {
-            if (!this._api) throw new StructError('API not set');
+            if (!this._api) throw new StructError(this, 'API not set');
             const lastRead = this._api.getLastRead(this.name, type);
             // Default to 1 hour
             if (lastRead === undefined || Date.now() - lastRead > (this.data.reflection?.queryThreshold ?? 1000 * 60 * 60)) {
