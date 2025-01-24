@@ -390,7 +390,7 @@ export class DataVersion<T extends Blank, Name extends string> {
         return attemptAsync(async () => {
             if (!this.struct.versionTable) throw new StructError(`Struct ${this.struct.name} does not have a version table`);
             await this.database.delete(this.struct.versionTable).where(sql`${this.struct.versionTable.vhId} = ${this.vhId}`);
-            if (config?.emit || config?.emit === undefined) this.metadata.set('no-emit', true);
+            if (config?.emit === false) this.metadata.set('no-emit', true);
             this.struct.emit('delete-version', this);
         });
     }
@@ -410,7 +410,7 @@ export class DataVersion<T extends Blank, Name extends string> {
             const data = (await this.struct.fromId(this.id)).unwrap();
             if (!data) this.struct.new(this.data);
             else await data.update(this.data);
-            if (config?.emit || config?.emit === undefined) this.metadata.set('no-emit', true);
+            if (config?.emit === false) this.metadata.set('no-emit', true);
             this.struct.emit('restore-version', this);
         });
     }
@@ -546,7 +546,7 @@ export class StructData<T extends Blank = any, Name extends string = any> {
                 updated: new Date(),
             }).where(sql`${this.struct.table.id} = ${this.id}`);
 
-            if (config?.emit || config?.emit === undefined) this.metadata.set('no-emit', true);
+            if (config?.emit === false) this.metadata.set('no-emit', true);
             this.struct.emit('update', this);
         });
     }
@@ -569,7 +569,7 @@ export class StructData<T extends Blank = any, Name extends string = any> {
                 updated: new Date(),
             } as any).where(sql`${this.struct.table.id} = ${this.id}`);
 
-            if (config?.emit || config?.emit === undefined) this.metadata.set('no-emit', true);
+            if (config?.emit === false) this.metadata.set('no-emit', true);
             this.struct.emit(archived ? 'archive' : 'restore', this);
         });
     }
@@ -588,7 +588,7 @@ export class StructData<T extends Blank = any, Name extends string = any> {
         return attemptAsync(async () => {
             this.makeVersion();
             await this.database.delete(this.struct.table).where(sql`${this.struct.table.id} = ${this.id}`);
-            if (config?.emit || config?.emit === undefined) this.metadata.set('no-emit', true);
+            if (config?.emit === false) this.metadata.set('no-emit', true);
             this.struct.emit('delete', this);
         });
     }
@@ -1177,7 +1177,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
             await this.database.insert(this.table).values(newData as any);
 
             const d = this.Generator(newData);
-            if (config?.emit || config?.emit === undefined) d.metadata.set('no-emit', true);
+            if (config?.emit === false) d.metadata.set('no-emit', true);
             this.emitter.emit('create', d);
 
             return d;
