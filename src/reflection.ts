@@ -50,7 +50,9 @@ const nextId = async () => attemptAsync(async () => {
     let id = -1;
 
     const { CachedEvents } = await import('./cached-events');
-    await CachedEvents.Events.all(true).pipe((e: any) => {
+    await CachedEvents.Events.all({
+        type: 'stream'
+    }).pipe((e: any) => {
         if (e.data.eventId > id) {
             id = e.data.eventId;
         }
@@ -1109,7 +1111,9 @@ export class Client {
                 }
     
                 try {
-                    CachedEvents.Events.all(true).pipe((e: any) => {
+                    CachedEvents.Events.all({
+                        type: 'stream',
+                    }).pipe((e: any) => {
                         // Under 1 minute
                         if (e.data.timestamp + 60_000 > Date.now()) return;
                         e.update({
