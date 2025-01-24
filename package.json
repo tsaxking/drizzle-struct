@@ -76,6 +76,10 @@
     "./reflection": {
       "import": "./lib/esm/reflection.js",
       "require": "./lib/cjs/reflection.js"
+    },
+    "./cached-events": {
+      "import": "./lib/esm/cached-events.js",
+      "require": "./lib/cjs/cached-events.js"
     }
   }
 }
