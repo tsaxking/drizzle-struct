@@ -20,6 +20,7 @@
     "@eslint/compat": "^1.2.4",
     "@types/proper-lockfile": "^4.1.4",
     "axios": "^1.7.9",
+    "chalk": "^5.4.1",
     "dotenv": "^16.4.7",
     "drizzle-orm": "^0.38.3",
     "drizzle-zod": "^0.6.1",

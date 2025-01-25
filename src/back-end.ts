@@ -16,6 +16,7 @@ import { OnceReadMap } from 'ts-utils/map';
 import { log } from './utils';
 import path from 'path';
 import fs from 'fs';
+import chalk from 'chalk';
 
 /**
  * Error thrown for invalid struct state
@@ -191,13 +192,18 @@ export type StructBuilder<T extends Blank, Name extends string> = {
      * struct.startReflection(api); // Must be called for reflection to work
      * 
      */
-    reflection?: {
+    reflection?: true | {
         /**
          * The time, in milliseconds, between each sync.
          * Basically, if you call Struct.all() it will always return the data it has in the database. If this threshold is reached, it will query the other server for updates. If there are any changes, it will emit batch new/update events so you can handle them.
          */
         queryThreshold?: number;
     };
+
+    /**
+     * Log events to the console
+     */
+    log: boolean;
 };
 
 
@@ -399,6 +405,7 @@ export class DataVersion<T extends Blank, Name extends string> {
             await this.database.delete(this.struct.versionTable).where(sql`${this.struct.versionTable.vhId} = ${this.vhId}`);
             if (config?.emit === false) this.metadata.set('no-emit', true);
             this.struct.emit('delete-version', this);
+            this.log('Deleted');
         });
     }
 
@@ -419,7 +426,12 @@ export class DataVersion<T extends Blank, Name extends string> {
             else await data.update(this.data);
             if (config?.emit === false) this.metadata.set('no-emit', true);
             this.struct.emit('restore-version', this);
+            this.log('Restored');
         });
+    }
+
+    log(...data: unknown[]) {
+        this.struct.log(chalk.magenta(`${this.id}`), chalk.green(`(${this.vhId})`), ...data);
     }
 }
 
@@ -536,6 +548,7 @@ export class StructData<T extends Blank = any, Name extends string = any> {
             })) {
                 throw new DataError(this.struct, 'Invalid Data');
             }
+            this.log('Updating');
             this.makeVersion();
             this.metadata.set('prev-state', JSON.stringify(this.safe()));
             const newData: any = { ...this.data, ...data };
@@ -571,6 +584,7 @@ export class StructData<T extends Blank = any, Name extends string = any> {
         emit?: boolean;
     }) {
         return attemptAsync(async () => {
+            this.log('Setting archive:', archived);
             await this.struct.database.update(this.struct.table).set({
                 archived,
                 updated: new Date(),
@@ -593,6 +607,7 @@ export class StructData<T extends Blank = any, Name extends string = any> {
         emit?: boolean;
     }) {
         return attemptAsync(async () => {
+            this.log('Deleting');
             this.makeVersion();
             await this.database.delete(this.struct.table).where(sql`${this.struct.table.id} = ${this.id}`);
             if (config?.emit === false) this.metadata.set('no-emit', true);
@@ -610,6 +625,7 @@ export class StructData<T extends Blank = any, Name extends string = any> {
     makeVersion() {
         return attemptAsync(async () => {
             if (!this.struct.versionTable) throw new StructError(this.struct, `Struct ${this.struct.name} does not have a version table`);
+            this.log('Making version');
             const vhId = uuid();
             const vhCreated = new Date();
             const vhData = { ...this.data, vhId, vhCreated } as any;
@@ -675,6 +691,7 @@ export class StructData<T extends Blank = any, Name extends string = any> {
      */
     setAttributes(attributes: string[]) {
         return attemptAsync(async () => {
+            this.log('Setting attributes', attributes);
             attributes = attributes
                 .filter(i => typeof i === 'string')
                 .filter((v, i, a) => a.indexOf(v) === i);
@@ -731,6 +748,7 @@ export class StructData<T extends Blank = any, Name extends string = any> {
      */
     setUniverses(universes: string[]) {
         return attemptAsync(async () => {
+            this.log('Setting universes', universes);
             universes = universes
                 .filter(i => typeof i === 'string')
                 .filter((v, i, a) => a.indexOf(v) === i);
@@ -802,6 +820,10 @@ export class StructData<T extends Blank = any, Name extends string = any> {
      */
     emitSelf() {
         this.struct.emit('update', this);
+    }
+
+    log(...data: unknown[]) {
+        this.struct.log(chalk.magenta(`(${this.id})`), ...data);
     }
 }
 
@@ -929,6 +951,10 @@ export type MultiConfig = {
  */
 export class Struct<T extends Blank = any, Name extends string = any> {
     private static loggingSet = false;
+
+    /**
+     * Set directory for event logging
+     */
     public static async setupLogger(logDir: string) {
         if (Struct.loggingSet) throw new Error('Logging already set up');
 
@@ -989,7 +1015,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
             }));
 
             s.on('error', (e) => log(file, {
-                type: 'error',
+                type: 'warn',
                 event: 'error',
                 message: e.message,
             }));
@@ -1001,7 +1027,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
             }));
 
             s.on('data-error', (e) => log(file, {
-                type: 'error',
+                type: 'warn',
                 event: 'data-error',
                 message: e.message,
             }));
@@ -1192,6 +1218,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
         });
 
         if (data.versionHistory) {
+            this.log('Applying version table');
             this.versionTable = pgTable(`${data.name}_history`, {
                 ...globalCols,
                 ...versionGlobalCols,
@@ -1255,6 +1282,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
         ignoreGlobals?: boolean;
     }) {
         return attemptAsync(async () => {
+            this.log('Creating new', data, config);
             this.validate(data, {
                 optionals: config?.ignoreGlobals ? [] : Object.keys(globalCols) as string[],
             });
@@ -1751,6 +1779,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
      */
     clear() {
         return attemptAsync(async () => {
+            this.log('Clearing data...');
             this.database.delete(this.table).where(sql`true`);
         });
     }
@@ -1873,6 +1902,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
         if (this.built) throw new FatalStructError(this, `Struct ${this.name} has already been built`);
         if (this.data.sample) throw new FatalStructError(this, `Struct ${this.name} is a sample struct and should never be built`);
         return attemptAsync(async () => {
+            this.log('Building...');
             this._database = database;
 
             resolveAll(await Promise.all(this.defaults.map(d => {
@@ -1889,6 +1919,9 @@ export class Struct<T extends Blank = any, Name extends string = any> {
             }
 
             this.built = true;
+
+            this.emit('build', undefined);
+            this.log('Built!');
         });
     }
 
@@ -1978,6 +2011,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
      */
     hash() {
         return attemptAsync(async () => {
+            this.log('Hashing');
             const encoder = new TextEncoder();
             // const data = (await this.all(false)).unwrap()
             //     .sort((a, b) => a.id.localeCompare(b.id))
@@ -2023,7 +2057,9 @@ export class Struct<T extends Blank = any, Name extends string = any> {
      */
     startReflection(api: Server | Client) {
         return attempt(() => {
+            this.log('Starting API reflection');
             if (this.data.reflection && api instanceof Client) {
+                this.log('Applying api onto struct');
                 // this property is only used for querying the data
                 // Because of this, we don't need it for the central server
                 this._api = api;
@@ -2197,10 +2233,12 @@ export class Struct<T extends Blank = any, Name extends string = any> {
      */
     private apiQuery<K extends keyof QueryType>(type: K, data: QueryType[K]) {
         return attemptAsync(async () => {
-            if (!this._api) throw new StructError(this, 'API not set');
+            if (!this._api) return;
+            this.log('Querying: ', type, data);
             const lastRead = this._api.getLastRead(this.name, type);
+            const queryThreshold = typeof this.data.reflection === 'object' ? this.data.reflection.queryThreshold : false;
             // Default to 1 hour
-            if (lastRead === undefined || Date.now() - lastRead > (this.data.reflection?.queryThreshold ?? 1000 * 60 * 60)) {
+            if (lastRead === undefined || Date.now() - lastRead > Number(queryThreshold ?? 1000 * 60 * 60)) {
                 const result = (await this._api.query(this, type, data)).unwrap();
                 if (result instanceof Stream) {
                     const updates: Promise<void>[] = [];
@@ -2288,7 +2326,12 @@ export class Struct<T extends Blank = any, Name extends string = any> {
         action: Action,
         condition: (account: Account, data?: Structable<T & typeof globalCols>) => boolean
     ) {
+        this.log('Added bypass');
         this.bypasses.push({ action, condition });
+    }
+
+    log(...data: unknown[]) {
+        if (this.data.log) console.log(chalk.blue(`[${this.name}]`), ...data);
     }
 }
 
