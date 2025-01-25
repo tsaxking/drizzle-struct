@@ -1279,12 +1279,12 @@ export class Struct<T extends Blank = any, Name extends string = any> {
      */
     new(data: Structable<T>, config?: {
         emit?: boolean;
-        ignoreGlobals?: boolean;
+        overwriteGlobals?: boolean;
     }) {
         return attemptAsync(async () => {
             this.log('Creating new', data, config);
             this.validate(data, {
-                optionals: config?.ignoreGlobals ? [] : Object.keys(globalCols) as string[],
+                optionals: config?.overwriteGlobals ? [] : Object.keys(globalCols) as string[],
             });
             const globals = {
                 id: this.data.generators?.id?.() ?? uuid(),
@@ -1297,7 +1297,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
             }
             const newData: Structable<T & typeof globalCols> = {
                 ...data,
-                ...(!config?.ignoreGlobals ? globals : {}),
+                ...(!config?.overwriteGlobals ? globals : {}),
             };
 
             await this.database.insert(this.table).values(newData as any);
@@ -2118,7 +2118,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
             });
             em.on('create', async ({ data, timestamp }) => {
                 this.new(data, {
-                    ignoreGlobals: false,
+                    overwriteGlobals: true,
                     emit: false,
                 });
             });
@@ -2131,7 +2131,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
                     this.new(
                         data,
                         {
-                            ignoreGlobals: false,
+                            overwriteGlobals: true,
                             emit: false,
                         }
                     );
@@ -2195,7 +2195,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
                     this.new(
                         d.safe(),
                         {
-                            ignoreGlobals: false,
+                            overwriteGlobals: true,
                             emit: false,
                         }
                     )
@@ -2275,7 +2275,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
                                     if (has.isErr()) throw has.error;
     
                                     if (!has.value) {
-                                        await this.new(d, { ignoreGlobals: false, emit: false });
+                                        await this.new(d, { overwriteGlobals: true, emit: false });
                                     } else if (!has.value.isSimilar(d)) {
                                         await has.value.update(d, { emit: false });
                                     }
