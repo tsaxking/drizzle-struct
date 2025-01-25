@@ -203,7 +203,7 @@ export type StructBuilder<T extends Blank, Name extends string> = {
     /**
      * Log events to the console
      */
-    log: boolean;
+    log?: boolean;
 };
 
 
