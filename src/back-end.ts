@@ -2069,6 +2069,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
             em.on('archive', async ({ id, timestamp }) => {
                 const data = await this.fromId(id);
                 if (data.isErr()) return console.error(data.error);
+                this.log('API Recieved archive', id);
                 data.value?.setArchive(true, {
                     emit: false,
                 });
@@ -2076,6 +2077,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
             em.on('restore', async ({ id, timestamp }) => {
                 const data = await this.fromId(id);
                 if (data.isErr()) return console.error(data.error);
+                this.log('API Recieved restore', id);
                 data.value?.setArchive(false, {
                     emit: false,
                 });
@@ -2083,6 +2085,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
             em.on('delete', async ({ id, timestamp }) => {
                 const data = await this.fromId(id);
                 if (data.isErr()) return console.error(data.error);
+                this.log('API Recieved delete', id);
                 data.value?.delete({
                     emit: false,
                 });
@@ -2095,6 +2098,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
                 if (!versions) return;
                 if (versions.isErr()) return console.error(versions.error);
                 const version = versions.value.find(v => v.vhId === vhId);
+                this.log('API Recieved delete-version', id, vhId);
                 version?.delete({
                     emit: false,
                 });
@@ -2107,6 +2111,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
                 if (!versions) return;
                 if (versions.isErr()) return console.error(versions.error);
                 const version = versions.value.find(v => v.vhId === vhId);
+                this.log('API Recieved restore-version', id, vhId);
                 version?.restore({
                     emit: false,
                 });
@@ -2121,6 +2126,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
                 const id = z.object({ id: z.string() }).parse(data).id;
                 const d = await this.fromId(id);
                 if (d.isErr()) return console.error(d.error);
+                this.log('API Recieved update', id);
                 if (!d.value) {
                     this.new(
                         data,
@@ -2149,6 +2155,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 
             this.on('create', async d => {
                 if (d.metadata.get('no-emit')) return;
+                this.log('API Sending create', d.data);
                 const res = await api.send(this, 'create', d.data);
                 if (res.isErr()) d.delete({
                     emit: false,
@@ -2157,6 +2164,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
             this.on('update', async d => {
                 const prevState = d.metadata.get('prev-state'); // always read so it will delete
                 if (d.metadata.get('no-emit')) return;
+                this.log('API Sending update', d.data);
                 const res = await api.send(this, 'update', d.data);
                 if (res.isErr()) {
                     if (prevState) {
@@ -2166,6 +2174,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
             });
             this.on('archive', async d => {
                 if (d.metadata.get('no-emit')) return;
+                this.log('API Sending archive', d.id);
                 const res = await api.send(this, 'archive', {
                     id: d.id,
                 });
@@ -2178,6 +2187,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
             });
             this.on('delete', async d => {
                 if (d.metadata.get('no-emit')) return;
+                this.log('API Sending delete', d.id);
                 const res = await api.send(this, 'delete', {
                     id: d.id,
                 });
@@ -2193,6 +2203,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
             });
             this.on('delete-version', async d => {
                 if (d.metadata.get('no-emit')) return;
+                this.log('API Sending delete-version', d.id, d.vhId);
                 api.send(this, 'delete-version', {
                     id: d.id,
                     vhId: d.vhId,
@@ -2200,6 +2211,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
             });
             this.on('restore-version', async d => {
                 if (d.metadata.get('no-emit')) return;
+                this.log('API Sending restore-version', d.id, d.vhId);
                 api.send(this, 'restore-version', {
                     id: d.id,
                     vhId: d.vhId,
@@ -2207,6 +2219,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
             });
             this.on('restore', async d => {
                 if (d.metadata.get('no-emit')) return;
+                this.log('API Sending restore', d.id);
                 const res = await api.send(this, 'restore', {
                     id: d.id,
                 });
