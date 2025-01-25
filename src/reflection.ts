@@ -311,15 +311,15 @@ export class Connection {
  * @template {Blank} [T=Blank] 
  */
 type StructEvent<T extends Blank = Blank> = {
-    'create': { data: Structable<T>, timestamp: number },
-    'update': { data: Structable<T>, timestamp: number },
-    'delete': { id: string, timestamp: number },
-    'delete-version': { id: string, vhId: string, timestamp: number },
-    'restore-version': { id: string, vhId: string, timestamp: number },
-    'archive': { id: string, timestamp: number },
-    'restore': { id: string, timestamp: number },
-    'set-attributes': { id: string, attributes: string[], timestamp: number },
-    'set-universes': { id: string, universes: string[], timestamp: number },
+    'create': { data: Structable<T>; timestamp: number; source: string; };
+    'update': { data: Structable<T>; timestamp: number; source: string; };
+    'delete': { id: string; timestamp: number; source: string; };
+    'delete-version': { id: string; vhId: string; timestamp: number; source: string; };
+    'restore-version': { id: string; vhId: string; timestamp: number; source: string; };
+    'archive': { id: string; timestamp: number; source: string; };
+    'restore': { id: string; timestamp: number; source: string; };
+    'set-attributes': { id: string; attributes: string[]; timestamp: number; source: string; };
+    'set-universes': { id: string; universes: string[]; timestamp: number; source: string; };
 };
 
 /**
@@ -742,39 +742,39 @@ export class Server {
         // Switch case to handle different events
         switch (event) {
             case 'create': {
-                emitter.emit('create', { data, timestamp });
+                emitter.emit('create', { data, timestamp, source: apiKey });
                 break;
             }
             case 'update': {
-                emitter.emit('update', { data, timestamp });
+                emitter.emit('update', { data, timestamp, source: apiKey });
                 break;
             }
             case 'delete': {
-                emitter.emit('delete', { id: data, timestamp });
+                emitter.emit('delete', { id: data, timestamp, source: apiKey });
                 break;
             }
             case 'archive': {
-                emitter.emit('archive', { id: data, timestamp });
+                emitter.emit('archive', { id: data, timestamp, source: apiKey });
                 break;
             }
             case 'delete-version': {
-                emitter.emit('delete-version', { id: data.id, vhId: data.vhId, timestamp });
+                emitter.emit('delete-version', { id: data.id, vhId: data.vhId, timestamp, source: apiKey });
                 break;
             }
             case 'restore': {
-                emitter.emit('restore', { id: data, timestamp });
+                emitter.emit('restore', { id: data, timestamp, source: apiKey });
                 break;
             }
             case 'restore-version': {
-                emitter.emit('restore-version', { id: data.id, vhId: data.vhId, timestamp });
+                emitter.emit('restore-version', { id: data.id, vhId: data.vhId, timestamp, source: apiKey });
                 break;
             }
             case 'set-attributes': {
-                emitter.emit('set-attributes', { id: data.id, attributes: data.attributes, timestamp });
+                emitter.emit('set-attributes', { id: data.id, attributes: data.attributes, timestamp, source: apiKey });
                 break;
             }
             case 'set-universes': {
-                emitter.emit('set-universes', { id: data.id, universes: data.universes, timestamp });
+                emitter.emit('set-universes', { id: data.id, universes: data.universes, timestamp, source: apiKey });
                 break;
             }
             default: {
@@ -825,8 +825,11 @@ export class Server {
      * @param {Omit<StructEvent[keyof StructEvent], 'timestamp'>} data 
      * @returns 
      */
-    async send<T extends Blank, Name extends string>(struct: Struct<T, Name>, event: keyof StructEvent, data: Omit<StructEvent[keyof StructEvent], 'timestamp'>) {
+    async send<T extends Blank, Name extends string>(struct: Struct<T, Name>, event: keyof StructEvent, data: Omit<StructEvent[keyof StructEvent], 'timestamp'>, config?: {
+        if: (connection?: Connection) => boolean;
+    }) {
         return resolveAll(await Promise.all(Array.from(this.connections.values()).map(async c => attemptAsync(async () => {
+            if (config?.if && !config.if(c)) return;
             if (await this.config.checkEvent({
                 apiKey: c.apiKey,
                 event,
@@ -921,8 +924,11 @@ export class Client {
      * @param {Omit<StructEvent<T>[keyof StructEvent<T>], 'timestamp'>} data 
      * @returns {*} 
      */
-    send<T extends Blank, Name extends string>(struct: Struct<T, Name>, event: keyof StructEvent<T>, data: Omit<StructEvent<T>[keyof StructEvent<T>], 'timestamp'>) {
+    send<T extends Blank, Name extends string>(struct: Struct<T, Name>, event: keyof StructEvent<T>, data: Omit<StructEvent<T>[keyof StructEvent<T>], 'timestamp'>, config?: {
+        if: (connection?: Connection) => boolean;
+    }) {
         return attemptAsync<unknown>(async () => {
+            if (config?.if && !config.if()) return;
             const { CachedEvents } = await import('./cached-events');
             const id = (await nextId()).unwrap();
             const timestamp = Date.now();
@@ -1294,31 +1300,31 @@ export class Client {
                                     if (em) {
                                         switch (parsed.event) {
                                             case 'create': {
-                                                em.emit('create', { data: parsed.payload.data, timestamp: parsed.timestamp });
+                                                em.emit('create', { data: parsed.payload.data, timestamp: parsed.timestamp, source: 'server', });
                                             } break;
                                             case 'update': {
-                                                em.emit('update', { data: parsed.payload.data, timestamp: parsed.timestamp });
+                                                em.emit('update', { data: parsed.payload.data, timestamp: parsed.timestamp, source: 'server', });
                                             } break;
                                             case 'delete': {
-                                                em.emit('delete', { id: parsed.payload.data, timestamp: parsed.timestamp });
+                                                em.emit('delete', { id: parsed.payload.data, timestamp: parsed.timestamp, source: 'server', });
                                             } break;
                                             case 'archive': {
-                                                em.emit('archive', { id: parsed.payload.data, timestamp: parsed.timestamp });
+                                                em.emit('archive', { id: parsed.payload.data, timestamp: parsed.timestamp, source: 'server', });
                                             } break;
                                             case 'delete-version': {
-                                                em.emit('delete-version', { id: parsed.payload.data.id, vhId: parsed.payload.data.vhId, timestamp: parsed.timestamp });
+                                                em.emit('delete-version', { id: parsed.payload.data.id, vhId: parsed.payload.data.vhId, timestamp: parsed.timestamp, source: 'server', });
                                             } break;
                                             case 'restore': {
-                                                em.emit('restore', { id: parsed.payload.data, timestamp: parsed.timestamp });
+                                                em.emit('restore', { id: parsed.payload.data, timestamp: parsed.timestamp, source: 'server', });
                                             } break;
                                             case 'restore-version': {
-                                                em.emit('restore-version', { id: parsed.payload.data.id, vhId: parsed.payload.data.vhId, timestamp: parsed.timestamp });
+                                                em.emit('restore-version', { id: parsed.payload.data.id, vhId: parsed.payload.data.vhId, timestamp: parsed.timestamp, source: 'server', });
                                             } break;
                                             case 'set-attributes': {
-                                                em.emit('set-attributes', { id: parsed.payload.data.id, attributes: parsed.payload.data.attributes, timestamp: parsed.timestamp });
+                                                em.emit('set-attributes', { id: parsed.payload.data.id, attributes: parsed.payload.data.attributes, timestamp: parsed.timestamp, source: 'server', });
                                             } break;
                                             case 'set-universes': {
-                                                em.emit('set-universes', { id: parsed.payload.data.id, universes: parsed.payload.data.universes, timestamp: parsed.timestamp });
+                                                em.emit('set-universes', { id: parsed.payload.data.id, universes: parsed.payload.data.universes, timestamp: parsed.timestamp, source: 'server', });
                                             } break;
                                         }
                                     }

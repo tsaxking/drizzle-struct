@@ -397,13 +397,18 @@ export class DataVersion<T extends Blank, Name extends string> {
      *     }} [config] 
      * @returns {*} 
      */
-    delete(config?: {
+    delete(config: {
         emit?: boolean;
+        source?: string;
+    } = {
+        emit: true,
+        source: 'self',
     }) {
         return attemptAsync(async () => {
             if (!this.struct.versionTable) throw new StructError(this.struct, `Struct ${this.struct.name} does not have a version table`);
             await this.database.delete(this.struct.versionTable).where(sql`${this.struct.versionTable.vhId} = ${this.vhId}`);
-            if (config?.emit === false) this.metadata.set('no-emit', true);
+            if (config.emit === false) this.metadata.set('no-emit', true);
+            if (config.source) this.metadata.set('source', config.source);
             this.struct.emit('delete-version', this);
             this.log('Deleted');
         });
@@ -417,14 +422,19 @@ export class DataVersion<T extends Blank, Name extends string> {
      *     }} [config] 
      * @returns {*} 
      */
-    restore(config?: {
+    restore(config: {
         emit?: boolean;
+        source?: string;
+    } = {
+        emit: true,
+        source: 'self',
     }) {
         return attemptAsync(async () => {
             const data = (await this.struct.fromId(this.id)).unwrap();
             if (!data) this.struct.new(this.data);
             else await data.update(this.data);
-            if (config?.emit === false) this.metadata.set('no-emit', true);
+            if (config.emit === false) this.metadata.set('no-emit', true);
+            if (config.source) this.metadata.set('source', config.source);
             this.struct.emit('restore-version', this);
             this.log('Restored');
         });
@@ -539,8 +549,12 @@ export class StructData<T extends Blank = any, Name extends string = any> {
      *     }} [config] 
      * @returns {*} 
      */
-    update(data: Partial<Structable<T>>, config?: {
+    update(data: Partial<Structable<T>>, config: {
         emit?: boolean;
+        source?: string;
+    } = {
+        emit: true,
+        source: 'self',
     }) {
         return attemptAsync(async () => {
             if (!this.struct.validate(this.data, {
@@ -566,7 +580,8 @@ export class StructData<T extends Blank = any, Name extends string = any> {
                 updated: new Date(),
             }).where(sql`${this.struct.table.id} = ${this.id}`);
 
-            if (config?.emit === false) this.metadata.set('no-emit', true);
+            if (config.emit === false) this.metadata.set('no-emit', true);
+            if (config.source) this.metadata.set('source', config.source);
             this.struct.emit('update', this);
         });
     }
@@ -580,8 +595,12 @@ export class StructData<T extends Blank = any, Name extends string = any> {
      *     }} [config] 
      * @returns {*} 
      */
-    setArchive(archived: boolean, config?: {
+    setArchive(archived: boolean, config: {
         emit?: boolean;
+        source?: string;
+    } = {
+        emit: true,
+        source: 'self',
     }) {
         return attemptAsync(async () => {
             this.log('Setting archive:', archived);
@@ -590,7 +609,8 @@ export class StructData<T extends Blank = any, Name extends string = any> {
                 updated: new Date(),
             } as any).where(sql`${this.struct.table.id} = ${this.id}`);
 
-            if (config?.emit === false) this.metadata.set('no-emit', true);
+            if (config.emit === false) this.metadata.set('no-emit', true);
+            if (config.source) this.metadata.set('source', config.source);
             this.struct.emit(archived ? 'archive' : 'restore', this);
         });
     }
@@ -603,14 +623,19 @@ export class StructData<T extends Blank = any, Name extends string = any> {
      *     }} [config] 
      * @returns {*} 
      */
-    delete(config?: {
+    delete(config: {
         emit?: boolean;
+        source?: string;
+    } = {
+        emit: true,
+        source: 'self',
     }) {
         return attemptAsync(async () => {
             this.log('Deleting');
             this.makeVersion();
             await this.database.delete(this.struct.table).where(sql`${this.struct.table.id} = ${this.id}`);
-            if (config?.emit === false) this.metadata.set('no-emit', true);
+            if (config.emit === false) this.metadata.set('no-emit', true);
+            if (config.source) this.metadata.set('source', config.source);
             this.struct.emit('delete', this);
         });
     }
@@ -1277,9 +1302,14 @@ export class Struct<T extends Blank = any, Name extends string = any> {
      *     }} [config] 
      * @returns {*} 
      */
-    new(data: Structable<T>, config?: {
+    new(data: Structable<T>, config: {
         emit?: boolean;
         overwriteGlobals?: boolean;
+        source?: string;
+    } = {
+        emit: true,
+        overwriteGlobals: false,
+        source: 'self',
     }) {
         return attemptAsync(async () => {
             this.log('Creating new', data, config);
@@ -1303,7 +1333,8 @@ export class Struct<T extends Blank = any, Name extends string = any> {
             await this.database.insert(this.table).values(newData as any);
 
             const d = this.Generator(newData);
-            if (config?.emit === false) d.metadata.set('no-emit', true);
+            if (config.emit === false) d.metadata.set('no-emit', true);
+            if (config.source) d.metadata.set('source', config.source);
             this.emitter.emit('create', d);
 
             return d;
@@ -2066,55 +2097,32 @@ export class Struct<T extends Blank = any, Name extends string = any> {
             }
             const em = api.getEmitter<T, Name>(this);
 
-            const ignoreEvents: {
-                event: keyof StructEvents<T, Name>;
-                id: string;
-            }[] = [];
 
-            const setIgnore = (event: keyof StructEvents<T, Name>, id: string) => {
-                ignoreEvents.push({
-                    event,
-                    id,
-                });
-                setTimeout(() => {
-                    const index = ignoreEvents.findIndex(e => e.event === event && e.id === id);
-                    if (index !== -1) ignoreEvents.splice(index, 1);
-                }, 1000);
-            }
-
-            const doIgnore = (event: keyof StructEvents<T, Name>, id: string): boolean => {
-                const index = ignoreEvents.findIndex(e => e.event === event && e.id === id);
-                if (index !== -1) {
-                    ignoreEvents.splice(index, 1);
-                    return true;
-                }
-
-                return false;
-            }
-
-            em.on('archive', async ({ id, timestamp }) => {
-                if (doIgnore('archive', id)) return;
+            em.on('archive', async ({ id, timestamp, source, }) => {
                 const data = await this.fromId(id);
                 if (data.isErr()) return console.error(data.error);
                 this.log('API Recieved archive', id);
-                data.value?.setArchive(true);
+                data.value?.setArchive(true,{
+                    source,
+                });
             });
-            em.on('restore', async ({ id, timestamp }) => {
-                if (doIgnore('restore', id)) return;
+            em.on('restore', async ({ id, timestamp, source }) => {
                 const data = await this.fromId(id);
                 if (data.isErr()) return console.error(data.error);
                 this.log('API Recieved restore', id);
-                data.value?.setArchive(false);
+                data.value?.setArchive(false, {
+                    source,
+                });
             });
-            em.on('delete', async ({ id, timestamp }) => {
-                if (doIgnore('delete', id)) return;
+            em.on('delete', async ({ id, timestamp, source, }) => {
                 const data = await this.fromId(id);
                 if (data.isErr()) return console.error(data.error);
                 this.log('API Recieved delete', id);
-                data.value?.delete();
+                data.value?.delete({
+                    source,
+                });
             });
-            em.on('delete-version', async ({ id, timestamp, vhId }) => {
-                if (doIgnore('delete-version', vhId)) return;
+            em.on('delete-version', async ({ id, timestamp, vhId, source, }) => {
                 const data = await this.fromId(id);
                 if (data.isErr()) return console.error(data.error);
                 if (!data) return;
@@ -2123,10 +2131,11 @@ export class Struct<T extends Blank = any, Name extends string = any> {
                 if (versions.isErr()) return console.error(versions.error);
                 const version = versions.value.find(v => v.vhId === vhId);
                 this.log('API Recieved delete-version', id, vhId);
-                version?.delete();
+                version?.delete({
+                    source,
+                });
             });
-            em.on('restore-version', async ({ id, timestamp, vhId }) => {
-                if (doIgnore('restore-version', vhId)) return;
+            em.on('restore-version', async ({ id, timestamp, vhId, source }) => {
                 const data = await this.fromId(id);
                 if (data.isErr()) return console.error(data.error);
                 if (!data) return;
@@ -2135,16 +2144,17 @@ export class Struct<T extends Blank = any, Name extends string = any> {
                 if (versions.isErr()) return console.error(versions.error);
                 const version = versions.value.find(v => v.vhId === vhId);
                 this.log('API Recieved restore-version', id, vhId);
-                version?.restore();
-            });
-            em.on('create', async ({ data, timestamp }) => {
-                if (doIgnore('create', String(data.id))) return;
-                this.new(data, {
-                    overwriteGlobals: true,
+                version?.restore({
+                    source
                 });
             });
-            em.on('update', async ({ data, timestamp }) => {
-                if (doIgnore('update', String(data.id))) return;
+            em.on('create', async ({ data, timestamp, source }) => {
+                this.new(data, {
+                    overwriteGlobals: true,
+                    source,
+                });
+            });
+            em.on('update', async ({ data, timestamp, source }) => {
                 const id = z.object({ id: z.string() }).parse(data).id;
                 const d = await this.fromId(id);
                 if (d.isErr()) return console.error(d.error);
@@ -2158,7 +2168,9 @@ export class Struct<T extends Blank = any, Name extends string = any> {
                     );
                     return;
                 }
-                d.value.update(data);
+                d.value.update(data, {
+                    source
+                });
             });
             // em.on('set-attributes', async ({ id, attributes, timestamp }) => {
             //     const data = await this.fromId(id);
@@ -2175,8 +2187,17 @@ export class Struct<T extends Blank = any, Name extends string = any> {
             this.on('create', async d => {
                 if (d.metadata.get('no-emit')) return;
                 this.log('API Sending create', d.data);
-                setIgnore('create', d.id);
-                const res = await api.send(this, 'create', d.data);
+                const res = await api.send(this, 'create', {
+                    ...d.data,
+                    source: 'self',
+                }, {
+                    if: (connection) => {
+                        if (connection) {
+                            return connection.apiKey !== d.metadata.get('source');
+                        }
+                        return true;
+                    },
+                });
                 if (res.isErr()) {
                     new StructError(this, res.error.message);
                     d.delete({
@@ -2187,9 +2208,18 @@ export class Struct<T extends Blank = any, Name extends string = any> {
             this.on('update', async d => {
                 const prevState = d.metadata.get('prev-state'); // always read so it will delete
                 if (d.metadata.get('no-emit')) return;
-                setIgnore('update', d.id);
                 this.log('API Sending update', d.data);
-                const res = await api.send(this, 'update', d.data);
+                const res = await api.send(this, 'update', {
+                    ...d.data,
+                    source: 'self',
+                }, {
+                    if: (connection) => {
+                        if (connection) {
+                            return connection.apiKey !== d.metadata.get('source');
+                        }
+                        return true;
+                    },
+                });
                 if (res.isErr()) {
                     new StructError(this, res.error.message);
                     if (prevState) {
@@ -2199,10 +2229,17 @@ export class Struct<T extends Blank = any, Name extends string = any> {
             });
             this.on('archive', async d => {
                 if (d.metadata.get('no-emit')) return;
-                setIgnore('archive', d.id);
                 this.log('API Sending archive', d.id);
                 const res = await api.send(this, 'archive', {
                     id: d.id,
+                    source: 'self',
+                } as any, {
+                    if: (connection) => {
+                        if (connection) {
+                            return connection.apiKey !== d.metadata.get('source');
+                        }
+                        return true;
+                    },
                 });
 
                 if (res.isErr()) {
@@ -2214,10 +2251,17 @@ export class Struct<T extends Blank = any, Name extends string = any> {
             });
             this.on('delete', async d => {
                 if (d.metadata.get('no-emit')) return;
-                setIgnore('delete', d.id);
                 this.log('API Sending delete', d.id);
                 const res = await api.send(this, 'delete', {
                     id: d.id,
+                    source: 'self',
+                } as any, {
+                    if: (connection) => {
+                        if (connection) {
+                            return connection.apiKey !== d.metadata.get('source');
+                        }
+                        return true;
+                    },
                 });
                 if(res.isErr()) {
                     new StructError(this, res.error.message);
@@ -2232,20 +2276,27 @@ export class Struct<T extends Blank = any, Name extends string = any> {
             });
             this.on('delete-version', async d => {
                 if (d.metadata.get('no-emit')) return;
-                setIgnore('delete-version', d.vhId);
                 this.log('API Sending delete-version', d.id, d.vhId);
                 api.send(this, 'delete-version', {
                     id: d.id,
                     vhId: d.vhId,
-                });
+                    source: 'self',
+                } as any);
             });
             this.on('restore-version', async d => {
                 if (d.metadata.get('no-emit')) return;
-                setIgnore('restore-version', d.vhId);
                 this.log('API Sending restore-version', d.id, d.vhId);
                 api.send(this, 'restore-version', {
                     id: d.id,
                     vhId: d.vhId,
+                    source: 'self',
+                } as any, {
+                    if: (connection) => {
+                        if (connection) {
+                            return connection.apiKey !== d.metadata.get('source');
+                        }
+                        return true;
+                    },
                 });
             });
             this.on('restore', async d => {
@@ -2253,6 +2304,14 @@ export class Struct<T extends Blank = any, Name extends string = any> {
                 this.log('API Sending restore', d.id);
                 const res = await api.send(this, 'restore', {
                     id: d.id,
+                    source: 'self',
+                } as any, {
+                    if: (connection) => {
+                        if (connection) {
+                            return connection.apiKey !== d.metadata.get('source');
+                        }
+                        return true;
+                    },
                 });
                 if (res.isErr()) {
                     d.setArchive(true, {
