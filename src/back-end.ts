@@ -18,6 +18,7 @@ import path from 'path';
 import fs from 'fs';
 import chalk from 'chalk';
 import { ServerCode } from 'ts-utils/status';
+import { encode } from 'ts-utils/text';
 
 /**
  * Error thrown for invalid struct state
@@ -107,18 +108,24 @@ export class FatalDataError extends Error {
     }
 }
 
-export class StructStatus {
-    constructor(
-        public readonly struct: Struct, 
-        public readonly code: ServerCode, 
-        public readonly message: string
-    ) {
+// export class StructStatus {
+//     constructor(
+//         public readonly struct: Struct, 
+//         public readonly code: ServerCode, 
+//         public readonly message: string
+//     ) {
 
-    }
+//     }
 
-    json() {
+//     json() {
 
-    }
+//     }
+// }
+
+type StructStatus = {
+    success: boolean;
+    message?: string;
+    data?: unknown;
 }
 
 /**
@@ -1132,14 +1139,22 @@ export class Struct<T extends Blank = any, Name extends string = any> {
                     data: z.unknown(),
                 }).parse(B.data);
 
-                const res = await struct.callListeners.get(body.event)?.(
-                    event,
-                    body.data,
-                );
+                const fn = struct.callListeners.get(body.event)
+                if (fn) {
+                    const res = await fn(
+                        event,
+                        body.data,
+                    );
+                    return new Response(
+                        JSON.stringify(res), 
+                        {
+                        status: 200,
+                    });
+                }
             }
 
 
-            if (B.action === 'read') {
+            CUSTOM_READ: if (B.action === 'read') {
                 const body = z.object({
                     type: z.string(),
                     args: z.unknown(),
@@ -1151,10 +1166,52 @@ export class Struct<T extends Blank = any, Name extends string = any> {
                         data: z.unknown(),
                     }).parse(body.args);
 
-                    const res = struct.queryListeners.get(args.query)?.(
+                    const query = await struct.queryListeners.get(args.query);
+                    if (!query) break CUSTOM_READ;
+
+                    const res = await query.fn(
                         event,
                         args.data,
                     );
+
+                    if (res instanceof Error) {
+                        return new Response(
+                            JSON.stringify(res.message), 
+                            {
+                            status: 500,
+                        });
+                    }
+
+                    if (!res) {
+                        return new Response(
+                            JSON.stringify('Not found'), 
+                            {
+                            status: 404,
+                        });
+                    }
+
+                    const stream = new ReadableStream({
+                        start(controller) {
+                            res.on('end', () => {
+                                controller.enqueue('end\n\n');
+                                controller.close();
+                            });
+
+                            res.pipe((d) => controller.enqueue(encode(JSON.stringify(query.filter ? query.filter(d) : d.safe())) + '\n\n'));
+                        },
+                        cancel() {
+                            res.off('end');
+                            res.off('data');
+                            res.off('error');
+                        }
+                    });
+
+                    return new Response(stream, {
+                        status: 200,
+                        headers: {
+                            'Content-Type': 'text/event-stream',
+                        }
+                    });
                 }
             }
 
@@ -2484,15 +2541,21 @@ export class Struct<T extends Blank = any, Name extends string = any> {
         if (this.data.log) console.log(chalk.blue(`[${this.name}]`), ...data);
     }
 
-    private readonly queryListeners = new Map<string, (event: RequestEvent, data: unknown) => StructStream<T, Name> | Error>();
+    private readonly queryListeners = new Map<string, {
+        fn: (event: RequestEvent, data: unknown) => StructStream<T, Name> | Error | Promise<StructStream<T, Name> | Error>;
+        filter?: (data: StructData<T, Name>) => boolean;
+    }>();
 
-    queryListen(event: string, fn: (event: RequestEvent, data: unknown) => StructStream<T, Name> | Error) {
-        this.queryListeners.set(event, fn);
+    queryListen(event: string, fn: (event: RequestEvent, data: unknown) => StructStream<T, Name> | Error | Promise<StructStream<T, Name> | Error>, filter?: (data: StructData<T, Name>) => boolean) {
+        this.queryListeners.set(event, {
+            fn,
+            filter,
+        });
     }
 
-    private readonly callListeners = new Map<string, (event: RequestEvent, data: unknown) => void>();
+    private readonly callListeners = new Map<string, (event: RequestEvent, data: unknown) => StructStatus | Promise<StructStatus>>();
 
-    callListen(event: string, fn: (event: RequestEvent, data: unknown) => void) {
+    callListen(event: string, fn: (event: RequestEvent, data: unknown) => StructStatus | Promise<StructStatus>) {
         this.callListeners.set(event, fn);
     }
 }

@@ -7,6 +7,7 @@ import { decode } from "ts-utils/text";
 import { DataAction, PropertyAction } from './types';
 import type { Readable, Writable } from "svelte/store";
 import { type ColType } from "./types";
+import { z } from "zod";
 
 // TODO: Batching?
 
@@ -1361,20 +1362,22 @@ export class Struct<T extends Blank> {
         }
     }
 
-    // Custom data pulls
-    query(query: string, data: unknown) {
+    query(query: string, data: unknown, asStream: true): StructStream<T>;
+    query(query: string, data: unknown, asStream: false): DataArr<T>;
+    query(query: string, data: unknown, asStream: boolean) {
+        const get = () => {
+            return this.getStream('custom', {
+                query,
+                data,
+            });
+        }
+        if (asStream) return get();
         const exists = this.writables.get(`custom:${query}:${JSON.stringify(data)}`);
         if (exists) return exists;
 
         const arr = new DataArr(this, []);
 
-        const res = this.getStream(
-            'custom',
-            {
-                query,
-                data,
-            }
-        );
+        const res = get();
 
         res.pipe(d => arr.add(d));
 
@@ -1387,9 +1390,17 @@ export class Struct<T extends Blank> {
 
     // custom functions
     call(event: string, data: unknown) {
-        return this.post('custom', {
-            event,
-            data,
+        return attemptAsync(async () => {
+            const res = await (await this.post('custom', {
+                event,
+                data,
+            })).unwrap().json();
+            
+            return z.object({
+                success: z.boolean(),
+                message: z.string().optional(),
+                data: z.unknown().optional(),
+            }).parse(res);
         });
     }
 };
