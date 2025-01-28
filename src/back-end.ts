@@ -252,6 +252,7 @@ export const globalCols = {
     universes: text('universes').notNull(),
     attributes: text('attributes').notNull(),
     lifetime: integer('lifetime').notNull(),
+    canUpdate: boolean<'can_update'>('can_update').default(true).notNull(),
 };
 
 /**
@@ -562,6 +563,10 @@ export class StructData<T extends Blank = any, Name extends string = any> {
         return this.data.lifetime;
     }
 
+    get canUpdate() {
+        return this.data.canUpdate;
+    }
+
     /**
      * Updates the data, this will emit an update event. If there is a version table, it will also make a version of the data of the state before the update
      *
@@ -579,6 +584,9 @@ export class StructData<T extends Blank = any, Name extends string = any> {
         source: 'self',
     }) {
         return attemptAsync(async () => {
+            if (!this.canUpdate) {
+                throw new DataError(this.struct, 'Cannot change static data');
+            }
             if (!this.struct.validate(this.data, {
                 optionals: Object.keys(globalCols) as string[]
             })) {
@@ -1410,6 +1418,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
         emit?: boolean;
         overwriteGlobals?: boolean;
         source?: string;
+        static?: boolean;
     } = {
         emit: true,
         overwriteGlobals: false,
@@ -1428,6 +1437,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
                 universes: JSON.stringify(this.data.generators?.universes?.() ?? []),
                 attributes: JSON.stringify(this.data.generators?.attributes?.() ?? []),
                 lifetime: this.data.lifetime || 0,
+                canUpdate: !config.static,
             }
             const newData: Structable<T & typeof globalCols> = {
                 ...data,
