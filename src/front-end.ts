@@ -733,6 +733,10 @@ type ReadTypes = {
         value: unknown;
     };
     universe: string;
+    custom: {
+        query: string;
+        data: unknown;
+    }
 }
 
 /**
@@ -1355,5 +1359,37 @@ export class Struct<T extends Blank> {
         if (this.data.log) {
             console.log(this.data.name + ':', ...args);
         }
+    }
+
+    // Custom data pulls
+    query(query: string, data: unknown) {
+        const exists = this.writables.get(`custom:${query}:${JSON.stringify(data)}`);
+        if (exists) return exists;
+
+        const arr = new DataArr(this, []);
+
+        const res = this.getStream(
+            'custom',
+            {
+                query,
+                data,
+            }
+        );
+
+        res.pipe(d => arr.add(d));
+
+        arr.onAllUnsubscribe(() => {
+            this.writables.delete(`custom:${query}:${JSON.stringify(data)}`);
+        });
+
+        return arr;
+    }
+
+    // custom functions
+    call(event: string, data: unknown) {
+        return this.post('custom', {
+            event,
+            data,
+        });
     }
 };

@@ -17,6 +17,7 @@ import { log } from './utils';
 import path from 'path';
 import fs from 'fs';
 import chalk from 'chalk';
+import { ServerCode } from 'ts-utils/status';
 
 /**
  * Error thrown for invalid struct state
@@ -103,6 +104,20 @@ export class FatalDataError extends Error {
         super(message);
         this.name = `FatalDataError [${struct.name}]`;
         struct.emit('error', this);
+    }
+}
+
+export class StructStatus {
+    constructor(
+        public readonly struct: Struct, 
+        public readonly code: ServerCode, 
+        public readonly message: string
+    ) {
+
+    }
+
+    json() {
+
     }
 }
 
@@ -1110,6 +1125,38 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 
             const struct = Struct.structs.get(B.struct);
             if (!struct) return new Response('Struct not found', { status: 404 });
+
+            if (B.action === 'custom') {
+                const body = z.object({
+                    event: z.string(),
+                    data: z.unknown(),
+                }).parse(B.data);
+
+                const res = await struct.callListeners.get(body.event)?.(
+                    event,
+                    body.data,
+                );
+            }
+
+
+            if (B.action === 'read') {
+                const body = z.object({
+                    type: z.string(),
+                    args: z.unknown(),
+                }).parse(B.data);
+
+                if (body.type === 'custom') {
+                    const args = z.object({
+                        query: z.string(),
+                        data: z.unknown(),
+                    }).parse(body.args);
+
+                    const res = struct.queryListeners.get(args.query)?.(
+                        event,
+                        args.data,
+                    );
+                }
+            }
 
             const response = (await struct._eventHandler?.({ action: B.action, data: B.data, request: event, struct }));
             if (response) return response;
@@ -2435,6 +2482,18 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 
     log(...data: unknown[]) {
         if (this.data.log) console.log(chalk.blue(`[${this.name}]`), ...data);
+    }
+
+    private readonly queryListeners = new Map<string, (event: RequestEvent, data: unknown) => StructStream<T, Name> | Error>();
+
+    queryListen(event: string, fn: (event: RequestEvent, data: unknown) => StructStream<T, Name> | Error) {
+        this.queryListeners.set(event, fn);
+    }
+
+    private readonly callListeners = new Map<string, (event: RequestEvent, data: unknown) => void>();
+
+    callListen(event: string, fn: (event: RequestEvent, data: unknown) => void) {
+        this.callListeners.set(event, fn);
     }
 }
 
