@@ -1362,16 +1362,26 @@ export class Struct<T extends Blank> {
         }
     }
 
-    query(query: string, data: unknown, asStream: true): StructStream<T>;
-    query(query: string, data: unknown, asStream: false): DataArr<T>;
-    query(query: string, data: unknown, asStream: boolean) {
+    query(query: string, data: unknown, config: {
+        asStream: true;
+    }): StructStream<T>;
+    query(query: string, data: unknown, config: {
+        asStream: false;
+        satisfies: (data: StructData<T>) => boolean;
+        includeArchive?: boolean; // default is falsy
+    }): DataArr<T>;
+    query(query: string, data: unknown, config: {
+        asStream: boolean;
+        satisfies?: (data: StructData<T>) => boolean;
+        includeArchive?: boolean;
+    }) {
         const get = () => {
             return this.getStream('custom', {
                 query,
                 data,
             });
         }
-        if (asStream) return get();
+        if (config.asStream) return get();
         const exists = this.writables.get(`custom:${query}:${JSON.stringify(data)}`);
         if (exists) return exists;
 
@@ -1379,10 +1389,32 @@ export class Struct<T extends Blank> {
 
         const res = get();
 
+        const add = (d: StructData<T>) => {
+            if (config.satisfies?.(d)) {
+                arr.add(d);
+            }
+        };
+
+        const remove = (d: StructData<T>) => {
+            if (config.satisfies?.(d)) {
+                arr.remove(d);
+            }
+        };
+
+        this.on('new', add);
+        if (!config.includeArchive) this.on('restore', add);
+        this.on('archive', remove);
+        if (!config.includeArchive) this.on('delete', remove);
+
         res.pipe(d => arr.add(d));
 
         arr.onAllUnsubscribe(() => {
             this.writables.delete(`custom:${query}:${JSON.stringify(data)}`);
+
+            this.off('new', add);
+            this.off('restore', add);
+            this.off('archive', remove);
+            this.off('delete', remove);
         });
 
         return arr;
