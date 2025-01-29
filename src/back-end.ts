@@ -171,6 +171,8 @@ export type StructBuilder<T extends Blank, Name extends string> = {
      * Configure how you want global columns to be generated
      */
     generators?: Partial<{
+        [key in keyof T]: () => TsType<T[key]['_']['dataType']>;
+    } & {
         id: () => string;
         attributes: () => string[];
         universes: () => string[];
@@ -1440,6 +1442,10 @@ export class Struct<T extends Blank = any, Name extends string = any> {
             }
             const newData: Structable<T & typeof globalCols> = {
                 ...data,
+                ...(Object.fromEntries(Object.entries(this.data.generators || {})
+                    // Only do generators that are not global cols, those have already been set at this point
+                    .filter(([k]) => Object.keys(globalCols).includes(k))
+                    .map(([k, v]) => ([k, v()]))) as any),
                 ...(!config?.overwriteGlobals ? globals : {}),
             };
 

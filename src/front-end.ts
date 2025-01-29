@@ -856,7 +856,7 @@ export class Struct<T extends Blank> {
      * @param {Structable<T>} data 
      * @returns {*} 
      */
-    new(data: Structable<T>) {
+    new(data: PartialStructable<T>) {
         return attemptAsync<StatusMessage>(async () => {
             return this.post(DataAction.Create, data).then(r => r.unwrap().json()) ;
         });
