@@ -2583,7 +2583,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
         message: string;
     }>();
 
-    block(event: string, fn: (event: RequestEvent, data: unknown) => boolean | Promise<boolean>, message: string) {
+    block(event: DataAction | PropertyAction, fn: (event: RequestEvent, data: unknown) => boolean | Promise<boolean>, message: string) {
         this.blocks.set(event, {
             fn,
             message,
