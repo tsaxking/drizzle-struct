@@ -81,6 +81,10 @@
     "./cached-events": {
       "import": "./lib/esm/cached-events.js",
       "require": "./lib/cjs/cached-events.js"
+    },
+    "./stream": {
+      "import": "./lib/esm/stream.js",
+      "require": "./lib/cjs/stream.js"
     }
   }
 }
