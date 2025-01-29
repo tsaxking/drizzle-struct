@@ -163,6 +163,11 @@ export type StructBuilder<T extends Blank> = {
      * Log all actions to the console (only use for development because this could log sensitive data and may slow down the application)
      */
     log?: boolean;
+
+    /**
+     * Whether the struct is a browser struct, this is used to prevent fetch requests on the server when sveltekit is doing SSR
+     */
+    browser: boolean;
 };
 
 /**
@@ -986,6 +991,7 @@ export class Struct<T extends Blank> {
      */
     post(action: DataAction | PropertyAction | string, data: unknown) {
         return attemptAsync(async () => {
+            if (!this.data.browser) throw new StructError('Currently not in a browser environment. Will not run a fetch request');
             const res = await fetch('/struct', {
                 method: 'POST',
                 headers: {
