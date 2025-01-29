@@ -1264,10 +1264,19 @@ export class Struct<T extends Blank> {
         const remove = (d: StructData<T>) => {
             arr.remove(d);
         }
+        const update = (d: StructData<T>) => {
+            if ((d.data as any)[key] === value) {
+                arr.add(d);
+            } else {
+                arr.remove(d);
+            }
+        };
+
         this.on('new', add);
         this.on('archive', remove);
         this.on('restore', add);
         this.on('delete', remove);
+        this.on('update', update);
 
         s.pipe((d) => {
             arr.add(d);
@@ -1278,6 +1287,7 @@ export class Struct<T extends Blank> {
             this.off('archive', remove);
             this.off('restore', add);
             this.off('delete', remove);
+            this.off('update', update);
             this.writables.delete(`property:${String(key)}:${JSON.stringify(value)}`);
         });
         return arr;
