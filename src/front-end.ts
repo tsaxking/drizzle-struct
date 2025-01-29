@@ -782,6 +782,16 @@ export class Struct<T extends Blank> {
      */
     public static readonly structs = new Map<string, Struct<Blank>>();
 
+    public static each(fn: (struct: Struct<Blank>) => void) {
+        for (const struct of Struct.structs.values()) {
+            fn(struct);
+        }
+    }
+
+    public static buildAll() {
+        Struct.each(s => s.build().then(r => r.isErr() && console.error(r.error)));
+    }
+
     /**
      * Cached writables for automatic updating
      *
@@ -1021,6 +1031,7 @@ export class Struct<T extends Blank> {
             this.log('Building struct:', this.data.name);
             const connect = (await this.connect()).unwrap();
             if (!connect.success) {
+                this.log('Failed to connect to struct:', this.data.name);
                 throw new FatalStructError(connect.message);
             }
 
