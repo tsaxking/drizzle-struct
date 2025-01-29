@@ -17,7 +17,6 @@ import { log } from './utils';
 import path from 'path';
 import fs from 'fs';
 import chalk from 'chalk';
-import { ServerCode } from 'ts-utils/status';
 import { encode } from 'ts-utils/text';
 
 /**
@@ -2120,6 +2119,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
                     universes: createSchema(z.string(), 'universes'),
                     attributes: createSchema(z.string(), 'attributes'),
                     lifetime: createSchema(z.number(), 'lifetime'),
+                    canUpdate: createSchema(z.boolean(), 'canUpdate'),
                     ...Object.fromEntries(
                         Object.entries(this.data.structure).map(([k, v]) => {
                             const type = (v as any).config.dataType as ColumnDataType;
