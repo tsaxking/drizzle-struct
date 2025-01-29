@@ -881,7 +881,7 @@ export class Struct<T extends Blank> {
     private setListeners() {
         return attempt(() => {
             this.data.socket.on(`struct:${this.data.name}`, (data) => {
-                this.log('Data:', data);
+                this.log('Event Data:', data);
                 if (typeof data !== 'object' || data === null) {
                     return console.error('Invalid data:', data);
                 }
@@ -909,7 +909,6 @@ export class Struct<T extends Blank> {
                                 ...d.data,
                                 archived: true,
                             });
-                            this.log('Archived:', d.data);
                             this.emit('archive', d);
                         }
                     })
@@ -919,7 +918,6 @@ export class Struct<T extends Blank> {
                         if (exists) return;
                         const d = new StructData(this, structData);
                         this.cache.set(id, d);
-                        this.log('Created:', d.data);
                         this.emit('new', d);
                     })
                     .case('delete', () => {
@@ -939,7 +937,6 @@ export class Struct<T extends Blank> {
                                 ...d.data,
                                 archived: false,
                             });
-                            this.log('Restored:', d.data);
                             this.emit('restore', d);
                         }
                     })
@@ -948,7 +945,6 @@ export class Struct<T extends Blank> {
                         const d = this.cache.get(id);
                         if (d) {
                             d.set(structData);
-                            this.log('Updated:', d.data);
                             this.emit('update', d);
                         }
                     })
