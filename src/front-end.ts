@@ -909,6 +909,7 @@ export class Struct<T extends Blank> {
                                 ...d.data,
                                 archived: true,
                             });
+                            this.log('Archived:', d.data);
                             this.emit('archive', d);
                         }
                     })
@@ -918,6 +919,7 @@ export class Struct<T extends Blank> {
                         if (exists) return;
                         const d = new StructData(this, structData);
                         this.cache.set(id, d);
+                        this.log('Created:', d.data);
                         this.emit('new', d);
                     })
                     .case('delete', () => {
@@ -925,6 +927,7 @@ export class Struct<T extends Blank> {
                         const d = this.cache.get(id);
                         if (d) {
                             this.cache.delete(id);
+                            this.log('Deleted:', d.data);
                             this.emit('delete', d);
                         }
                     })
@@ -936,6 +939,7 @@ export class Struct<T extends Blank> {
                                 ...d.data,
                                 archived: false,
                             });
+                            this.log('Restored:', d.data);
                             this.emit('restore', d);
                         }
                     })
@@ -944,6 +948,7 @@ export class Struct<T extends Blank> {
                         const d = this.cache.get(id);
                         if (d) {
                             d.set(structData);
+                            this.log('Updated:', d.data);
                             this.emit('update', d);
                         }
                     })
