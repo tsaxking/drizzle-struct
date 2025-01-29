@@ -419,6 +419,7 @@ export class StructData<T extends Blank> implements Writable< PartialStructable<
             delete result.lifetime;
             delete result.universes;
             delete result.attributes;
+            delete result.canUpdate;
 
             const res = (await this.struct.post(PropertyAction.Update, result)).unwrap();
             return {
@@ -758,6 +759,7 @@ export type GlobalCols = {
     universes: 'string';
     attributes: 'string';
     lifetime: 'number';
+    canUpdate: 'boolean';
 }
 
 /**
