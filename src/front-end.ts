@@ -789,7 +789,7 @@ export class Struct<T extends Blank> {
     }
 
     public static buildAll() {
-        Struct.each(s => s.build().then(r => r.isErr() && console.error(r.error)));
+        Struct.each(s => s.build().then(res => res.isErr() && console.error(res.error)));
     }
 
     /**
