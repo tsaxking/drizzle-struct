@@ -1142,6 +1142,9 @@ export class Struct<T extends Blank = any, Name extends string = any> {
             const struct = Struct.structs.get(B.struct);
             if (!struct) return new Response('Struct not found', { status: 404 });
 
+            const blocked = struct.blocks.get(B.action);
+            if (blocked && blocked.fn(event, B.data)) return new Response(`Blocked: ${blocked.message}`, { status: 403 });
+
             if (B.action === 'custom') {
                 const body = z.object({
                     event: z.string(),
@@ -2573,6 +2576,18 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 
     callListen(event: string, fn: (event: RequestEvent, data: unknown) => StructStatus | Promise<StructStatus>) {
         this.callListeners.set(event, fn);
+    }
+
+    private readonly blocks = new Map<string, {
+        fn: (event: RequestEvent, data: unknown) => boolean | Promise<boolean>;
+        message: string;
+    }>();
+
+    block(event: string, fn: (event: RequestEvent, data: unknown) => boolean | Promise<boolean>, message: string) {
+        this.blocks.set(event, {
+            fn,
+            message,
+        });
     }
 }
 
