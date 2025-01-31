@@ -832,6 +832,18 @@ export class StructData<T extends Blank = any, Name extends string = any> {
     log(...data: unknown[]) {
         this.struct.log(chalk.magenta(`(${this.id})`), ...data);
     }
+
+    setUniverse(universe: string) {
+        return attemptAsync(async () => {
+            this.log('Setting universe');
+            await this.database
+                .update(this.struct.table)
+                .set({
+                    universe
+                } as any)
+                .where(eq(this.struct.table.id as any, this.id));
+        });
+    }
 }
 
 /**
@@ -1908,6 +1920,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
             }
             const em = api.getEmitter<T, Name>(this);
 
+            // TODO: Set universe
 
             em.on('archive', async ({ id, timestamp, source, }) => {
                 const data = await this.fromId(id);
