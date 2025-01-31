@@ -13,7 +13,9 @@ export enum DataAction {
     RestoreVersion = 'restore-version',
     DeleteVersion = 'delete-version',
     ReadVersionHistory = 'read-version-history',
-    ReadArchive = 'read-archive'
+    ReadArchive = 'read-archive',
+    Update = 'update',
+    Read = 'read',
 }
 
 export type ColType = 'string' | 'number' | 'boolean' | 'array' | 'json' | 'date' | 'bigint' | 'custom' | 'buffer';
