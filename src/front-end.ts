@@ -417,7 +417,7 @@ export class StructData<T extends Blank> implements Writable< PartialStructable<
             delete result.created;
             delete result.updated;
             delete result.lifetime;
-            // delete result.universes;
+            delete result.universes;
             delete result.attributes;
             delete result.canUpdate;
 
@@ -512,14 +512,14 @@ export class StructData<T extends Blank> implements Writable< PartialStructable<
      *
      * @returns {*} 
      */
-    // getUniverses() {
-    //     return attempt(() => {
-    //         const a = JSON.parse(this.data.universes);
-    //         if (!Array.isArray(a)) throw new DataError('Universes must be an array');
-    //         if (!a.every(i => typeof i === 'string')) throw new DataError('Universes must be an array of strings');
-    //         return a;
-    //     });
-    // }
+    getUniverses() {
+        return attempt(() => {
+            const a = JSON.parse(this.data.universes);
+            if (!Array.isArray(a)) throw new DataError('Universes must be an array');
+            if (!a.every(i => typeof i === 'string')) throw new DataError('Universes must be an array of strings');
+            return a;
+        });
+    }
     // addUniverses(...universes: string[]) {}
     // removeUniverses(...universes: string[]) {}
     // setUniverses(...universes: string[]) {}
@@ -756,7 +756,7 @@ export type GlobalCols = {
     created: 'string';
     updated: 'string';
     archived: 'boolean';
-    // universes: 'string';
+    universes: 'string';
     attributes: 'string';
     lifetime: 'number';
     canUpdate: 'boolean';

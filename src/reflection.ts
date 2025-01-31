@@ -319,7 +319,7 @@ type StructEvent<T extends Blank = Blank> = {
     'archive': { id: string; timestamp: number; source: string; };
     'restore': { id: string; timestamp: number; source: string; };
     'set-attributes': { id: string; attributes: string[]; timestamp: number; source: string; };
-    // 'set-universe': { id: string; universes: string[]; timestamp: number; source: string; };
+    'set-universes': { id: string; universes: string[]; timestamp: number; source: string; };
 };
 
 /**
@@ -333,7 +333,7 @@ export type QueryType = {
     'from-id': { id: string };
     // 'from-ids': { ids: string[] };
     'from-property': { property: string, value: any };
-    // 'from-universe': { universe: string };
+    'from-universe': { universe: string };
     'archived': {};
     'versions': { id: string };
     // 'get': Record<string, unknown>;
@@ -350,7 +350,7 @@ type QueryResponse<T extends Blank> = {
     'from-id': Structable<T> | undefined;
     // 'from-ids': Stream<Structable<T & typeof globalCols>>;
     'from-property': Stream<Structable<T & typeof globalCols>>;
-    // 'from-universe': Stream<Structable<T & typeof globalCols>>;
+    'from-universe': Stream<Structable<T & typeof globalCols>>;
     'archived': Stream<Structable<T & typeof globalCols>>;
     'versions': Stream<Structable<T & typeof globalCols>>;
     // 'get': Stream<Structable<T & typeof globalCols>>;
@@ -577,15 +577,15 @@ export class Server {
                         }));
                     }
                         break;
-                    // case 'from-universe': {
-                    //     const { universe } = z.object({
-                    //         universe: z.string(),
-                    //     }).parse(args);
-                    //     stream(s.fromUniverse(universe, {
-                    //         type: 'stream',
-                    //     }));
-                    // }
-                    // break;
+                    case 'from-universe': {
+                        const { universe } = z.object({
+                            universe: z.string(),
+                        }).parse(args);
+                        stream(s.fromUniverse(universe, {
+                            type: 'stream',
+                        }));
+                    }
+                    break;
                     case 'versions': {
                         const { id } = z.object({
                             id: z.string(),
@@ -773,10 +773,10 @@ export class Server {
                 emitter.emit('set-attributes', { id: data.id, attributes: data.attributes, timestamp, source: apiKey });
                 break;
             }
-            // case 'set-universe': {
-            //     emitter.emit('set-universe', { id: data.id, universes: data.universes, timestamp, source: apiKey });
-            //     break;
-            // }
+            case 'set-universes': {
+                emitter.emit('set-universes', { id: data.id, universes: data.universes, timestamp, source: apiKey });
+                break;
+            }
             default: {
                 return { status: 400, message: 'Invalid event' };
             }
@@ -1287,7 +1287,7 @@ export class Client {
                                 if (data.startsWith('data: ') && data.endsWith('\n\n')) {
                                     const unsafe = JSON.parse(decode(data.slice(6, -2)));
                                     const parsed = z.object({
-                                        event: z.enum(['create', 'update', 'delete', 'delete-version', 'restore-version', 'archive', 'restore', 'set-attributes', 'set-universe']),
+                                        event: z.enum(['create', 'update', 'delete', 'delete-version', 'restore-version', 'archive', 'restore', 'set-attributes', 'set-universes']),
                                         payload: z.object({
                                             struct: z.string(),
                                             data: z.any(),
@@ -1323,9 +1323,9 @@ export class Client {
                                             case 'set-attributes': {
                                                 em.emit('set-attributes', { id: parsed.payload.data.id, attributes: parsed.payload.data.attributes, timestamp: parsed.timestamp, source: 'server', });
                                             } break;
-                                            // case 'set-universe': {
-                                            //     em.emit('set-universe', { id: parsed.payload.data.id, universes: parsed.payload.data.universes, timestamp: parsed.timestamp, source: 'server', });
-                                            // } break;
+                                            case 'set-universes': {
+                                                em.emit('set-universes', { id: parsed.payload.data.id, universes: parsed.payload.data.universes, timestamp: parsed.timestamp, source: 'server', });
+                                            } break;
                                         }
                                     }
     
