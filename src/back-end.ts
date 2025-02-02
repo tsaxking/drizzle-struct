@@ -2226,7 +2226,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
         }
         return {
             success: false,
-            reason: res.error.issues.map(i => i.message).join(', '),
+            reason: res.error.message,
         }
     }
     
