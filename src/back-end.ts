@@ -570,7 +570,7 @@ export class StructData<T extends Blank = any, Name extends string = any> {
         return this.data.canUpdate;
     }
 
-    get unvierse() {
+    get universe() {
         return this.data.universe;
     }
 
