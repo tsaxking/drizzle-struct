@@ -1252,7 +1252,7 @@ export class Struct<T extends Blank> {
      * @param {true} asStream If true, returns a stream
      * @returns {StructStream<T>} 
      */
-    fromProperty<K extends keyof T>(key: K, value: ColTsType<T[K]>, asStream: true): StructStream<T>;
+    fromProperty<K extends keyof (T & GlobalCols)>(key: K, value: ColTsType<(T & GlobalCols)[K]>, asStream: true): StructStream<T>;
     /**
      * Gets all data with a specific property value
      *
@@ -1261,7 +1261,7 @@ export class Struct<T extends Blank> {
      * @param {false} asStream If false, returns a svelte store
      * @returns {DataArr<T>} 
      */
-    fromProperty<K extends keyof T>(key: K, value: ColTsType<T[K]>, asStream: false): DataArr<T>;
+    fromProperty<K extends keyof (T & GlobalCols)>(key: K, value: ColTsType<(T & GlobalCols)[K]>, asStream: false): DataArr<T>;
     /**
      * Gets all data with a specific property value
      *
@@ -1270,7 +1270,7 @@ export class Struct<T extends Blank> {
      * @param {boolean} asStream Returns a stream if true, svelte store if false
      * @returns 
      */
-    fromProperty<K extends keyof T>(key: K, value: ColTsType<T[K]>, asStream: boolean) {
+    fromProperty<K extends keyof (T & GlobalCols)>(key: K, value: ColTsType<(T & GlobalCols)[K]>, asStream: boolean) {
         const s = this.getStream('property', { key: String(key), value });
         if (asStream) return s;
         const arr = this.writables.get(`property:${String(key)}:${JSON.stringify(value)}`) || new DataArr(this, []);
