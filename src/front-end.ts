@@ -615,6 +615,7 @@ export class DataArr<T extends Blank> implements Readable<StructData<T>[]> {
     private apply(value: StructData<T>[]): void {
         this.data = value.filter((v, i, a) => a.indexOf(v) === i);
         this.subscribers.forEach((fn) => fn(value));
+        this.struct.log('Applied Data:', this.data);
     }
 
     /**
@@ -1398,7 +1399,7 @@ export class Struct<T extends Blank> {
      * @private
      * @param {...any[]} args 
      */
-    private log(...args: any[]) {
+    public log(...args: any[]) {
         if (this.data.log) {
             console.log(`[${this.data.name}]`, ...args);
         }
