@@ -658,6 +658,7 @@ export class StructData<T extends Blank = any, Name extends string = any> {
                 archived,
                 updated: new Date(),
             } as any).where(sql`${this.struct.table.id} = ${this.id}`);
+            this.data.archived = archived;
 
             if (config.emit === false) this.metadata.set('no-emit', true);
             if (config.source) this.metadata.set('source', config.source);
