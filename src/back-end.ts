@@ -881,6 +881,20 @@ export class StructData<T extends Blank = any, Name extends string = any> {
     log(...data: unknown[]) {
         this.struct.log(chalk.magenta(`(${this.id})`), ...data);
     }
+
+    setStatic(isStatic: boolean) {
+        return attemptAsync(async () => {
+            this.log('Setting static:', isStatic);
+            await this.database.update(this.struct.table).set({
+                canUpdate: !isStatic,
+                updated: new Date(),
+            } as any).where(sql`${this.struct.table.id} = ${this.id}`);
+            Object.assign(this.data, {
+                canUpdate: true,
+            });
+            this.emitSelf();
+        });
+    }
 }
 
 /**
@@ -1011,7 +1025,13 @@ export class Struct<T extends Blank = any, Name extends string = any> {
     /**
      * Set directory for event logging
      */
-    public static async setupLogger(logDir: string) {
+    public static async setupLogger(logDir: string, fn?: (log: {
+        struct: string;
+        event: string;
+        type: 'info' | 'warn' | 'error';
+        message: string;
+        timestamp: string;
+    }) => unknown) {
         if (Struct.loggingSet) throw new Error('Logging already set up');
 
         try {
@@ -1020,75 +1040,91 @@ export class Struct<T extends Blank = any, Name extends string = any> {
             // do nothing
         }
 
+
+
         Struct.each(s => {
             const file = path.join(logDir, `${s.name}.log`);
-            s.on('archive', (d) => log(file, {
+
+            const l = (data: {
+                event: string;
+                type: 'info' | 'warn' | 'error';
+                message: string;
+            }) => {
+                log(file, data);
+                fn?.({
+                    struct: s.name,
+                    timestamp: new Date().toISOString(),
+                    ...data,
+                });
+            }
+
+            s.on('archive', (d) => l({
                 type: 'info',
                 event: 'archive',
                 message: `Archived ${d.id}`,
             }));
 
-            s.on('create', (d) => log(file, {
+            s.on('create', (d) => l({
                 type: 'info',
                 event: 'create',
                 message: `Created ${d.id}`,
             }));
 
-            s.on('delete', (d) => log(file, {
+            s.on('delete', (d) => l({
                 type: 'info',
                 event: 'delete',
                 message: `Deleted ${d.id}`,
             }));
 
-            s.on('restore', (d) => log(file, {
+            s.on('restore', (d) => l({
                 type: 'info',
                 event: 'restore',
                 message: `Restored ${d.id}`,
             }));
 
-            s.on('update', (d) => log(file, {
+            s.on('update', (d) => l({
                 type: 'info',
                 event: 'update',
                 message: `Updated ${d.id}`,
             }));
 
-            s.on('delete-version', (d) => log(file, {
+            s.on('delete-version', (d) => l({
                 type: 'info',
                 event: 'delete-version',
                 message: `Deleted version ${d.vhId}`,
             }));
 
-            s.on('restore-version', (d) => log(file, {
+            s.on('restore-version', (d) => l({
                 type: 'info',
                 event: 'restore-version',
                 message: `Restored version ${d.vhId}`,
             }));
 
-            s.on('build', () => log(file, {
+            s.on('build', () => l({
                 type: 'info',
                 event: 'build',
                 message: 'Built',
             }));
 
-            s.on('error', (e) => log(file, {
+            s.on('error', (e) => l({
                 type: 'warn',
                 event: 'error',
                 message: e.message,
             }));
 
-            s.on('fatal-error', (e) => log(file, {
+            s.on('fatal-error', (e) => l({
                 type: 'error',
                 event: 'fatal-error',
                 message: e.message,
             }));
 
-            s.on('data-error', (e) => log(file, {
+            s.on('data-error', (e) => l({
                 type: 'warn',
                 event: 'data-error',
                 message: e.message,
             }));
 
-            s.on('fatal-data-error', (e) => log(file, {
+            s.on('fatal-data-error', (e) => l({
                 type: 'error',
                 event: 'fatal-data-error',
                 message: e.message,
