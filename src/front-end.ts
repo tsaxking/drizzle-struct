@@ -949,6 +949,10 @@ export class Struct<T extends Blank> {
                         if (d) {
                             d.set(structData);
                             this.emit('update', d);
+                        } else {
+                            const d = new StructData(this, structData);
+                            this.cache.set(id, d);
+                            this.emit('new', d);
                         }
                     })
                     .default(() => console.error('Invalid event:', event))
