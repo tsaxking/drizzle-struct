@@ -594,6 +594,7 @@ export class StructData<T extends Blank = any, Name extends string = any> {
             if (!this.canUpdate) {
                 throw new DataError(this.struct, 'Cannot change static data');
             }
+            const now = new Date();
             const res = this.struct.validate({
                 ...this.data,
                 ...data,
@@ -622,11 +623,15 @@ export class StructData<T extends Blank = any, Name extends string = any> {
             delete newData.lifetime;
             await this.database.update(this.struct.table).set({
                 ...newData,
-                updated: new Date(),
+                updated: now,
             }).where(sql`${this.struct.table.id} = ${this.id}`);
 
             if (config.emit === false) this.metadata.set('no-emit', true);
             if (config.source) this.metadata.set('source', config.source);
+            Object.assign(this.data, {
+                ...newData,
+                updated: now,
+            });
             this.struct.emit('update', this);
         });
     }
