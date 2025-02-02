@@ -594,11 +594,11 @@ export class StructData<T extends Blank = any, Name extends string = any> {
             if (!this.canUpdate) {
                 throw new DataError(this.struct, 'Cannot change static data');
             }
-            const res = this.struct.validate({
-                ...this.data,
-                ...data,
-            }, {
-                optionals: Object.keys(globalCols) as string[]
+            const res = this.struct.validate(data, {
+                optionals: Object.keys({
+                    ...globalCols,
+                    ...this.data,
+                }) as string[]
             });
             if (!res.success) {
                 throw new DataError(this.struct, `Invalid Data received: ${res.reason}`);
