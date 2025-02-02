@@ -594,10 +594,11 @@ export class StructData<T extends Blank = any, Name extends string = any> {
             if (!this.canUpdate) {
                 throw new DataError(this.struct, 'Cannot change static data');
             }
-            if (!this.struct.validate(this.data, {
+            const res = this.struct.validate(data, {
                 optionals: Object.keys(globalCols) as string[]
-            })) {
-                throw new DataError(this.struct, 'Invalid Data');
+            });
+            if (!res.success) {
+                throw new DataError(this.struct, `Invalid Data received: ${res.reason}`);
             }
             this.log('Updating');
             this.makeVersion();
@@ -1483,9 +1484,14 @@ export class Struct<T extends Blank = any, Name extends string = any> {
     }) {
         return attemptAsync(async () => {
             this.log('Creating new', data, config);
-            this.validate(data, {
+            const validateRes = this.validate(data, {
                 optionals: config?.overwriteGlobals ? [] : Object.keys(globalCols) as string[],
             });
+
+            if (!validateRes.success) {
+                throw new DataError(this, `Invalid Data Received, please check your data: ${validateRes.reason}`);
+            }
+
             const globals = {
                 id: this.data.generators?.id?.() ?? uuid(),
                 created: new Date(),
@@ -1524,7 +1530,8 @@ export class Struct<T extends Blank = any, Name extends string = any> {
      * @returns {StructData<T, Name>} 
      */
     Generator(data: Structable<T & typeof globalCols>) {
-        if (!this.validate(data)) console.warn('Invalid data, there may be issues. If you see this, please fix your program, as this will become an error in the future', data);
+        const res = this.validate(data);
+        if (!res.success) console.warn('Invalid data, there may be issues. If you see this, please fix your program, as this will become an error in the future', data, res.reason);
         return new StructData(data, this);
     }
 
@@ -2116,7 +2123,8 @@ export class Struct<T extends Blank = any, Name extends string = any> {
                 return attemptAsync(async () => {
                     const exists = (await this.fromId(d.id)).unwrap();
                     if (exists) return;
-                    if (!this.validate(d)) throw new FatalDataError(this, 'Invalid default data');
+                    const res = this.validate(d);
+                    if (!res.success) throw new DataError(this, `Invalid default data: ${res.reason}`);
                     this.database.insert(this.table).values(d as any);
                 });
             }))).unwrap();
@@ -2158,57 +2166,67 @@ export class Struct<T extends Blank = any, Name extends string = any> {
      * @param {?{ optionals?: string[]; not?: string[] }} [config] Configuration for the validation
      * @returns {boolean} 
      */
-    validate(data: unknown, config?: { optionals?: string[]; not?: string[] }): boolean {
-        if (data === null || Array.isArray(data) || typeof data !== 'object') return false;
+    validate(data: unknown, config?: { optionals?: string[]; not?: string[] }): {
+        success: true;
+    } | {
+        success: false;
+        reason: string;
+    } {
+        if (data === null || Array.isArray(data) || typeof data !== 'object') return {
+            success: false,
+            reason: 'Data is not an object',
+        };
     
         const keys = Object.keys(data);
         if (config?.not) {
             const keySet = new Set(keys);
             for (const n of config.not) {
-                if (keySet.has(n)) return false;
+                if (keySet.has(n)) return {
+                    success: false,
+                    reason: `Data contains key that should not exist: ${n}`,
+                };
             }
         }
     
-        const createSchema = (type: any, key: string) =>
-            config?.optionals?.includes(key) ? type.optional() : type;
-    
-        try {
-            const schema = z
-                .object({
-                    id: createSchema(z.string(), 'id'),
-                    created: createSchema(z.date().refine((d) => !isNaN(d.getTime()), { message: 'Invalid date' }), 'created'),
-                    updated: createSchema(z.date().refine((d) => !isNaN(d.getTime()), { message: 'Invalid date' }), 'updated'),
-                    archived: createSchema(z.boolean(), 'archived'),
-                    // universes: createSchema(z.string(), 'universes'),
-                    universe: createSchema(z.string(), 'universe'),
-                    attributes: createSchema(z.string(), 'attributes'),
-                    lifetime: createSchema(z.number(), 'lifetime'),
-                    canUpdate: createSchema(z.boolean(), 'canUpdate'),
-                    ...Object.fromEntries(
-                        Object.entries(this.data.structure).map(([k, v]) => {
-                            const type = (v as any).config.dataType as ColumnDataType;
-                            const schemaType = (() => {
-                                switch (type) {
-                                    case 'number': return z.number();
-                                    case 'string': return z.string();
-                                    case 'boolean': return z.boolean();
-                                    case 'date': return z.date();
-                                    default: throw new DataError(this, `Invalid data type: ${type} in ${k} of ${this.name}`);
-                                }
-                            })();
-                            return [k, createSchema(schemaType, k)];
-                        })
-                    ),
-                })
-                .strict(); // Disallow additional keys
-    
-            schema.parse(data);
-            return true;
-        } catch (error) {
-            if (error instanceof z.ZodError) {
-                return false;
-            }
-            throw error; // Unexpected errors
+    const createSchema = (type: z.ZodType, key: string) =>
+        config?.optionals?.includes(key) ? type.optional() : type;
+
+        const res = z
+            .object({
+                id: createSchema(z.string(), 'id'),
+                created: createSchema(z.date().refine((d) => !isNaN(d.getTime()), { message: 'Invalid date' }), 'created'),
+                updated: createSchema(z.date().refine((d) => !isNaN(d.getTime()), { message: 'Invalid date' }), 'updated'),
+                archived: createSchema(z.boolean(), 'archived'),
+                // universes: createSchema(z.string(), 'universes'),
+                universe: createSchema(z.string(), 'universe'),
+                attributes: createSchema(z.string(), 'attributes'),
+                lifetime: createSchema(z.number(), 'lifetime'),
+                canUpdate: createSchema(z.boolean(), 'canUpdate'),
+                ...Object.fromEntries(
+                    Object.entries(this.data.structure).map(([k, v]) => {
+                        const type = (v as any).config.dataType as ColumnDataType;
+                        const schemaType = (() => {
+                            switch (type) {
+                                case 'number': return z.number();
+                                case 'string': return z.string();
+                                case 'boolean': return z.boolean();
+                                case 'date': return z.date();
+                                default: throw new DataError(this, `Invalid data type: ${type} in ${k} of ${this.name}`);
+                            }
+                        })();
+                        return [k, createSchema(schemaType, k)];
+                    })
+                ),
+            })
+            .strict()
+            .safeParse(data); // Disallow additional keys
+
+        if (res.success) return {
+            success: true,
+        }
+        return {
+            success: false,
+            reason: res.error.errors.map(e => e.message).join(', '),
         }
     }
     
