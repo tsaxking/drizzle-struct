@@ -1292,7 +1292,7 @@ export class Struct<T extends Blank> {
         const update = (d: StructData<T>) => {
             if ((d.data as any)[key] === value && !arr.data.includes(d)) {
                 arr.add(d);
-            } else {
+            } else if ((d.data as any)[key] !== value) {
                 arr.remove(d);
             }
         };
