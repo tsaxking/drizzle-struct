@@ -613,7 +613,7 @@ export class DataArr<T extends Blank> implements Readable<StructData<T>[]> {
      * @param {StructData<T>[]} value 
      */
     private apply(value: StructData<T>[]): void {
-        this.data = value.filter((v, i, a) => a.indexOf(v) === i);
+        this.data = value.filter((v, i, a) => a.findIndex(_v => _v.data.id === v.data.id) === i);
         this.subscribers.forEach((fn) => fn(value));
         this.struct.log('Applied Data:', this.data);
     }
