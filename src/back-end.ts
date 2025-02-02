@@ -1524,7 +1524,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
      * @returns {StructData<T, Name>} 
      */
     Generator(data: Structable<T & typeof globalCols>) {
-        if (!this.validate(data)) console.warn('Invalid data, there may be issues. If you see this, please fix your program, as this will become an error in the future');
+        if (!this.validate(data)) console.warn('Invalid data, there may be issues. If you see this, please fix your program, as this will become an error in the future', data);
         return new StructData(data, this);
     }
 
@@ -1737,27 +1737,27 @@ export class Struct<T extends Blank = any, Name extends string = any> {
         }
     }
 
-    fromProperty<K extends keyof T>(property: K, value: TsType<T[K]['_']['dataType']>, config: {
+    fromProperty<K extends keyof (T & typeof globalCols)>(property: K, value: TsType<(T & typeof globalCols)[K]['_']['dataType']>, config: {
         type: 'stream';
         limit?: number;
         offset?: number;
         includeArchived?: boolean;
     }): StructStream<T, Name>;
-    fromProperty<K extends keyof T>(property: K, value: TsType<T[K]['_']['dataType']>, config: {
+    fromProperty<K extends keyof (T & typeof globalCols)>(property: K, value: TsType<(T & typeof globalCols)[K]['_']['dataType']>, config: {
         type: 'array';
         limit: number;
         offset: number;
         includeArchived?: boolean;
     }): Promise<Result<StructData<T, Name>[], Error>>;
-    fromProperty<K extends keyof T>(property: K, value: TsType<T[K]['_']['dataType']>, config: {
+    fromProperty<K extends keyof (T & typeof globalCols)>(property: K, value: TsType<(T & typeof globalCols)[K]['_']['dataType']>, config: {
         type: 'single';
         includeArchived?: boolean;
     }): Promise<Result<StructData<T, Name> | undefined, Error>>;
-    fromProperty<K extends keyof T>(property: K, value: TsType<T[K]['_']['dataType']>, config: {
+    fromProperty<K extends keyof (T & typeof globalCols)>(property: K, value: TsType<(T & typeof globalCols)[K]['_']['dataType']>, config: {
         type: 'count';
         includeArchived?: boolean;
     }): Promise<Result<number>>;
-    fromProperty<K extends keyof T>(property: K, value: TsType<T[K]['_']['dataType']>, config: MultiConfig): StructStream<T, Name> | Promise<Result<StructData<T, Name>[] | StructData<T, Name> | undefined | number, Error>> {
+    fromProperty<K extends keyof (T & typeof globalCols)>(property: K, value: TsType<(T & typeof globalCols)[K]['_']['dataType']>, config: MultiConfig): StructStream<T, Name> | Promise<Result<StructData<T, Name>[] | StructData<T, Name> | undefined | number, Error>> {
         const get = async () => {
             this.apiQuery('from-property', {
                 property: String(property),
