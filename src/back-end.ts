@@ -759,10 +759,12 @@ export class StructData<T extends Blank = any, Name extends string = any> {
             attributes = attributes
                 .filter(i => typeof i === 'string')
                 .filter((v, i, a) => a.indexOf(v) === i);
+            const updated = new Date();
             await this.database.update(this.struct.table).set({
                 attributes: JSON.stringify(attributes),
-                updated: new Date(),
+                updated,
             } as any).where(sql`${this.struct.table.id} = ${this.id}`);
+            Obj
         });
     }
     /**
@@ -794,10 +796,16 @@ export class StructData<T extends Blank = any, Name extends string = any> {
     setUniverse(universe: string) {
         return attemptAsync(async () => {
             this.log('Setting universe', universe);
+            const updated = new Date();
             await this.database.update(this.struct.table).set({
                 universe,
-                updated: new Date(),
+                updated,
             } as any).where(sql`${this.struct.table.id} = ${this.id}`);
+            Object.assign(this.data, {
+                universe,
+                updated
+            });
+            this.struct.emit('update', this);
         });
     }
 
