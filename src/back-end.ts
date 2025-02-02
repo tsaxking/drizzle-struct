@@ -2018,6 +2018,9 @@ export class Struct<T extends Blank = any, Name extends string = any> {
         return attemptAsync(async () => {
             this.log('Clearing data...');
             this.database.delete(this.table).where(sql`true`);
+            if (this.versionTable) {
+                this.database.delete(this.versionTable).where(sql`true`);
+            }
         });
     }
 
