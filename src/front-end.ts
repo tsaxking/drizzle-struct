@@ -947,9 +947,11 @@ export class Struct<T extends Blank> {
                         this.log('Update:', structData);
                         const d = this.cache.get(id);
                         if (d) {
+                            this.log('Data exists, updating');
                             d.set(structData);
                             this.emit('update', d);
                         } else {
+                            this.log('Data does not exist, creating');
                             const d = new StructData(this, structData);
                             this.cache.set(id, d);
                             this.emit('new', d);
@@ -1398,7 +1400,7 @@ export class Struct<T extends Blank> {
      */
     private log(...args: any[]) {
         if (this.data.log) {
-            console.log(this.data.name + ':', ...args);
+            console.log(`[${this.data.name}]`, ...args);
         }
     }
 
