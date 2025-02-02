@@ -319,7 +319,7 @@ type StructEvent<T extends Blank = Blank> = {
     'archive': { id: string; timestamp: number; source: string; };
     'restore': { id: string; timestamp: number; source: string; };
     'set-attributes': { id: string; attributes: string[]; timestamp: number; source: string; };
-    'set-universes': { id: string; universes: string[]; timestamp: number; source: string; };
+    // 'set-universes': { id: string; universes: string[]; timestamp: number; source: string; };
 };
 
 /**
@@ -581,7 +581,10 @@ export class Server {
                         const { universe } = z.object({
                             universe: z.string(),
                         }).parse(args);
-                        stream(s.fromUniverse(universe, {
+                        // stream(s.fromUniverse(universe, {
+                        //     type: 'stream',
+                        // }));
+                        stream(s.fromProperty('universe', universe, {
                             type: 'stream',
                         }));
                     }
@@ -773,10 +776,10 @@ export class Server {
                 emitter.emit('set-attributes', { id: data.id, attributes: data.attributes, timestamp, source: apiKey });
                 break;
             }
-            case 'set-universes': {
-                emitter.emit('set-universes', { id: data.id, universes: data.universes, timestamp, source: apiKey });
-                break;
-            }
+            // case 'set-universes': {
+            //     emitter.emit('set-universes', { id: data.id, universes: data.universes, timestamp, source: apiKey });
+            //     break;
+            // }
             default: {
                 return { status: 400, message: 'Invalid event' };
             }
@@ -1323,9 +1326,9 @@ export class Client {
                                             case 'set-attributes': {
                                                 em.emit('set-attributes', { id: parsed.payload.data.id, attributes: parsed.payload.data.attributes, timestamp: parsed.timestamp, source: 'server', });
                                             } break;
-                                            case 'set-universes': {
-                                                em.emit('set-universes', { id: parsed.payload.data.id, universes: parsed.payload.data.universes, timestamp: parsed.timestamp, source: 'server', });
-                                            } break;
+                                            // case 'set-universes': {
+                                            //     em.emit('set-universes', { id: parsed.payload.data.id, universes: parsed.payload.data.universes, timestamp: parsed.timestamp, source: 'server', });
+                                            // } break;
                                         }
                                     }
     

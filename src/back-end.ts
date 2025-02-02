@@ -175,7 +175,8 @@ export type StructBuilder<T extends Blank, Name extends string> = {
     } & {
         id: () => string;
         attributes: () => string[];
-        universes: () => string[];
+        // universes: () => string[];
+        universe: () => string;
     }>;
     lifetime?: number;
     /**
@@ -189,7 +190,7 @@ export type StructBuilder<T extends Blank, Name extends string> = {
     /**
      * The number of universes the data is allowed to be in, if not set, it defaults to 1
      */
-    universeLimit?: number;
+    // universeLimit?: number;
     // This is so the struct isn't actually permanently in the database, it 'reflects' a different server's data
     // If there are merge conflicts, it will always prioritize the other server's data
     // It will still save in the local database for optimization purposes
@@ -250,7 +251,8 @@ export const globalCols = {
     created: timestamp<'created', 'string'>('created').notNull(),
     updated: timestamp<'updated', 'string'>('updated').notNull(),
     archived: boolean<'archived'>('archived').default(false).notNull(),
-    universes: text('universes').notNull(),
+    // universes: text('universes').notNull(),
+    universe: text('universe').notNull(),
     attributes: text('attributes').notNull(),
     lifetime: integer('lifetime').notNull(),
     canUpdate: boolean<'can_update'>('can_update').default(true).notNull(),
@@ -568,6 +570,10 @@ export class StructData<T extends Blank = any, Name extends string = any> {
         return this.data.canUpdate;
     }
 
+    get unvierse() {
+        return this.data.universe;
+    }
+
     /**
      * Updates the data, this will emit an update event. If there is a version table, it will also make a version of the data of the state before the update
      *
@@ -603,7 +609,8 @@ export class StructData<T extends Blank = any, Name extends string = any> {
             delete newData.created;
             delete newData.updated;
             delete newData.archived;
-            delete newData.universes;
+            // delete newData.universes;
+            delete newData.universe;
             delete newData.attributes;
             delete newData.lifetime;
             await this.database.update(this.struct.table).set({
@@ -783,62 +790,72 @@ export class StructData<T extends Blank = any, Name extends string = any> {
         });
     }
 
-    /**
-     * Returns an array of universe Ids
-     *
-     * @returns {*} 
-     */
-    getUniverses() {
-        return attempt(() => {
-            const a = JSON.parse(this.data.universes);
-            if (!Array.isArray(a)) throw new DataError(this.struct, 'Universes must be an array');
-            if (!a.every(i => typeof i === 'string')) throw new DataError(this.struct, 'Universes must be an array of strings');
-            return a;
-        });
-    }
-    /**
-     * Sets the universes
-     *
-     * @param {string[]} universes 
-     * @returns {*} 
-     */
-    setUniverses(universes: string[]) {
+    setUniverse(universe: string) {
         return attemptAsync(async () => {
-            this.log('Setting universes', universes);
-            universes = universes
-                .filter(i => typeof i === 'string')
-                .filter((v, i, a) => a.indexOf(v) === i);
+            this.log('Setting universe', universe);
             await this.database.update(this.struct.table).set({
-                universes: JSON.stringify(universes),
+                universe,
                 updated: new Date(),
             } as any).where(sql`${this.struct.table.id} = ${this.id}`);
         });
     }
-    /**
-     * Removes universes
-     *
-     * @param {...string[]} universes 
-     * @returns {*} 
-     */
-    removeUniverses(...universes: string[]) {
-        return attemptAsync(async () => {
-            const a = this.getUniverses().unwrap();
-            const newUniverses = a.filter(i => !universes.includes(i));
-            return (await this.setUniverses(newUniverses)).unwrap()
-        });
-    }
-    /**
-     * Adds universes
-     *
-     * @param {...string[]} universes 
-     * @returns {*} 
-     */
-    addUniverses(...universes: string[]) {
-        return attemptAsync(async () => {
-            const a = this.getUniverses().unwrap();
-            return (await this.setUniverses([...a, ...universes])).unwrap()
-        });
-    }
+
+    // /**
+    //  * Returns an array of universe Ids
+    //  *
+    //  * @returns {*} 
+    //  */
+    // getUniverses() {
+    //     return attempt(() => {
+    //         const a = JSON.parse(this.data.universes);
+    //         if (!Array.isArray(a)) throw new DataError(this.struct, 'Universes must be an array');
+    //         if (!a.every(i => typeof i === 'string')) throw new DataError(this.struct, 'Universes must be an array of strings');
+    //         return a;
+    //     });
+    // }
+    // /**
+    //  * Sets the universes
+    //  *
+    //  * @param {string[]} universes 
+    //  * @returns {*} 
+    //  */
+    // setUniverses(universes: string[]) {
+    //     return attemptAsync(async () => {
+    //         this.log('Setting universes', universes);
+    //         universes = universes
+    //             .filter(i => typeof i === 'string')
+    //             .filter((v, i, a) => a.indexOf(v) === i);
+    //         await this.database.update(this.struct.table).set({
+    //             universes: JSON.stringify(universes),
+    //             updated: new Date(),
+    //         } as any).where(sql`${this.struct.table.id} = ${this.id}`);
+    //     });
+    // }
+    // /**
+    //  * Removes universes
+    //  *
+    //  * @param {...string[]} universes 
+    //  * @returns {*} 
+    //  */
+    // removeUniverses(...universes: string[]) {
+    //     return attemptAsync(async () => {
+    //         const a = this.getUniverses().unwrap();
+    //         const newUniverses = a.filter(i => !universes.includes(i));
+    //         return (await this.setUniverses(newUniverses)).unwrap()
+    //     });
+    // }
+    // /**
+    //  * Adds universes
+    //  *
+    //  * @param {...string[]} universes 
+    //  * @returns {*} 
+    //  */
+    // addUniverses(...universes: string[]) {
+    //     return attemptAsync(async () => {
+    //         const a = this.getUniverses().unwrap();
+    //         return (await this.setUniverses([...a, ...universes])).unwrap()
+    //     });
+    // }
 
     /**
      * Returns a safe object of the data, omitting columns that you want removed.
@@ -1474,7 +1491,8 @@ export class Struct<T extends Blank = any, Name extends string = any> {
                 created: new Date(),
                 updated: new Date(),
                 archived: false,
-                universes: JSON.stringify(this.data.generators?.universes?.() ?? []),
+                // universes: JSON.stringify(this.data.generators?.universes?.() ?? []),
+                universe: this.data.generators?.universe?.() ?? '',
                 attributes: JSON.stringify(this.data.generators?.attributes?.() ?? []),
                 lifetime: this.data.lifetime || 0,
                 canUpdate: !config.static,
@@ -1882,82 +1900,82 @@ export class Struct<T extends Blank = any, Name extends string = any> {
         }
     }
 
-    fromUniverse(universe: string, config: {
-        type: 'stream';
-        limit?: number;
-        offset?: number;
-        includeArchived?: boolean;
-    }): StructStream<T, Name>;
-    fromUniverse(universe: string, config: {
-        type: 'array';
-        limit: number;
-        offset: number;
-        includeArchived?: boolean;
-    }): Promise<Result<StructData<T, Name>[], Error>>;
-    fromUniverse(universe: string, config: {
-        type: 'single';
-        includeArchived?: boolean;
-    }): Promise<Result<StructData<T, Name> | undefined, Error>>;
-    fromUniverse(universe: string, config: {
-        type: 'count';
-        includeArchived?: boolean;
-    }): Promise<Result<number>>;
-    fromUniverse(universe: string, config: MultiConfig): StructStream<T, Name> | Promise<Result<StructData<T, Name>[] | undefined | StructData<T, Name> | number, Error>> {
-        const get = async () => {
-            this.apiQuery('from-universe', {
-                universe,
-            });
+    // fromUniverse(universe: string, config: {
+    //     type: 'stream';
+    //     limit?: number;
+    //     offset?: number;
+    //     includeArchived?: boolean;
+    // }): StructStream<T, Name>;
+    // fromUniverse(universe: string, config: {
+    //     type: 'array';
+    //     limit: number;
+    //     offset: number;
+    //     includeArchived?: boolean;
+    // }): Promise<Result<StructData<T, Name>[], Error>>;
+    // fromUniverse(universe: string, config: {
+    //     type: 'single';
+    //     includeArchived?: boolean;
+    // }): Promise<Result<StructData<T, Name> | undefined, Error>>;
+    // fromUniverse(universe: string, config: {
+    //     type: 'count';
+    //     includeArchived?: boolean;
+    // }): Promise<Result<number>>;
+    // fromUniverse(universe: string, config: MultiConfig): StructStream<T, Name> | Promise<Result<StructData<T, Name>[] | undefined | StructData<T, Name> | number, Error>> {
+        // const get = async () => {
+        //     this.apiQuery('from-universe', {
+        //         universe,
+        //     });
 
-            // const squeal = sql`${this.table.universes} @> ${universe} AND ${config.includeArchived ? sql`1 = 1` : sql`${this.table.archived} = ${false}`}`;
-            let squeal: SQL;
-            if (config.includeArchived) {
-                squeal = sql`${this.table.universes} @> ${universe}`;
-            } else {
-                squeal = sql`${this.table.universes} @> ${universe} AND ${this.table.archived} = ${false}`;
-            }
+        //     // const squeal = sql`${this.table.universes} @> ${universe} AND ${config.includeArchived ? sql`1 = 1` : sql`${this.table.archived} = ${false}`}`;
+        //     let squeal: SQL;
+        //     if (config.includeArchived) {
+        //         squeal = sql`${this.table.universes} @> ${universe}`;
+        //     } else {
+        //         squeal = sql`${this.table.universes} @> ${universe} AND ${this.table.archived} = ${false}`;
+        //     }
 
-            if (config.type === 'count') {
-                const res = await this.database.select({
-                    count: count(),
-                }).from(this.table).where(squeal);
-                return res[0].count;
-            }
+        //     if (config.type === 'count') {
+        //         const res = await this.database.select({
+        //             count: count(),
+        //         }).from(this.table).where(squeal);
+        //         return res[0].count;
+        //     }
 
-            if (config.type === 'single') {
-                return (await this.database.select().from(this.table).where(squeal))[0];
-            }
+        //     if (config.type === 'single') {
+        //         return (await this.database.select().from(this.table).where(squeal))[0];
+        //     }
 
-            const { offset, limit } = config;
-            if (offset && limit) {
-                return this.database.select().from(this.table).where(squeal).offset(offset).limit(limit);
-            } else {
-                return this.database.select().from(this.table).where(squeal);
-            }
-        }
+        //     const { offset, limit } = config;
+        //     if (offset && limit) {
+        //         return this.database.select().from(this.table).where(squeal).offset(offset).limit(limit);
+        //     } else {
+        //         return this.database.select().from(this.table).where(squeal);
+        //     }
+        // }
 
-        if (config.type === 'stream') {
-            const stream = new StructStream(this);
-            (async () => {
-                const dataStream = await get() as Structable<T & typeof globalCols>[];
-                for (let i = 0; i < dataStream.length; i++) {
-                    stream.add(this.Generator(dataStream[i] as any));
-                }
-                stream.end();
-            })();
-            return stream;
-        } else {
-            return attemptAsync(async () => {
-                const data = await get() as Structable<T & typeof globalCols>[] | Structable<T & typeof globalCols> | number;
-                if (Array.isArray(data)) {
-                    return data.map(d => this.Generator(d));
-                } else if (typeof data === 'object') {
-                    return this.Generator(data);
-                } else {
-                    return data;
-                }
-            });
-        }
-    }
+        // if (config.type === 'stream') {
+        //     const stream = new StructStream(this);
+        //     (async () => {
+        //         const dataStream = await get() as Structable<T & typeof globalCols>[];
+        //         for (let i = 0; i < dataStream.length; i++) {
+        //             stream.add(this.Generator(dataStream[i] as any));
+        //         }
+        //         stream.end();
+        //     })();
+        //     return stream;
+        // } else {
+        //     return attemptAsync(async () => {
+        //         const data = await get() as Structable<T & typeof globalCols>[] | Structable<T & typeof globalCols> | number;
+        //         if (Array.isArray(data)) {
+        //             return data.map(d => this.Generator(d));
+        //         } else if (typeof data === 'object') {
+        //             return this.Generator(data);
+        //         } else {
+        //             return data;
+        //         }
+        //     });
+        // }
+    // }
 
     /**
      * Deletes all data from the struct

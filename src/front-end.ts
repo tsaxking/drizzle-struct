@@ -215,7 +215,7 @@ export type StatusMessage<T = void> = {
 export type VersionStructable<T extends Blank> = Structable<{
     vhId: 'string';
     vhCreated: 'date';
-}> & PartialStructable<T> & Structable<GlobalCols>;
+}> & PartialStructable<T & GlobalCols>;
 
 /**
  * Version history point of a data.
@@ -231,12 +231,12 @@ export class StructDataVersion<T extends Blank> {
      *
      * @constructor
      * @param {Struct<T>} struct 
-     * @param {PartialStructable<T> & Structable<GlobalCols> & Structable<{
+     * @param {PartialStructable<T & GlobalCols & {
      *         vhId: 'string';
      *         vhCreated: 'date';
      *     }>} data 
      */
-    constructor(public readonly struct: Struct<T>, public readonly data: PartialStructable<T> & Structable<GlobalCols> & Structable<{
+    constructor(public readonly struct: Struct<T>, public readonly data: PartialStructable<T & GlobalCols & {
         vhId: 'string';
         vhCreated: 'date';
     }>) {}
@@ -348,17 +348,17 @@ export class StructDataVersion<T extends Blank> {
  * @class StructData
  * @typedef {StructData}
  * @template {Blank} T 
- * @implements {Writable<PartialStructable<T> & Structable<GlobalCols>>}
+ * @implements {Writable<PartialStructable<T & GlobalCols>>}
  */
-export class StructData<T extends Blank> implements Writable< PartialStructable<T> & Structable<GlobalCols>> {
+export class StructData<T extends Blank> implements Writable< PartialStructable<T & GlobalCols>> {
     /**
      * Creates an instance of StructData.
      *
      * @constructor
      * @param {Struct<T>} struct 
-     * @param {(PartialStructable<T> & Structable<GlobalCols>)} data 
+     * @param {(PartialStructable<T & GlobalCols>)} data 
      */
-    constructor(public readonly struct: Struct<T>, public data: PartialStructable<T> & Structable<GlobalCols>) {}
+    constructor(public readonly struct: Struct<T>, public data: PartialStructable<T> & PartialStructable<GlobalCols>) {}
 
     /**
      * Svelte store subscribers, used to automatically update the view
@@ -366,16 +366,16 @@ export class StructData<T extends Blank> implements Writable< PartialStructable<
      * @private
      * @type {*}
      */
-    private subscribers = new Set<(value: PartialStructable<T> & Structable<GlobalCols>) => void>();
+    private subscribers = new Set<(value: PartialStructable<T & GlobalCols>) => void>();
 
     /**
      * Subscribe to the data
      *
      * @public
-     * @param {(value:  PartialStructable<T> & Structable<GlobalCols>) => void} fn 
+     * @param {(value:  PartialStructable<T & GlobalCols>) => void} fn 
      * @returns {() => void} 
      */
-    public subscribe(fn: (value:  PartialStructable<T> & Structable<GlobalCols>) => void): () => void {
+    public subscribe(fn: (value:  PartialStructable<T & GlobalCols>) => void): () => void {
         this.subscribers.add(fn);
         fn(this.data);
         return () => {
@@ -388,9 +388,9 @@ export class StructData<T extends Blank> implements Writable< PartialStructable<
      * Sets the data and updates the subscribers, this will not update the backend
      *
      * @public
-     * @param {(PartialStructable<T> & Structable<GlobalCols>)} value 
+     * @param {(PartialStructable<T & GlobalCols>)} value 
      */
-    public set(value: PartialStructable<T> & Structable<GlobalCols>): void {
+    public set(value: PartialStructable<T & GlobalCols>): void {
         this.data = value;
         this.subscribers.forEach((fn) => fn(value));
     }
@@ -401,12 +401,12 @@ export class StructData<T extends Blank> implements Writable< PartialStructable<
      *
      * @public
      * @async
-     * @param {(value: PartialStructable<T> & Structable<GlobalCols>) => PartialStructable<T> & Structable<{
+     * @param {(value: PartialStructable<T & GlobalCols>) => PartialStructable<T & {
      *         id: 'string';
      *     }>} fn 
-     * @returns {(PartialStructable<T> & Structable<{ id: "string"; }>) => unknown)} 
+     * @returns {(PartialStructable<T & { id: "string"; }>) => unknown)} 
      */
-    public async update(fn: (value: PartialStructable<T> & Structable<GlobalCols>) => PartialStructable<T> & Structable<{
+    public async update(fn: (value: PartialStructable<T & GlobalCols>) => PartialStructable<T & {
         id: 'string';
     }>) {
         return attemptAsync(async () => {
@@ -507,19 +507,19 @@ export class StructData<T extends Blank> implements Writable< PartialStructable<
         return w;
     }
 
-    /**
-     * Retrieves all universes the data is in
-     *
-     * @returns {*} 
-     */
-    getUniverses() {
-        return attempt(() => {
-            const a = JSON.parse(this.data.universes);
-            if (!Array.isArray(a)) throw new DataError('Universes must be an array');
-            if (!a.every(i => typeof i === 'string')) throw new DataError('Universes must be an array of strings');
-            return a;
-        });
-    }
+    // /**
+    //  * Retrieves all universes the data is in
+    //  *
+    //  * @returns {*} 
+    //  */
+    // getUniverses() {
+    //     return attempt(() => {
+    //         const a = JSON.parse(this.data.universes);
+    //         if (!Array.isArray(a)) throw new DataError('Universes must be an array');
+    //         if (!a.every(i => typeof i === 'string')) throw new DataError('Universes must be an array of strings');
+    //         return a;
+    //     });
+    // }
     // addUniverses(...universes: string[]) {}
     // removeUniverses(...universes: string[]) {}
     // setUniverses(...universes: string[]) {}
@@ -531,7 +531,7 @@ export class StructData<T extends Blank> implements Writable< PartialStructable<
      */
     getAttributes() {
         return attempt(() => {
-            const a = JSON.parse(this.data.attributes);
+            const a = JSON.parse(this.data.attributes || '[]');
             if (!Array.isArray(a)) throw new DataError('Attributes must be an array');
             if (!a.every(i => typeof i === 'string')) throw new DataError('Attributes must be an array of strings');
             return a;
@@ -756,7 +756,8 @@ export type GlobalCols = {
     created: 'string';
     updated: 'string';
     archived: 'boolean';
-    universes: 'string';
+    universe: 'string';
+    // universes: 'string';
     attributes: 'string';
     lifetime: 'number';
     canUpdate: 'boolean';
@@ -893,12 +894,14 @@ export class Struct<T extends Blank> {
                 }
                 const { event, data: structData } = data as { 
                     event: 'create' | 'update' | 'archive' | 'delete' | 'restore'; 
-                    data:  PartialStructable<T> & Structable<GlobalCols>; 
+                    data:  PartialStructable<T & GlobalCols>; 
                 };
                 const { id } = structData;
 
                 this.log('Event:', event);
                 this.log('Data:', structData);
+
+                if (!id) throw new Error('Data must have an id');
                 
                 match(event)
                     .case('archive', () => {
@@ -957,12 +960,15 @@ export class Struct<T extends Blank> {
     /**
      * Generates a new StructData or returns the cached version, if exists
      *
-     * @param {(PartialStructable<T> & Structable<GlobalCols>)} data 
+     * @param {(PartialStructable<T & GlobalCols>)} data 
      * @returns {StructData<T>} 
      */
-    Generator(data: PartialStructable<T> & Structable<GlobalCols>): StructData<T> {
-        if (this.cache.has(data.id)) {
-            return this.cache.get(data.id) as StructData<T>;
+    Generator(data: PartialStructable<T & GlobalCols>): StructData<T> {
+        if (Object.hasOwn(data, 'id')) {
+            const id = (data as { id: string; }).id;
+            if (this.cache.has(id)) {
+                return this.cache.get(id) as StructData<T>;
+            }
         }
 
         // TODO: Data validation
@@ -979,9 +985,9 @@ export class Struct<T extends Blank> {
      * Validates the data
      *
      * @param {unknown} data 
-     * @returns {(data is PartialStructable<T> & Structable<GlobalCols>)} 
+     * @returns {(data is PartialStructable<T & GlobalCols>)} 
      */
-    validate(data: unknown): data is PartialStructable<T> & Structable<GlobalCols> {
+    validate(data: unknown): data is PartialStructable<T & GlobalCols> {
         if (typeof data !== 'object' || data === null) return false;
         for (const key in data) {
             if (!Object.hasOwn(this.data.structure, key)) return false;
