@@ -764,7 +764,11 @@ export class StructData<T extends Blank = any, Name extends string = any> {
                 attributes: JSON.stringify(attributes),
                 updated,
             } as any).where(sql`${this.struct.table.id} = ${this.id}`);
-            Obj
+            Object.assign(this.data, {
+                attributes,
+                updated
+            });
+            this.struct.emit('update', this);
         });
     }
     /**
