@@ -614,7 +614,7 @@ export class DataArr<T extends Blank> implements Readable<StructData<T>[]> {
      */
     private apply(value: StructData<T>[]): void {
         this.data = value.filter((v, i, a) => a.findIndex(_v => _v.data.id === v.data.id) === i);
-        this.subscribers.forEach((fn) => fn(value));
+        this.subscribers.forEach((fn) => fn(this.data));
         this.struct.log('Applied Data:', this.data);
     }
 
@@ -1290,7 +1290,7 @@ export class Struct<T extends Blank> {
             arr.remove(d);
         }
         const update = (d: StructData<T>) => {
-            if ((d.data as any)[key] === value) {
+            if ((d.data as any)[key] === value && !arr.data.includes(d)) {
                 arr.add(d);
             } else {
                 arr.remove(d);
