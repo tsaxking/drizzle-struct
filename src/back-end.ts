@@ -1511,7 +1511,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
             const d = this.Generator(newData);
             if (config.emit === false) d.metadata.set('no-emit', true);
             if (config.source) d.metadata.set('source', config.source);
-            this.emitter.emit('create', d);
+            this.emitter.emit('create', newData as any);
 
             return d;
         });
