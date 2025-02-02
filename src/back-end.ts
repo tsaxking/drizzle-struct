@@ -1471,7 +1471,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
      *     }} [config] 
      * @returns {*} 
      */
-    new(data: Structable<T>, config: {
+    new(data: Structable<T> & Partial<Structable<typeof globalCols>>, config: {
         emit?: boolean;
         overwriteGlobals?: boolean;
         source?: string;
