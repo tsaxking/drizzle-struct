@@ -2698,7 +2698,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
                 await fs.promises.mkdir(dir, { recursive: true });
             }
 
-            const file = `${this.name}${new Date().toISOString()}.backupv1`;
+            const file = `${this.name}-${new Date().toISOString()}.backupv1`;
             this.log('Backing up:', file);
             const ws = fs.createWriteStream(path.join(dir, file));
 
