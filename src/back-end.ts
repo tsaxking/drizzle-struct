@@ -2710,7 +2710,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 
             await fs.promises.writeFile(
                 file,
-                JSON.stringify(data),
+                JSON.stringify(data.map(d => d.data)),
             );
 
             // const stream = this.all({
