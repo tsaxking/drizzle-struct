@@ -2720,6 +2720,13 @@ export class Struct<T extends Blank = any, Name extends string = any> {
             await stream.pipe(d => {
                 ws.write(encode(JSON.stringify(d.data, (self, val) => {
                     if (val instanceof Date) return val.toISOString();
+                    // if is json
+                    try {
+                        JSON.parse(val);
+                        return '[JSON]:' + val;
+                    } catch {
+                        // do nothing
+                    }
                     return val;
                 })) + '\n');
             });
@@ -2750,6 +2757,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
                                 if (val.match(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}.\d{3}Z$/)) {
                                     return new Date(val);
                                 }
+                                if (val.startsWith('[JSON]:')) return val.slice(7);
                             }
                             return val;
                         });
