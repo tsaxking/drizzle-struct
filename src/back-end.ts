@@ -1505,6 +1505,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
         overwriteGlobals?: boolean;
         source?: string;
         static?: boolean;
+        overwriteGenerators?: boolean;
     } = {
         emit: true,
         overwriteGlobals: false,
@@ -1533,10 +1534,10 @@ export class Struct<T extends Blank = any, Name extends string = any> {
             }
             const newData: Structable<T & typeof globalCols> = {
                 ...data,
-                ...(Object.fromEntries(Object.entries(this.data.generators || {})
+                ...(config?.overwriteGenerators ? Object.fromEntries(Object.entries(this.data.generators || {})
                     // Only do generators that are not global cols, those have already been set at this point
                     .filter(([k]) => !Object.keys(globalCols).includes(k))
-                    .map(([k, v]) => ([k, v()]))) as any),
+                    .map(([k, v]) => ([k, v()]))) as any : {}),
                 ...(!config?.overwriteGlobals ? globals : {}),
             };
 
@@ -2768,6 +2769,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
                         }
                         await this.new(data as any, {
                             overwriteGlobals: true,
+                            overwriteGenerators: true,
                         });
                     } catch (err) {
                         console.error(err);
@@ -2778,56 +2780,6 @@ export class Struct<T extends Blank = any, Name extends string = any> {
             });
         });
     }
-
-    // backup(dir: string) {
-    //     return attemptAsync(async () => {
-    //         if (!fs.existsSync(dir)) {
-    //             await fs.promises.mkdir(dir, { recursive: true });
-    //         }
-    
-    //         const file = `${this.name}-${new Date().toISOString()}.backupv1`;
-    //         this.log('Backing up:', file);
-    //         const ws = fs.createWriteStream(path.join(dir, file));
-            
-    //         const writeObject = (obj: unknown) => {
-    //             ws.write(msgpack.encode(obj).toString() + '\n'); // Base64 prevents delimiter issues
-    //         };
-    
-    //         const stream = this.all({ type: 'stream' });
-    
-    //         await stream.pipe(d => {
-    //             writeObject(d.data);
-    //         });
-    
-    //         ws.end();
-    //     });
-    // }
-    
-
-    // restore(fullBackupPath: string) {
-    //     return attemptAsync(async () => {
-    //         const stream = readline.createInterface({
-    //             input: fs.createReadStream(fullBackupPath),
-    //             crlfDelay: Infinity,
-    //         });
-
-    //         for await (const line of stream) {
-    //             try {
-    //                 const obj = msgpack.decode(Buffer.from(line, 'utf-8'));
-    //                 const validateRes = this.validate(obj);
-    //                 if (!validateRes.success) {
-    //                     console.error('Invalid data:', validateRes.reason);
-    //                     continue;
-    //                 }
-    //                 this.new(obj as any, {
-    //                     overwriteGlobals: true,
-    //                 });
-    //             } catch (err) {
-    //                 console.error(err);
-    //             }
-    //         }
-    //     });
-    // }
 }
 
 /**
