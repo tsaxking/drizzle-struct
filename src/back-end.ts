@@ -2706,11 +2706,9 @@ export class Struct<T extends Blank = any, Name extends string = any> {
                 type: 'stream',
             });
 
-            stream.pipe(d => {
+            await stream.pipe(d => {
                 ws.write(encode(JSON.stringify(d.data)) + '\n');
             });
-
-            await stream.await();
 
             ws.end();
         });
