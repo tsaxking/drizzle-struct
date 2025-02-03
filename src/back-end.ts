@@ -2722,11 +2722,13 @@ export class Struct<T extends Blank = any, Name extends string = any> {
                 ws.write(encode(JSON.stringify(d.data, (self, val) => {
                     if (val instanceof Date) return val.toISOString();
                     // if is json
-                    try {
-                        JSON.parse(val);
-                        return '[JSON]:' + val;
-                    } catch {
-                        // do nothing
+                    if (typeof val === 'string') {
+                        try {
+                            JSON.parse(val);
+                            return '[JSON]:' + val;
+                        } catch {
+                            // do nothing
+                        }
                     }
                     return val;
                 })) + '\n');
