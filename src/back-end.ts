@@ -2764,7 +2764,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
                         });
                         const res = this.validate(data);
                         if (!res.success) {
-                            console.error('Invalid data:', res.reason);
+                            console.error('Invalid data:', res.reason, data);
                             return;
                         }
                         await this.new(data as any, {
