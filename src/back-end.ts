@@ -2720,7 +2720,6 @@ export class Struct<T extends Blank = any, Name extends string = any> {
             await stream.pipe(d => {
                 ws.write(encode(JSON.stringify(d.data, (self, val) => {
                     if (val instanceof Date) return val.toISOString();
-                    if (typeof val === 'bigint') return val.toString() + 'n';
                     return val;
                 })) + '\n');
             });
@@ -2750,10 +2749,6 @@ export class Struct<T extends Blank = any, Name extends string = any> {
                                 // if date
                                 if (val.match(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}.\d{3}Z$/)) {
                                     return new Date(val);
-                                }
-                                // if bigint
-                                if (val.match(/^\d+n$/)) {
-                                    return BigInt(val.slice(0, -1));
                                 }
                             }
                             return val;
