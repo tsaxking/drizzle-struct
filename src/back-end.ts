@@ -18,8 +18,8 @@ import path from 'path';
 import fs from 'fs';
 import chalk from 'chalk';
 import { encode, decode } from 'ts-utils/text';
-import msgpack from '@msgpack/msgpack';
 import readline from 'readline';
+import { sleep } from 'ts-utils/sleep';
 
 /**
  * Error thrown for invalid struct state
@@ -2718,22 +2718,27 @@ export class Struct<T extends Blank = any, Name extends string = any> {
             });
 
             const ws = fs.createWriteStream(path.join(dir, file));
+            const promises: Promise<void>[] = [];
             await stream.pipe(d => {
-                ws.write(encode(JSON.stringify(d.data, (self, val) => {
-                    if (val instanceof Date) return val.toISOString();
-                    // if is json
-                    if (typeof val === 'string') {
-                        try {
-                            JSON.parse(val);
-                            return '[JSON]:' + val;
-                        } catch {
-                            // do nothing
+                promises.push(new Promise<void>((res) => {
+                    ws.write(encode(JSON.stringify(d.data, (self, val) => {
+                        if (val instanceof Date) return val.toISOString();
+                        // if is json
+                        if (typeof val === 'string') {
+                            try {
+                                JSON.parse(val);
+                                return '[JSON]:' + val;
+                            } catch {
+                                // do nothing
+                            }
                         }
-                    }
-                    return val;
-                })) + '\n');
+                        return val;
+                    })) + '\n');
+                    sleep(1).then(() => res());
+                }));
             });
 
+            await Promise.all(promises);
             ws.end();
         });
     }
@@ -2769,10 +2774,10 @@ export class Struct<T extends Blank = any, Name extends string = any> {
                             console.error('Invalid data:', res.reason, data);
                             return;
                         }
-                        await this.new(data as any, {
+                        (await this.new(data as any, {
                             overwriteGlobals: true,
                             overwriteGenerators: true,
-                        });
+                        })).unwrap();
                     } catch (err) {
                         console.error(err);
                     }
