@@ -18,6 +18,8 @@ import path from 'path';
 import fs from 'fs';
 import chalk from 'chalk';
 import { encode, decode } from 'ts-utils/text';
+import msgpack from '@msgpack/msgpack';
+import readline from 'readline';
 
 /**
  * Error thrown for invalid struct state
@@ -2692,80 +2694,136 @@ export class Struct<T extends Blank = any, Name extends string = any> {
         });
     }
 
+    // backup(dir: string) {
+    //     return attemptAsync(async () => {
+    //         if (!fs.existsSync(dir)) {
+    //             await fs.promises.mkdir(dir, { recursive: true });
+    //         }
+
+    //         const file = `${this.name}-${new Date().toISOString()}.backupv1`;
+    //         this.log('Backing up:', file);
+    //         const ws = fs.createWriteStream(path.join(dir, file));
+
+    //         const stream = this.all({
+    //             type: 'stream',
+    //         });
+
+    //         await stream.pipe(d => {
+    //             ws.write(encode(JSON.stringify(d.data)) + '\n');
+    //         });
+
+    //         ws.end();
+    //     });
+    // }
+
+    // restore(fullBackupPath: string) {
+    //     return attemptAsync(async () => {
+    //         (await this.backup(path.dirname(fullBackupPath))).unwrap();
+    //         (await this.clear()).unwrap();
+    //         this.log('Restoring:', fullBackupPath);
+
+    //         const dir = path.dirname(fullBackupPath);
+
+    //         const files = fs.readdirSync(dir);
+
+    //         // Assuming the backup file is the most recent one
+    //         const backupFile = files
+    //             .filter(file => file.endsWith('.backupv1'))
+    //             .sort()
+    //             .pop();  // Get the most recent backup file
+
+    //         if (!backupFile) {
+    //             throw new Error('No backup files found.');
+    //         }
+
+    //         const filePath = path.join(dir, backupFile);
+    //         const fileStream = fs.createReadStream(filePath, { encoding: 'utf-8' });
+
+    //         let buffer = '';
+
+    //         // Read and process each line
+    //         fileStream.on('data', (chunk) => {
+    //             buffer += chunk;
+    //             let boundary = buffer.indexOf('\n');
+    //             while (boundary !== -1) {
+    //                 const line = buffer.substring(0, boundary);
+    //                 buffer = buffer.substring(boundary + 1);
+    //                 try {
+    //                     const data = JSON.parse(decode(line));
+
+    //                     const validateRes = this.validate(data);
+    //                     if (!validateRes.success) {
+    //                         console.error('Invalid data:', validateRes.reason);
+    //                         continue;
+    //                     }
+
+    //                     this.new(data, {
+    //                         overwriteGlobals: true,
+    //                     });
+
+    //                     boundary = buffer.indexOf('\n');
+    //                 } catch (error) {
+    //                     console.error(error);
+    //                 }
+    //             }
+    //         });
+
+    //         await new Promise<void>((resolve, reject) => {
+    //             fileStream.on('end', resolve);
+    //             fileStream.on('error', reject);
+    //         });
+
+    //         this.log('Restore completed.');
+    //     });
+    // }
+
     backup(dir: string) {
         return attemptAsync(async () => {
             if (!fs.existsSync(dir)) {
                 await fs.promises.mkdir(dir, { recursive: true });
             }
-
+    
             const file = `${this.name}-${new Date().toISOString()}.backupv1`;
             this.log('Backing up:', file);
             const ws = fs.createWriteStream(path.join(dir, file));
-
-            const stream = this.all({
-                type: 'stream',
-            });
-
+            
+            const writeObject = (obj: unknown) => {
+                ws.write(msgpack.encode(obj).toString() + '\n'); // Base64 prevents delimiter issues
+            };
+    
+            const stream = this.all({ type: 'stream' });
+    
             await stream.pipe(d => {
-                ws.write(encode(JSON.stringify(d.data)) + '\n');
+                writeObject(d.data);
             });
-
+    
             ws.end();
         });
     }
+    
 
     restore(fullBackupPath: string) {
         return attemptAsync(async () => {
-            (await this.backup(path.dirname(fullBackupPath))).unwrap();
-            (await this.clear()).unwrap();
-            this.log('Restoring:', fullBackupPath);
+            const stream = readline.createInterface({
+                input: fs.createReadStream(fullBackupPath),
+                crlfDelay: Infinity,
+            });
 
-            const dir = path.dirname(fullBackupPath);
-
-            const files = fs.readdirSync(dir);
-
-            // Assuming the backup file is the most recent one
-            const backupFile = files
-                .filter(file => file.endsWith('.backupv1'))
-                .sort()
-                .pop();  // Get the most recent backup file
-
-            if (!backupFile) {
-                throw new Error('No backup files found.');
-            }
-
-            const filePath = path.join(dir, backupFile);
-            const fileStream = fs.createReadStream(filePath, { encoding: 'utf-8' });
-
-            let buffer = '';
-
-            // Read and process each line
-            fileStream.on('data', (chunk) => {
-                buffer += chunk;
-                let boundary = buffer.indexOf('\n');
-                while (boundary !== -1) {
-                    const line = buffer.substring(0, boundary);
-                    buffer = buffer.substring(boundary + 1);
-                    try {
-                        const data = JSON.parse(decode(line));
-
-                        this.new(data, {
-                            overwriteGlobals: true,
-                        });
-
-                        boundary = buffer.indexOf('\n');
-                    } catch (error) {
-                        console.error(error);
+            for await (const line of stream) {
+                try {
+                    const obj = msgpack.decode(Buffer.from(line, 'utf-8'));
+                    const validateRes = this.validate(obj);
+                    if (!validateRes.success) {
+                        console.error('Invalid data:', validateRes.reason);
+                        continue;
                     }
+                    this.new(obj as any, {
+                        overwriteGlobals: true,
+                    });
+                } catch (err) {
+                    console.error(err);
                 }
-            });
-
-            await new Promise<void>((resolve, reject) => {
-                fileStream.on('end', resolve);
-                fileStream.on('error', reject);
-            });
-
-            this.log('Restore completed.');
+            }
         });
     }
 }
