@@ -2718,7 +2718,11 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 
             const ws = fs.createWriteStream(path.join(dir, file));
             await stream.pipe(d => {
-                ws.write(encode(JSON.stringify(d.data)) + '\n');
+                ws.write(encode(JSON.stringify(d.data, (self, val) => {
+                    if (val instanceof Date) return val.toISOString();
+                    if (typeof val === 'bigint') return val.toString() + 'n';
+                    return val;
+                })) + '\n');
             });
 
             ws.end();
@@ -2741,7 +2745,19 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 
                 rl.on('line', async line => {
                     try {
-                        const data = JSON.parse(decode(line));
+                        const data = JSON.parse(decode(line), (self, val) => {
+                            if (typeof val === 'string') {
+                                // if date
+                                if (val.match(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}.\d{3}Z$/)) {
+                                    return new Date(val);
+                                }
+                                // if bigint
+                                if (val.match(/^\d+n$/)) {
+                                    return BigInt(val.slice(0, -1));
+                                }
+                            }
+                            return val;
+                        });
                         const res = this.validate(data);
                         if (!res.success) {
                             console.error('Invalid data:', res.reason);
