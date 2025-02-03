@@ -2725,53 +2725,38 @@ export class Struct<T extends Blank = any, Name extends string = any> {
         });
     }
 
-    restore(fullBackupPath: string) {
+    restore(file: string) {
         return attemptAsync(async () => {
-            (await this.backup(path.dirname(fullBackupPath))).unwrap();
+            (await this.backup(path.dirname(file))).unwrap();
             (await this.clear()).unwrap();
-            this.log('Restoring:', fullBackupPath);
+            return new Promise<void>((res, rej) => {
+                this.log('Restoring:', file);
 
-            const dir = path.dirname(fullBackupPath);
+                const filestream = fs.createReadStream(file);
 
-            const files = fs.readdirSync(dir);
+                const rl = readline.createInterface({
+                    input: filestream,
+                    crlfDelay: Infinity,
+                });
 
-            const fileStream = fs.createReadStream(fullBackupPath, { encoding: 'utf-8' });
-
-            let buffer = '';
-
-            // Read and process each line
-            fileStream.on('data', (chunk) => {
-                buffer += chunk;
-                let boundary = buffer.indexOf('\n');
-                while (boundary !== -1) {
-                    const line = buffer.substring(0, boundary);
-                    buffer = buffer.substring(boundary + 1);
+                rl.on('line', async line => {
                     try {
                         const data = JSON.parse(decode(line));
-
-                        const validateRes = this.validate(data);
-                        if (!validateRes.success) {
-                            console.error('Invalid data:', validateRes.reason);
-                            continue;
+                        const res = this.validate(data);
+                        if (!res.success) {
+                            console.error('Invalid data:', res.reason);
+                            return;
                         }
-
-                        this.new(data, {
+                        await this.new(data as any, {
                             overwriteGlobals: true,
                         });
-
-                        boundary = buffer.indexOf('\n');
-                    } catch (error) {
-                        console.error(error);
+                    } catch (err) {
+                        console.error(err);
                     }
-                }
-            });
+                });
 
-            await new Promise<void>((resolve, reject) => {
-                fileStream.on('end', resolve);
-                fileStream.on('error', reject);
+                rl.on('close', res);
             });
-
-            this.log('Restore completed.');
         });
     }
 
