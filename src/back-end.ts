@@ -2704,42 +2704,42 @@ export class Struct<T extends Blank = any, Name extends string = any> {
             const file = `${this.name}-${new Date().toISOString()}.backupv1`;
             this.log('Backing up:', file);
 
-            // const data = (await this.all({
-            //     type: 'stream',
-            // }).await()).unwrap();
-
-            // await fs.promises.writeFile(
-            //     file,
-            //     JSON.stringify(data),
-            // );
-
-            const stream = this.all({
+            const data = (await this.all({
                 type: 'stream',
-            });
+            }).await()).unwrap();
 
-            const ws = fs.createWriteStream(path.join(dir, file));
-            const promises: Promise<void>[] = [];
-            await stream.pipe(d => {
-                promises.push(new Promise<void>((res) => {
-                    ws.write(encode(JSON.stringify(d.data, (self, val) => {
-                        if (val instanceof Date) return val.toISOString();
-                        // if is json
-                        if (typeof val === 'string') {
-                            try {
-                                JSON.parse(val);
-                                return '[JSON]:' + val;
-                            } catch {
-                                // do nothing
-                            }
-                        }
-                        return val;
-                    })) + '\n');
-                    sleep(1).then(() => res());
-                }));
-            });
+            await fs.promises.writeFile(
+                file,
+                JSON.stringify(data),
+            );
 
-            await Promise.all(promises);
-            ws.end();
+            // const stream = this.all({
+            //     type: 'stream',
+            // });
+
+            // const ws = fs.createWriteStream(path.join(dir, file));
+            // const promises: Promise<void>[] = [];
+            // await stream.pipe(d => {
+            //     promises.push(new Promise<void>((res) => {
+            //         ws.write(encode(JSON.stringify(d.data, (self, val) => {
+            //             if (val instanceof Date) return val.toISOString();
+            //             // if is json
+            //             if (typeof val === 'string') {
+            //                 try {
+            //                     JSON.parse(val);
+            //                     return '[JSON]:' + val;
+            //                 } catch {
+            //                     // do nothing
+            //                 }
+            //             }
+            //             return val;
+            //         })) + '\n');
+            //         sleep(1).then(() => res());
+            //     }));
+            // });
+
+            // await Promise.all(promises);
+            // ws.end();
         });
     }
 
@@ -2747,44 +2747,65 @@ export class Struct<T extends Blank = any, Name extends string = any> {
         return attemptAsync(async () => {
             (await this.backup(path.dirname(file))).unwrap();
             (await this.clear()).unwrap();
-            return new Promise<void>((res, rej) => {
-                this.log('Restoring:', file);
 
-                const filestream = fs.createReadStream(file);
+            const data = z.array(z.unknown()).parse(JSON.parse(await fs.promises.readFile(file, 'utf-8')));
 
-                const rl = readline.createInterface({
-                    input: filestream,
-                    crlfDelay: Infinity,
-                });
 
-                rl.on('line', async line => {
-                    try {
-                        const data = JSON.parse(decode(line), (self, val) => {
-                            if (typeof val === 'string') {
-                                // if date
-                                if (val.match(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}.\d{3}Z$/)) {
-                                    return new Date(val);
-                                }
-                                if (val.startsWith('[JSON]:')) return val.slice(7);
-                            }
-                            return val;
-                        });
-                        const res = this.validate(data);
+            return resolveAll(
+                await Promise.all(data.map(d => {
+                    return attemptAsync(async () => {
+                        const res = this.validate(d);
                         if (!res.success) {
-                            console.error('Invalid data:', res.reason, data);
-                            return;
+                            console.error('Invalid data:', res.reason, d);
+                        } else {
+                            this.new(d as any, {
+                                overwriteGlobals: true,
+                                overwriteGenerators: true,
+                            });
                         }
-                        (await this.new(data as any, {
-                            overwriteGlobals: true,
-                            overwriteGenerators: true,
-                        })).unwrap();
-                    } catch (err) {
-                        console.error(err);
-                    }
-                });
+                    });
+                }))
+            );
 
-                rl.on('close', res);
-            });
+
+            // return new Promise<void>((res, rej) => {
+            //     this.log('Restoring:', file);
+
+            //     const filestream = fs.createReadStream(file);
+
+            //     const rl = readline.createInterface({
+            //         input: filestream,
+            //         crlfDelay: Infinity,
+            //     });
+
+            //     rl.on('line', async line => {
+            //         try {
+            //             const data = JSON.parse(decode(line), (self, val) => {
+            //                 if (typeof val === 'string') {
+            //                     // if date
+            //                     if (val.match(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}.\d{3}Z$/)) {
+            //                         return new Date(val);
+            //                     }
+            //                     if (val.startsWith('[JSON]:')) return val.slice(7);
+            //                 }
+            //                 return val;
+            //             });
+            //             const res = this.validate(data);
+            //             if (!res.success) {
+            //                 console.error('Invalid data:', res.reason, data);
+            //                 return;
+            //             }
+            //             (await this.new(data as any, {
+            //                 overwriteGlobals: true,
+            //                 overwriteGenerators: true,
+            //             })).unwrap();
+            //         } catch (err) {
+            //             console.error(err);
+            //         }
+            //     });
+
+            //     rl.on('close', res);
+            // });
         });
     }
 }
