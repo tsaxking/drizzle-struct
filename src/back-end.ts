@@ -1534,10 +1534,10 @@ export class Struct<T extends Blank = any, Name extends string = any> {
             }
             const newData: Structable<T & typeof globalCols> = {
                 ...data,
-                ...(config?.overwriteGenerators ? Object.fromEntries(Object.entries(this.data.generators || {})
+                ...(config?.overwriteGenerators ? {} : Object.fromEntries(Object.entries(this.data.generators || {})
                     // Only do generators that are not global cols, those have already been set at this point
                     .filter(([k]) => !Object.keys(globalCols).includes(k))
-                    .map(([k, v]) => ([k, v()]))) as any : {}),
+                    .map(([k, v]) => ([k, v()]))) as any),
                 ...(!config?.overwriteGlobals ? globals : {}),
             };
 
