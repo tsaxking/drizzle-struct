@@ -2710,7 +2710,19 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 
             await fs.promises.writeFile(
                 path.join(dir, file),
-                JSON.stringify(data.map(d => d.data)),
+                JSON.stringify(data.map(d => d.data), (self, val) => {
+                    if (val instanceof Date) return val.toISOString();
+                    // if is json
+                    if (typeof val === 'string') {
+                        try {
+                            JSON.parse(val);
+                            return '[JSON]:' + val;
+                        } catch {
+                            // do nothing
+                        }
+                    }
+                    return val;
+                }),
             );
 
             // const stream = this.all({
@@ -2748,7 +2760,16 @@ export class Struct<T extends Blank = any, Name extends string = any> {
             (await this.backup(path.dirname(file))).unwrap();
             (await this.clear()).unwrap();
 
-            const data = z.array(z.unknown()).parse(JSON.parse(await fs.promises.readFile(file, 'utf-8')));
+            const data = z.array(z.unknown()).parse(JSON.parse(await fs.promises.readFile(file, 'utf-8'), (self, val) => {
+                if (typeof val === 'string') {
+                    // if date
+                    if (val.match(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}.\d{3}Z$/)) {
+                        return new Date(val);
+                    }
+                    if (val.startsWith('[JSON]:')) return val.slice(7);
+                }
+                return val;
+            }));
 
 
             return resolveAll(
