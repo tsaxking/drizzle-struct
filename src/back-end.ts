@@ -2709,7 +2709,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
             }).await()).unwrap();
 
             await fs.promises.writeFile(
-                file,
+                path.join(dir, file),
                 JSON.stringify(data.map(d => d.data)),
             );
 
