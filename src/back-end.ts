@@ -17,7 +17,7 @@ import { log } from './utils';
 import path from 'path';
 import fs from 'fs';
 import chalk from 'chalk';
-import { encode } from 'ts-utils/text';
+import { encode, decode } from 'ts-utils/text';
 
 /**
  * Error thrown for invalid struct state
@@ -2689,6 +2689,85 @@ export class Struct<T extends Blank = any, Name extends string = any> {
         this.blocks.set(event, {
             fn,
             message,
+        });
+    }
+
+    backup(dir: string) {
+        return attemptAsync(async () => {
+            if (!fs.existsSync(dir)) {
+                await fs.promises.mkdir(dir, { recursive: true });
+            }
+
+            const file = `${this.name}${new Date().toISOString()}.backupv1`;
+            this.log('Backing up:', file);
+            const ws = fs.createWriteStream(path.join(dir, file));
+
+            const stream = this.all({
+                type: 'stream',
+            });
+
+            stream.pipe(d => {
+                ws.write(encode(JSON.stringify(d.data)) + '\n');
+            });
+
+            await stream.await();
+
+            ws.end();
+        });
+    }
+
+    restore(fullBackupPath: string) {
+        return attemptAsync(async () => {
+            (await this.backup(path.dirname(fullBackupPath))).unwrap();
+            (await this.clear()).unwrap();
+            this.log('Restoring:', fullBackupPath);
+
+            const dir = path.dirname(fullBackupPath);
+
+            const files = fs.readdirSync(dir);
+
+            // Assuming the backup file is the most recent one
+            const backupFile = files
+                .filter(file => file.endsWith('.backupv1'))
+                .sort()
+                .pop();  // Get the most recent backup file
+
+            if (!backupFile) {
+                throw new Error('No backup files found.');
+            }
+
+            const filePath = path.join(dir, backupFile);
+            const fileStream = fs.createReadStream(filePath, { encoding: 'utf-8' });
+
+            let buffer = '';
+
+            // Read and process each line
+            fileStream.on('data', (chunk) => {
+                buffer += chunk;
+                let boundary = buffer.indexOf('\n');
+                while (boundary !== -1) {
+                    const line = buffer.substring(0, boundary);
+                    buffer = buffer.substring(boundary + 1);
+                    try {
+                        const data = JSON.parse(decode(line));
+
+                        this.new(data, {
+                            overwriteGlobals: true,
+                        });
+
+                        boundary = buffer.indexOf('\n');
+                    } catch (error) {
+                        console.error(error);
+                    }
+                }
+            });
+
+            await new Promise<void>((resolve, reject) => {
+                fileStream.on('end', resolve);
+                fileStream.on('error', reject);
+            });
+
+            this.log('Restore completed.');
         });
     }
 }
