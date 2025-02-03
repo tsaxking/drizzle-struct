@@ -2779,10 +2779,10 @@ export class Struct<T extends Blank = any, Name extends string = any> {
                         if (!res.success) {
                             console.error('Invalid data:', res.reason, d);
                         } else {
-                            this.new(d as any, {
+                            (await this.new(d as any, {
                                 overwriteGlobals: true,
                                 overwriteGenerators: true,
-                            });
+                            })).unwrap();
                         }
                     });
                 }))
