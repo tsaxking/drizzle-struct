@@ -230,6 +230,9 @@ export type StructBuilder<T extends Blank, Name extends string> = {
      * Log events to the console
      */
     log?: boolean;
+
+
+    safes?: (keyof (T & typeof globalCols))[];
 };
 
 
@@ -284,6 +287,10 @@ export type Table<T extends Blank, TableName extends string> = PgTableWithColumn
  */
 export type Structable<T extends Blank> = {
     [K in keyof T]: TsType<T[K]['_']['dataType']>;// | TsType<T[K]['config']['dataType']>;
+}
+
+export type SafeStructable<T extends Blank> = {
+    [K in keyof T]: SafeTsType<T[K]['_']['dataType']>;// | TsType<T[K]['config']['dataType']>;
 }
 
 /**
@@ -893,15 +900,20 @@ export class StructData<T extends Blank = any, Name extends string = any> {
      * @param {?(keyof T & keyof typeof globalCols)[]} [omit] 
      * @returns {*} 
      */
-    safe(omit?: (keyof T & keyof typeof globalCols)[]) {
+    safe(omit?: (keyof (T & typeof globalCols))[]): Readonly<SafeStructable<T & typeof globalCols>> {
         // TODO: Type the ommitted columns properly
         const data = { ...this.data };
-        if (omit) {
-            for (const key of omit) {
-                delete data[key];
+        if (!omit) omit = [];
+        omit.push(...(this.struct.data.safes || []));
+        for (const key of omit) {
+            delete data[key];
+        }
+        for (const [k, v] of Object.entries(data)) {
+            if (v instanceof Date) {
+                (data as any)[k] = v.toISOString();
             }
         }
-        return data;
+        return data as any;
     }
 
     /**
@@ -1053,6 +1065,14 @@ export type TsType<T extends ColumnDataType> = T extends 'string' ? string
     : T extends 'timestamp' ? Date 
     : T extends 'date' ? Date
     : never;
+
+export type SafeTsType<T extends ColumnDataType> = T extends 'string' ? string
+    : T extends 'number' ? number 
+    : T extends 'boolean' ? boolean 
+    : T extends 'timestamp' ? string 
+    : T extends 'date' ? string
+    : never;
+
 
 export type MultiConfig = {
     type: 'stream' | 'array' | 'single' | 'count';
@@ -2501,7 +2521,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
                 if(res.isErr()) {
                     new StructError(this, res.error.message);
                     this.new(
-                        d.safe(),
+                        d.data,
                         {
                             overwriteGlobals: true,
                             emit: false,
