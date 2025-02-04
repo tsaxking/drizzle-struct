@@ -2244,8 +2244,10 @@ export class Struct<T extends Blank = any, Name extends string = any> {
         const res = z
             .object({
                 id: createSchema(z.string(), 'id'),
-                created: createSchema(z.date().refine((d) => !isNaN(d.getTime()), { message: 'Invalid date' }), 'created'),
-                updated: createSchema(z.date().refine((d) => !isNaN(d.getTime()), { message: 'Invalid date' }), 'updated'),
+                // created: createSchema(z.date().refine((d) => !isNaN(d.getTime()), { message: 'Invalid date' }), 'created'),
+                // updated: createSchema(z.date().refine((d) => !isNaN(d.getTime()), { message: 'Invalid date' }), 'updated'),
+                created: createSchema(z.string().date(), 'created'),
+                updated: createSchema(z.string().date(), 'updated'),
                 archived: createSchema(z.boolean(), 'archived'),
                 // universes: createSchema(z.string(), 'universes'),
                 universe: createSchema(z.string(), 'universe'),
