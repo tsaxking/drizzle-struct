@@ -1573,8 +1573,9 @@ export class Struct<T extends Blank = any, Name extends string = any> {
                 lifetime: this.data.lifetime || 0,
                 canUpdate: !config.static,
             }
-            
+            // I do overwriteglobals twice, because the input is a partial for globals.
             const newData: Structable<T & typeof globalCols> = {
+                ...(config?.overwriteGlobals ? globals : {}),
                 ...data,
                 ...(config?.overwriteGenerators ? {} : Object.fromEntries(Object.entries(this.data.generators || {})
                     // Only do generators that are not global cols, those have already been set at this point
