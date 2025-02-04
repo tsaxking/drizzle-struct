@@ -173,12 +173,23 @@ export type StructBuilder<T extends Blank, Name extends string> = {
      * Configure how you want global columns to be generated
      */
     generators?: Partial<{
-        [key in keyof T]: () => TsType<T[key]['_']['dataType']>;
+        [key in keyof T]: (
+            data: Structable<T>,
+        ) => TsType<T[key]['_']['dataType']>;
     } & {
-        id: () => string;
-        attributes: () => string[];
+        id: (
+            data: Structable<T>,
+        ) => string;
+        attributes: (
+            data: Structable<T>,
+        ) => string[];
         // universes: () => string[];
-        universe: () => string;
+        universe: (
+            data: Structable<T>,
+        ) => string;
+        canUpdate: (
+            data: Structable<T>,
+        ) => boolean;
     }>;
     lifetime?: number;
     /**
@@ -189,22 +200,6 @@ export type StructBuilder<T extends Blank, Name extends string> = {
         type: 'days' | 'versions';
         amount: number;
     };
-    /**
-     * The number of universes the data is allowed to be in, if not set, it defaults to 1
-     */
-    // universeLimit?: number;
-    // This is so the struct isn't actually permanently in the database, it 'reflects' a different server's data
-    // If there are merge conflicts, it will always prioritize the other server's data
-    // It will still save in the local database for optimization purposes
-    // If there are type conflicts, they are incompatible, so it will throw an error
-    // reflect?: {
-    //     address: string;
-    //     port: number;
-    //     key: string;
-    //     // How often it should sync with the other server
-    //     // it will first send a hash of the data, and if the other server doesn't have that hash, the other server will pipe the data
-    //     interval: number;
-    // };
     /**
      * Configure how the reflection API works. Reflections are used to sync data between servers. If a server has a reflection, it will send data to the other server, and receive updates. If there are conflicts, it will prioritize the other server's data. If there are type conflicts, it will throw an error.
      * If not set, there will be no reflection.
@@ -233,6 +228,10 @@ export type StructBuilder<T extends Blank, Name extends string> = {
 
 
     safes?: (keyof (T & typeof globalCols))[];
+
+    validators?: {
+        [key in keyof T]?: z.ZodType<T[key]['_']['dataType']> | ((data: unknown) => boolean);
+    }
 };
 
 
@@ -896,17 +895,26 @@ export class StructData<T extends Blank = any, Name extends string = any> {
      * @param {?(keyof T & keyof typeof globalCols)[]} [omit] 
      * @returns {*} 
      */
-    safe(omit?: (keyof (T & typeof globalCols))[]): Readonly<Structable<T & typeof globalCols>> {
-        // TODO: Type the ommitted columns properly
-        const data = { ...this.data };
-        if (!omit) omit = [];
-        omit.push(...(this.struct.data.safes || []));
+    safe<Keys extends (keyof (T & typeof globalCols))[]>(
+        ...omit: Keys
+    ): Readonly<
+        Omit<
+            Structable<T & typeof globalCols>,
+            Keys[number] // | (this["struct"]["data"]["safes"] extends (keyof T)[] ? this["struct"]["data"]["safes"][number] : never)
+        >
+    > {
+        // TODO: Type the omitted columns properly
+        const data = { ...this.data }; // copy
+        if (!omit) omit = [] as any;
+        
+        // Merge omitted keys with safes
+        (omit as any).push(...(this.struct.data.safes || []));
+    
         for (const key of omit) {
-            delete data[key];
+            delete (data as any)[key];
         }
         return data as any;
     }
-
     /**
      * If this data is similar to another data
      *
@@ -1449,6 +1457,12 @@ export class Struct<T extends Blank = any, Name extends string = any> {
      * @param {StructBuilder<T, Name>} data 
      */
     constructor(public readonly data: StructBuilder<T, Name>) {
+        for (const key of Object.keys(data.structure)) {
+            if (Object.keys(globalCols).includes(key)) {
+                throw new FatalStructError(this, `Cannot have a custom column named ${key}`);
+            }
+        }
+
         Struct.structs.set(data.name, this as Struct);
 
         this.table = pgTable(data.name, {
@@ -1538,13 +1552,13 @@ export class Struct<T extends Blank = any, Name extends string = any> {
             }
 
             const globals = {
-                id: this.data.generators?.id?.() ?? uuid(),
+                id: this.data.generators?.id?.(data) ?? uuid(),
                 created: new Date().toISOString(),
                 updated: new Date().toISOString(),
                 archived: false,
                 // universes: JSON.stringify(this.data.generators?.universes?.() ?? []),
-                universe: this.data.generators?.universe?.() ?? '',
-                attributes: JSON.stringify(this.data.generators?.attributes?.() ?? []),
+                universe: this.data.generators?.universe?.(data) ?? '',
+                attributes: JSON.stringify(this.data.generators?.attributes?.(data) ?? []),
                 lifetime: this.data.lifetime || 0,
                 canUpdate: !config.static,
             }
@@ -1554,7 +1568,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
                 ...(config?.overwriteGenerators ? {} : Object.fromEntries(Object.entries(this.data.generators || {})
                     // Only do generators that are not global cols, those have already been set at this point
                     .filter(([k]) => !Object.keys(globalCols).includes(k))
-                    .map(([k, v]) => ([k, v()]))) as any),
+                    .map(([k, v]) => ([k, v(data)]))) as any),
                 ...(!config?.overwriteGlobals ? globals : {}),
             };
 
@@ -2256,6 +2270,20 @@ export class Struct<T extends Blank = any, Name extends string = any> {
                 canUpdate: createSchema(z.boolean(), 'canUpdate'),
                 ...Object.fromEntries(
                     Object.entries(this.data.structure).map(([k, v]) => {
+                        if (this.data.validators && this.data.validators[k]) {
+                            const validator = this.data.validators[k];
+                            if (validator instanceof z.ZodType) {
+                                return [k, createSchema(validator, k)];
+                            } else {
+                                return [
+                                    k,
+                                    createSchema(
+                                        z.unknown().refine(validator),
+                                        k
+                                    )
+                                ]
+                            }
+                        }
                         const type = (v as any).config.dataType as ColumnDataType;
                         const schemaType = (() => {
                             switch (type) {
@@ -2888,3 +2916,14 @@ export interface Account {
      */
     get id(): string;
 }
+
+const test = new Struct({
+    name: 'test',
+    structure: {
+        name: text('name').notNull(),
+        age: text('age').notNull(),
+    },
+    safes: ['age']
+});
+
+test.sample.safe().age;
