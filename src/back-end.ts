@@ -1331,6 +1331,17 @@ export class Struct<T extends Blank = any, Name extends string = any> {
                         }
                     });
                 }
+
+                if (body.type === 'retrieve') {
+                    const args = z.object({
+                        name: z.string(),
+                        data: z.unknown(),
+                    }).parse(body.args);
+                    const listener = struct.sendListeners.get(args.name);
+                    if (!listener) return new Response('Not found', { status: 404 });
+                    const res = await listener(event, args.data);
+                    return new Response(JSON.stringify(res), { status: 200 });
+                }
             }
 
             const response = (await struct._eventHandler?.({ action: B.action, data: B.data, request: event, struct }));
@@ -2729,6 +2740,12 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 
     callListen(event: string, fn: (event: RequestEvent, data: unknown) => StructStatus | Promise<StructStatus>) {
         this.callListeners.set(event, fn);
+    }
+
+    private readonly sendListeners = new Map<string, (event: RequestEvent, data: unknown) => unknown>();
+
+    sendListen(event: string, fn: (event: RequestEvent, data: unknown) => unknown) {
+        this.sendListeners.set(event, fn);
     }
 
     private readonly blocks = new Map<string, {

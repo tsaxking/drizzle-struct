@@ -1463,6 +1463,20 @@ export class Struct<T extends Blank> {
         return arr;
     }
 
+    send<T>(name: string, data: unknown, returnType: z.ZodType<T>) {
+        return attemptAsync<T>(async () => {
+            const res = await this.post('retrieve', {
+                type: 'retrieve',
+                args: {
+                    name,
+                    data,
+                }
+            })
+                .then(r => r.unwrap().json());
+            return returnType.parse(res);
+        });
+    }
+
     // custom functions
     call(event: string, data: unknown) {
         return attemptAsync(async () => {
