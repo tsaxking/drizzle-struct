@@ -250,8 +250,8 @@ export type Data<T extends Struct<Blank, string>> = T['sample'];
  */
 export const globalCols = {
     id: text('id').primaryKey(),
-    created: timestamp<'created', 'string'>('created').notNull(),
-    updated: timestamp<'updated', 'string'>('updated').notNull(),
+    created: timestamp<'created', 'date'>('created').notNull(),
+    updated: timestamp<'updated', 'date'>('updated').notNull(),
     archived: boolean<'archived'>('archived').default(false).notNull(),
     // universes: text('universes').notNull(),
     universe: text('universe').notNull(),
@@ -374,7 +374,7 @@ export class DataVersion<T extends Blank, Name extends string> {
      * @type {*}
      */
     get created() {
-        return new Date(this.data.created);
+        return this.data.created;
     }
 
     /**
@@ -384,7 +384,7 @@ export class DataVersion<T extends Blank, Name extends string> {
      * @type {*}
      */
     get updated() {
-        return new Date(this.data.updated);
+        return this.data.updated;
     }
 
     /**
@@ -525,7 +525,7 @@ export class StructData<T extends Blank = any, Name extends string = any> {
      * @type {*}
      */
     get created() {
-        return new Date(this.data.created);
+        return this.data.created;
     }
 
     /**
@@ -535,7 +535,7 @@ export class StructData<T extends Blank = any, Name extends string = any> {
      * @type {*}
      */
     get updated() {
-        return new Date(this.data.updated);
+        return this.data.updated;
     }
 
     /**
@@ -1047,7 +1047,12 @@ export type RequestAction = {
  * @typedef {TsType}
  * @template {ColumnDataType} T 
  */
-export type TsType<T extends ColumnDataType> = T extends 'string' ? string : T extends 'number' ? number : T extends 'boolean' ? boolean : T extends 'timestamp' ? Date : never;
+export type TsType<T extends ColumnDataType> = T extends 'string' ? string 
+    : T extends 'number' ? number 
+    : T extends 'boolean' ? boolean 
+    : T extends 'timestamp' ? Date 
+    : T extends 'date' ? Date
+    : never;
 
 export type MultiConfig = {
     type: 'stream' | 'array' | 'single' | 'count';
@@ -1532,6 +1537,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
                 lifetime: this.data.lifetime || 0,
                 canUpdate: !config.static,
             }
+            
             const newData: Structable<T & typeof globalCols> = {
                 ...data,
                 ...(config?.overwriteGenerators ? {} : Object.fromEntries(Object.entries(this.data.generators || {})
@@ -2155,12 +2161,6 @@ export class Struct<T extends Blank = any, Name extends string = any> {
                 return attemptAsync(async () => {
                     const exists = (await this.fromId(d.id)).unwrap();
                     if (exists) return;                    
-                    for (const [key, value] of Object.entries(d)) {
-                        // if value matches a date iso string, change it to a date object
-                        if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}.\d{3}Z$/.test(value as string)) {
-                            (d as any)[key] = new Date(value as string);
-                        }
-                    }
                     const res = this.validate(d);
                     if (!res.success) throw new DataError(this, `Invalid default data: ${res.reason}`);
                     this.log('Generating default:', d);
