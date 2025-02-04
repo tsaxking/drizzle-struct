@@ -2154,9 +2154,16 @@ export class Struct<T extends Blank = any, Name extends string = any> {
             resolveAll(await Promise.all(this.defaults.map(d => {
                 return attemptAsync(async () => {
                     const exists = (await this.fromId(d.id)).unwrap();
-                    if (exists) return;
+                    if (exists) return;                    
+                    for (const [key, value] of Object.entries(d)) {
+                        // if value matches a date iso string, change it to a date object
+                        if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}.\d{3}Z$/.test(value as string)) {
+                            (d as any)[key] = new Date(value as string);
+                        }
+                    }
                     const res = this.validate(d);
                     if (!res.success) throw new DataError(this, `Invalid default data: ${res.reason}`);
+                    this.log('Generating default:', d);
                     this.database.insert(this.table).values(d as any);
                 });
             }))).unwrap();
