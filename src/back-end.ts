@@ -2935,13 +2935,13 @@ export interface Account {
     get id(): string;
 }
 
-const test = new Struct({
-    name: 'test',
-    structure: {
-        name: text('name').notNull(),
-        age: text('age').notNull(),
-    },
-    safes: ['age']
-});
+// const test = new Struct({
+//     name: 'test',
+//     structure: {
+//         name: text('name').notNull(),
+//         age: text('age').notNull(),
+//     },
+//     safes: ['age']
+// });
 
-test.sample.safe().age;
+// test.sample.safe().age;
