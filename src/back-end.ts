@@ -319,7 +319,7 @@ export class StructStream<T extends Blank = Blank, Name extends string = string>
 export const versionGlobalCols = {
     vhId: text('vh_id').primaryKey(),
     id: text('id').notNull(), // Used to overwrite the other primary key
-    vhCreated: timestamp<'vh_created', 'string'>('vh_created').notNull(),
+    vhCreated: text('vh_created').notNull(),
 };
 
 /**
@@ -599,7 +599,7 @@ export class StructData<T extends Blank = any, Name extends string = any> {
             if (!this.canUpdate) {
                 throw new DataError(this.struct, 'Cannot change static data');
             }
-            const now = new Date();
+            const now = new Date().toISOString();
             const res = this.struct.validate({
                 ...this.data,
                 ...data,
@@ -661,7 +661,7 @@ export class StructData<T extends Blank = any, Name extends string = any> {
             this.log('Setting archive:', archived);
             await this.struct.database.update(this.struct.table).set({
                 archived,
-                updated: new Date(),
+                updated: new Date().toISOString(),
             } as any).where(sql`${this.struct.table.id} = ${this.id}`);
             Object.assign(this.data, {
                 archived
@@ -710,7 +710,7 @@ export class StructData<T extends Blank = any, Name extends string = any> {
             if (!this.struct.versionTable) throw new StructError(this.struct, `Struct ${this.struct.name} does not have a version table`);
             this.log('Making version');
             const vhId = uuid();
-            const vhCreated = new Date();
+            const vhCreated = new Date().toISOString();
             const vhData = { ...this.data, vhId, vhCreated } as any;
             await this.database.insert(this.struct.versionTable).values(vhData);
 
@@ -778,7 +778,7 @@ export class StructData<T extends Blank = any, Name extends string = any> {
             attributes = attributes
                 .filter(i => typeof i === 'string')
                 .filter((v, i, a) => a.indexOf(v) === i);
-            const updated = new Date();
+            const updated = new Date().toISOString();
             await this.database.update(this.struct.table).set({
                 attributes: JSON.stringify(attributes),
                 updated,
@@ -819,7 +819,7 @@ export class StructData<T extends Blank = any, Name extends string = any> {
     setUniverse(universe: string) {
         return attemptAsync(async () => {
             this.log('Setting universe', universe);
-            const updated = new Date();
+            const updated = new Date().toISOString();
             await this.database.update(this.struct.table).set({
                 universe,
                 updated,
@@ -936,7 +936,7 @@ export class StructData<T extends Blank = any, Name extends string = any> {
             this.log('Setting static:', isStatic);
             await this.database.update(this.struct.table).set({
                 canUpdate: !isStatic,
-                updated: new Date(),
+                updated: new Date().toISOString(),
             } as any).where(sql`${this.struct.table.id} = ${this.id}`);
             Object.assign(this.data, {
                 canUpdate: true,
@@ -1539,8 +1539,8 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 
             const globals = {
                 id: this.data.generators?.id?.() ?? uuid(),
-                created: new Date(),
-                updated: new Date(),
+                created: new Date().toISOString(),
+                updated: new Date().toISOString(),
                 archived: false,
                 // universes: JSON.stringify(this.data.generators?.universes?.() ?? []),
                 universe: this.data.generators?.universe?.() ?? '',
