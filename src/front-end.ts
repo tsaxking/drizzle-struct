@@ -125,7 +125,7 @@ export type ColTsType<t extends ColType> = t extends 'string' ? string :
     t extends 'boolean' ? boolean :
     t extends 'array' ? unknown[] :
     t extends 'json' ? unknown :
-    t extends 'date' ? Date :
+    t extends 'date' ? string :
     t extends 'bigint' ? bigint :
     t extends 'custom' ? unknown :
     t extends 'buffer' ? Buffer :
@@ -754,8 +754,8 @@ type ReadTypes = {
  */
 export type GlobalCols = {
     id: 'string';
-    created: 'string';
-    updated: 'string';
+    created: 'date';
+    updated: 'date';
     archived: 'boolean';
     universe: 'string';
     // universes: 'string';

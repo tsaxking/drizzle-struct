@@ -253,8 +253,8 @@ export type Data<T extends Struct<Blank, string>> = T['sample'];
  */
 export const globalCols = {
     id: text('id').primaryKey(),
-    created: timestamp<'created', 'date'>('created').notNull(),
-    updated: timestamp<'updated', 'date'>('updated').notNull(),
+    created: text('created').notNull(),
+    updated: text('updated').notNull(),
     archived: boolean<'archived'>('archived').default(false).notNull(),
     // universes: text('universes').notNull(),
     universe: text('universe').notNull(),
@@ -287,10 +287,6 @@ export type Table<T extends Blank, TableName extends string> = PgTableWithColumn
  */
 export type Structable<T extends Blank> = {
     [K in keyof T]: TsType<T[K]['_']['dataType']>;// | TsType<T[K]['config']['dataType']>;
-}
-
-export type SafeStructable<T extends Blank> = {
-    [K in keyof T]: SafeTsType<T[K]['_']['dataType']>;// | TsType<T[K]['config']['dataType']>;
 }
 
 /**
@@ -381,7 +377,7 @@ export class DataVersion<T extends Blank, Name extends string> {
      * @type {*}
      */
     get created() {
-        return this.data.created;
+        return new Date(this.data.created);
     }
 
     /**
@@ -391,7 +387,7 @@ export class DataVersion<T extends Blank, Name extends string> {
      * @type {*}
      */
     get updated() {
-        return this.data.updated;
+        return new Date(this.data.updated);
     }
 
     /**
@@ -532,7 +528,7 @@ export class StructData<T extends Blank = any, Name extends string = any> {
      * @type {*}
      */
     get created() {
-        return this.data.created;
+        return new Date(this.data.created);
     }
 
     /**
@@ -542,7 +538,7 @@ export class StructData<T extends Blank = any, Name extends string = any> {
      * @type {*}
      */
     get updated() {
-        return this.data.updated;
+        return new Date(this.data.updated);
     }
 
     /**
@@ -900,18 +896,13 @@ export class StructData<T extends Blank = any, Name extends string = any> {
      * @param {?(keyof T & keyof typeof globalCols)[]} [omit] 
      * @returns {*} 
      */
-    safe(omit?: (keyof (T & typeof globalCols))[]): Readonly<SafeStructable<T & typeof globalCols>> {
+    safe(omit?: (keyof (T & typeof globalCols))[]): Readonly<Structable<T & typeof globalCols>> {
         // TODO: Type the ommitted columns properly
         const data = { ...this.data };
         if (!omit) omit = [];
         omit.push(...(this.struct.data.safes || []));
         for (const key of omit) {
             delete data[key];
-        }
-        for (const [k, v] of Object.entries(data)) {
-            if (v instanceof Date) {
-                (data as any)[k] = v.toISOString();
-            }
         }
         return data as any;
     }
@@ -1062,16 +1053,16 @@ export type RequestAction = {
 export type TsType<T extends ColumnDataType> = T extends 'string' ? string 
     : T extends 'number' ? number 
     : T extends 'boolean' ? boolean 
-    : T extends 'timestamp' ? Date 
-    : T extends 'date' ? Date
+    // : T extends 'timestamp' ? Date 
+    // : T extends 'date' ? Date
     : never;
 
-export type SafeTsType<T extends ColumnDataType> = T extends 'string' ? string
-    : T extends 'number' ? number 
-    : T extends 'boolean' ? boolean 
-    : T extends 'timestamp' ? string 
-    : T extends 'date' ? string
-    : never;
+// export type SafeTsType<T extends ColumnDataType> = T extends 'string' ? string
+//     : T extends 'number' ? number 
+//     : T extends 'boolean' ? boolean 
+//     : T extends 'timestamp' ? string 
+//     : T extends 'date' ? string
+//     : never;
 
 
 export type MultiConfig = {
