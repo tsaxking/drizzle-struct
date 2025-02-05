@@ -2777,7 +2777,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
             await fs.promises.writeFile(
                 path.join(dir, file),
                 JSON.stringify(data.map(d => d.data), (self, val) => {
-                    if (val instanceof Date) return val.toISOString();
+                    if (val instanceof Date) return '[DATE]:' + val.toISOString();
                     // if is json
                     if (typeof val === 'string') {
                         try {
@@ -2829,9 +2829,10 @@ export class Struct<T extends Blank = any, Name extends string = any> {
             const data = z.array(z.unknown()).parse(JSON.parse(await fs.promises.readFile(file, 'utf-8'), (self, val) => {
                 if (typeof val === 'string') {
                     // if date
-                    if (val.match(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}.\d{3}Z$/)) {
-                        return new Date(val);
-                    }
+                    // if (val.match(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}.\d{3}Z$/)) {
+                    //     return new Date(val);
+                    // }
+                    if (val.startsWith('[DATE]:')) return new Date(val.slice(7));
                     if (val.startsWith('[JSON]:')) return val.slice(7);
                 }
                 return val;
