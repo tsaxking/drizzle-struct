@@ -598,6 +598,7 @@ export class StructData<T extends Blank = any, Name extends string = any> {
             if (!this.canUpdate) {
                 throw new DataError(this.struct, 'Cannot change static data');
             }
+            const prev = { ...this.data };
             const now = new Date().toISOString();
             const res = this.struct.validate({
                 ...this.data,
@@ -636,7 +637,10 @@ export class StructData<T extends Blank = any, Name extends string = any> {
                 ...newData,
                 updated: now,
             });
-            this.struct.emit('update', this);
+            this.struct.emit('update', {
+                from: prev,
+                to: this,
+            });
         });
     }
 
@@ -773,6 +777,7 @@ export class StructData<T extends Blank = any, Name extends string = any> {
      */
     setAttributes(attributes: string[]) {
         return attemptAsync(async () => {
+            const prev = { ...this.data };
             this.log('Setting attributes', attributes);
             attributes = attributes
                 .filter(i => typeof i === 'string')
@@ -786,7 +791,10 @@ export class StructData<T extends Blank = any, Name extends string = any> {
                 attributes,
                 updated
             });
-            this.struct.emit('update', this);
+            this.struct.emit('update', {
+                from: prev,
+                to: this,
+            });
         });
     }
     /**
@@ -817,6 +825,7 @@ export class StructData<T extends Blank = any, Name extends string = any> {
 
     setUniverse(universe: string) {
         return attemptAsync(async () => {
+            const prev = { ...this.data };
             this.log('Setting universe', universe);
             const updated = new Date().toISOString();
             await this.database.update(this.struct.table).set({
@@ -827,7 +836,10 @@ export class StructData<T extends Blank = any, Name extends string = any> {
                 universe,
                 updated
             });
-            this.struct.emit('update', this);
+            this.struct.emit('update', {
+                from: prev,
+                to: this,
+            });
         });
     }
 
@@ -932,7 +944,10 @@ export class StructData<T extends Blank = any, Name extends string = any> {
      * This is to handle states diverging between frontend and backend, or between servers
      */
     emitSelf() {
-        this.struct.emit('update', this);
+        this.struct.emit('update', {
+            from: this.data,
+            to: this,
+        });
     }
 
     log(...data: unknown[]) {
@@ -1000,7 +1015,10 @@ export const toJson = <T extends Blank>(struct: Struct<T, string>, data: Structa
  * @template {string} Name 
  */
 export type StructEvents<T extends Blank, Name extends string> = {
-    update: StructData<T, Name>;
+    update: {
+        from: Structable<T & typeof globalCols>;
+        to: StructData<T, Name>;
+    };
     archive: StructData<T, Name>;
     delete: StructData<T, Name>;
     restore: StructData<T, Name>;
@@ -1155,7 +1173,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
             s.on('update', (d) => l({
                 type: 'info',
                 event: 'update',
-                message: `Updated ${d.id}`,
+                message: `Updated ${d.to.id}`,
             }));
 
             s.on('delete-version', (d) => l({
@@ -2494,16 +2512,16 @@ export class Struct<T extends Blank = any, Name extends string = any> {
                 }
             });
             this.on('update', async d => {
-                const prevState = d.metadata.get('prev-state'); // always read so it will delete
-                if (d.metadata.get('no-emit')) return;
-                this.log('API Sending update', d.data);
+                const prevState = d.to.metadata.get('prev-state'); // always read so it will delete
+                if (d.to.metadata.get('no-emit')) return;
+                this.log('API Sending update', d.to.data);
                 const res = await api.send(this, 'update', {
-                    ...d.data,
+                    ...d.to.data,
                     source: 'self',
                 }, {
                     if: (connection) => {
                         if (connection) {
-                            return connection.apiKey !== d.metadata.get('source');
+                            return connection.apiKey !== d.to.metadata.get('source');
                         }
                         return true;
                     },
@@ -2511,7 +2529,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
                 if (res.isErr()) {
                     new StructError(this, res.error.message);
                     if (prevState) {
-                        await d.update(JSON.parse(prevState as string), { emit: false });
+                        await d.to.update(JSON.parse(prevState as string), { emit: false });
                     }
                 }
             });
