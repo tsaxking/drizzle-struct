@@ -665,16 +665,16 @@ export class DataArr<T extends Blank> implements Readable<StructData<T>[]> {
     }
 }
 
-export class SingleWritable<T extends Blank> implements Writable<StructData<T & GlobalCols>> {
-    private data: StructData<T & GlobalCols>;
+export class SingleWritable<T extends Blank> implements Writable<StructData<T>> {
+    private data: StructData<T>;
 
-    constructor(defaultData: StructData<T & GlobalCols>) {
+    constructor(defaultData: StructData<T>) {
         this.data = defaultData;
     }
     private _onUnsubscribe?: () => void;
-    private readonly subscribers = new Set<(data: StructData<T & GlobalCols>) => void>();
+    private readonly subscribers = new Set<(data: StructData<T>) => void>();
 
-    subscribe(fn: (data: StructData<T & GlobalCols>) => void) {
+    subscribe(fn: (data: StructData<T>) => void) {
         this.subscribers.add(fn);
         fn(this.data);
         return () => {
@@ -687,12 +687,12 @@ export class SingleWritable<T extends Blank> implements Writable<StructData<T & 
         this._onUnsubscribe = fn;
     }
 
-    set(data: StructData<T & GlobalCols>) {
+    set(data: StructData<T>) {
         this.data = data;
         this.subscribers.forEach(fn => fn(data));
     }
 
-    update(fn: (data: StructData<T & GlobalCols>) => StructData<T & GlobalCols>) {
+    update(fn: (data: StructData<T>) => StructData<T>) {
         this.set(fn(this.data));
     }
 
