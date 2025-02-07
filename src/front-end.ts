@@ -1016,6 +1016,45 @@ export class Struct<T extends Blank> {
         return true;
     }
 
+    getZodSchema(config?: {
+        optionals?: (keyof T & keyof GlobalCols)[];
+        not?: (keyof T & keyof GlobalCols)[];
+    }) {
+        const createSchema = (key: keyof T & keyof GlobalCols, type: z.ZodType) => {
+            if (config?.optionals?.includes(key)) return [key, type.optional()];
+            return [key, type];
+        };
+
+        return z.object({
+            ...Object.fromEntries(Object.entries({
+                ...this.data.structure,
+                id: 'string',
+                created: 'date',
+                updated: 'date',
+                archived: 'boolean',
+                universe: 'string',
+                // universes: 'string',
+                attributes: 'string',
+                lifetime: 'number',
+                canUpdate: 'boolean',
+            }).map(([key, value]) => {
+                if (config?.not?.includes(key as any)) return [];
+                switch (value) {
+                    case 'string': return createSchema(key as any, z.string());
+                    case 'number': return createSchema(key as any, z.number());
+                    case 'boolean': return createSchema(key as any, z.boolean());
+                    case 'array': return createSchema(key as any, z.array(z.unknown()));
+                    case 'json': return createSchema(key as any, z.string());
+                    case 'date': return createSchema(key as any, z.string());
+                    case 'bigint': return createSchema(key as any, z.bigint());
+                    case 'custom': return createSchema(key as any, z.unknown());
+                    case 'buffer': return createSchema(key as any, z.unknown());
+                    default: return [];
+                }
+            })),
+        });
+    }
+
 
     /**
      * Sends a post request to the server

@@ -2340,6 +2340,54 @@ export class Struct<T extends Blank = any, Name extends string = any> {
         }
     }
     
+    getZodSchema(config?: {
+        optionals?: (keyof T & keyof typeof globalCols)[];
+        not?: (keyof T & keyof typeof globalCols)[];
+    }) {
+        const createSchema = (type: z.ZodType, key: string) =>
+            config?.optionals?.includes(key as any) ? type.optional() : type;
+
+        return z
+            .object({
+                id: createSchema(z.string(), 'id'),
+                created: createSchema(z.string(), 'created'),
+                updated: createSchema(z.string(), 'updated'),
+                archived: createSchema(z.boolean(), 'archived'),
+                universe: createSchema(z.string(), 'universe'),
+                attributes: createSchema(z.string(), 'attributes'),
+                lifetime: createSchema(z.number(), 'lifetime'),
+                canUpdate: createSchema(z.boolean(), 'canUpdate'),
+                ...Object.fromEntries(
+                    Object.entries(this.data.structure).map(([k, v]) => {
+                        if (this.data.validators && this.data.validators[k]) {
+                            const validator = this.data.validators[k];
+                            if (validator instanceof z.ZodType) {
+                                return [k, createSchema(validator, k)];
+                            } else {
+                                return [
+                                    k,
+                                    createSchema(
+                                        z.unknown().refine(validator),
+                                        k
+                                    )
+                                ]
+                            }
+                        }
+                        const type = (v as any).config.dataType as ColumnDataType;
+                        const schemaType = (() => {
+                            switch (type) {
+                                case 'number': return z.number();
+                                case 'string': return z.string();
+                                case 'boolean': return z.boolean();
+                                case 'date': return z.date();
+                                default: throw new DataError(this, `Invalid data type: ${type} in ${k} of ${this.name}`);
+                            }
+                        })();
+                        return [k, createSchema(schemaType, k)];
+                    })
+                ),
+            });
+    }
 
     /**
      * Hashes the data in the struct
