@@ -613,7 +613,9 @@ export class DataArr<T extends Blank> implements Readable<StructData<T>[]> {
      * @param {StructData<T>[]} value 
      */
     private apply(value: StructData<T>[]): void {
-        this.data = value.filter((v, i, a) => a.findIndex(_v => _v.data.id === v.data.id) === i);
+        this.data = value
+            .filter((v, i, a) => a.findIndex(_v => _v.data.id === v.data.id) === i)
+            .sort(this._sort);
         this.subscribers.forEach((fn) => fn(this.data));
         this.struct.log('Applied Data:', this.data);
     }
@@ -653,6 +655,13 @@ export class DataArr<T extends Blank> implements Readable<StructData<T>[]> {
      */
     public onAllUnsubscribe(fn: () => void): void {
         this._onAllUnsubscribe = fn;
+    }
+
+    private _sort: (a: StructData<T>, b: StructData<T>) => number = (a, b) => 0;
+
+    sort(fn: (a: StructData<T>, b: StructData<T>) => number) {
+        this._sort = fn;
+        this.apply(this.data);
     }
 }
 
