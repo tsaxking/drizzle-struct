@@ -3275,11 +3275,15 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 // }
 
 const accountSampleStructCols = {
-	username: text('username').notNull(),
-	firstName: text('firstName').notNull(),
-	lastName: text('lastName').notNull(),
+	username: text('username').notNull().unique(),
+	key: text('key').notNull().unique(),
+	salt: text('salt').notNull(),
+	firstName: text('first_name').notNull(),
+	lastName: text('last_name').notNull(),
+	email: text('email').notNull().unique(),
+	picture: text('picture').notNull(),
 	verified: boolean('verified').notNull(),
-	email: text('email').notNull(),
+	verification: text('verification').notNull()
 };
 
 export type Account = StructData<typeof accountSampleStructCols, 'account'>;
