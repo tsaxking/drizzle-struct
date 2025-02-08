@@ -1107,7 +1107,7 @@ export interface RequestEvent {
 
 	locals: {
 		session: Session;
-		account: Account;
+		account?: Account;
 	}
 }
 
