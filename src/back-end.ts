@@ -1104,6 +1104,11 @@ export interface RequestEvent {
 	 * @type {*}
 	 */
 	cookies: any;
+
+	locals: {
+		session: Session;
+		account: Account;
+	}
 }
 
 /**
@@ -2504,7 +2509,14 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 							if (validator instanceof z.ZodType) {
 								return [k, createSchema(validator, k)];
 							} else {
-								return [k, createSchema(z.unknown().refine(validator), k)];
+								return [k, createSchema(z.unknown().refine((d) => {
+                                    try {
+                                        return validator(d);
+                                    } catch (error) {
+                                        this.log('Error running validator', k, error);
+                                        return false;
+                                    }
+                                }), k)];
 							}
 						}
 						const type = (v as any).config.dataType as ColumnDataType;
@@ -3231,36 +3243,57 @@ export class Struct<T extends Blank = any, Name extends string = any> {
  * @interface Account
  * @typedef {Account}
  */
-export interface Account {
-	/**
-	 * Data for the account
-	 *
-	 * @type {{
-	 *         id: string;
-	 *         username: string;
-	 *         firstName: string;
-	 *         lastName: string;
-	 *         verified: boolean;
-	 *         email: string;
-	 *     }}
-	 */
-	data: {
-		id: string;
-		username: string;
-		firstName: string;
-		lastName: string;
-		verified: boolean;
-		email: string;
-	};
+// export interface Account {
+// 	/**
+// 	 * Data for the account
+// 	 *
+// 	 * @type {{
+// 	 *         id: string;
+// 	 *         username: string;
+// 	 *         firstName: string;
+// 	 *         lastName: string;
+// 	 *         verified: boolean;
+// 	 *         email: string;
+// 	 *     }}
+// 	 */
+// 	data: {
+// 		id: string;
+// 		username: string;
+// 		firstName: string;
+// 		lastName: string;
+// 		verified: boolean;
+// 		email: string;
+// 	};
 
-	/**
-	 * ID of the account
-	 *
-	 * @readonly
-	 * @type {string}
-	 */
-	get id(): string;
+// 	/**
+// 	 * ID of the account
+// 	 *
+// 	 * @readonly
+// 	 * @type {string}
+// 	 */
+// 	get id(): string;
+// }
+
+const accountSampleStructCols = {
+	username: text('username').notNull(),
+	firstName: text('firstName').notNull(),
+	lastName: text('lastName').notNull(),
+	verified: boolean('verified').notNull(),
+	email: text('email').notNull(),
+};
+
+export type Account = StructData<typeof accountSampleStructCols, 'account'>;
+
+const sessionSampleStructCols = {
+	accountId: text('account_id').notNull(),
+	ip: text('ip').notNull(),
+	userAgent: text('user_agent').notNull(),
+	requests: integer('requests').notNull(),
+	prevUrl: text('prev_url').notNull()
 }
+
+export type Session = StructData<typeof sessionSampleStructCols, 'session'>;
+
 
 // const test = new Struct({
 //     name: 'test',

@@ -702,6 +702,10 @@ export class DataArr<T extends Blank> implements Readable<StructData<T>[]> {
 		this._sort = fn;
 		this.apply(this.data);
 	}
+
+	inform() {
+		this.apply(this.data);
+	}
 }
 
 export class SingleWritable<T extends Blank> implements Writable<StructData<T>> {
