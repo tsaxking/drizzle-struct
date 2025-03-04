@@ -1857,13 +1857,13 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 
 		if (config.type === 'stream') {
 			const stream = new StructStream(this);
-			(async () => {
+			setTimeout(async () => {
 				const dataStream = (await get()) as Structable<T & typeof globalCols>[];
 				for (let i = 0; i < dataStream.length; i++) {
 					stream.add(this.Generator(dataStream[i] as any));
 				}
 				stream.end();
-			})();
+			});
 			return stream;
 		} else {
 			return attemptAsync(async () => {
@@ -1926,13 +1926,13 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 
 		if (config.type === 'stream') {
 			const stream = new StructStream(this);
-			(async () => {
+			setTimeout(async () => {
 				const dataStream = (await get()) as Structable<T & typeof globalCols>[];
 				for (let i = 0; i < dataStream.length; i++) {
 					stream.add(this.Generator(dataStream[i] as any));
 				}
 				stream.end();
-			})();
+			});
 			return stream;
 		} else {
 			return attemptAsync(async () => {
@@ -2031,13 +2031,13 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 
 		if (config.type === 'stream') {
 			const stream = new StructStream(this);
-			(async () => {
+			setTimeout(async () => {
 				const dataStream = (await get()) as Structable<T & typeof globalCols>[];
 				for (let i = 0; i < dataStream.length; i++) {
 					stream.add(this.Generator(dataStream[i] as any));
 				}
 				stream.end();
-			})();
+			});
 			return stream;
 		} else {
 			return attemptAsync(async () => {
@@ -2142,13 +2142,13 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 
 		if (config.type === 'stream') {
 			const stream = new StructStream(this);
-			(async () => {
+			setTimeout(async () => {
 				const dataStream = (await get()) as Structable<T & typeof globalCols>[];
 				for (let i = 0; i < dataStream.length; i++) {
 					stream.add(this.Generator(dataStream[i] as any));
 				}
 				stream.end();
-			})();
+			});
 			return stream;
 		} else {
 			return attemptAsync(async () => {
@@ -2339,13 +2339,13 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 
 		if (config.type === 'stream') {
 			const stream = new StructStream(this);
-			(async () => {
+			setTimeout(async () => {
 				const dataStream = (await get()) as Structable<T & typeof globalCols>[];
 				for (let i = 0; i < dataStream.length; i++) {
 					stream.add(this.Generator(dataStream[i] as any));
 				}
 				stream.end();
-			})();
+			});
 			return stream;
 		} else {
 			return attemptAsync(async () => {
