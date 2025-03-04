@@ -1592,7 +1592,7 @@ export class Struct<T extends Blank> {
 
 	send<T>(name: string, data: unknown, returnType: z.ZodType<T>) {
 		return attemptAsync<T>(async () => {
-			const res = await this.post('retrieve', {
+			const res = await this.post('read', {
 				type: 'retrieve',
 				args: {
 					name,
