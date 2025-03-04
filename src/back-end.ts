@@ -18,6 +18,7 @@ import path from 'path';
 import fs from 'fs';
 import chalk from 'chalk';
 import { encode } from 'ts-utils/text';
+import { dbStream } from './db-streamer';
 
 /**
  * Error thrown for invalid struct state
@@ -1700,8 +1701,6 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 
     archived(config: {
         type: 'stream';
-        limit?: number;
-        offset?: number;
     }): StructStream<T, Name>;
     archived(config: {
         type: 'array';
@@ -1719,10 +1718,9 @@ export class Struct<T extends Blank = any, Name extends string = any> {
         limit?: number;
         offset?: number;
     }): StructStream<T, Name> | Promise<Result<StructData<T, Name>[] | StructData<T, Name> | undefined | number, Error>> {
-        const get = async () => {
+        const squeal = sql`${this.table.archived} = ${true}`;
+        const get = async (squeal: SQL) => {
             this.apiQuery('archived', {});
-
-            const squeal = sql`${this.table.archived} = ${true}`;
 
             if (config.type === 'count') {
                 const res = await this.database.select({
@@ -1745,17 +1743,22 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 
         if (config.type === 'stream') {
             const stream = new StructStream(this);
-            (async () => {
-                const dataStream = await get() as Structable<T & typeof globalCols>[];
-                for (let i = 0; i < dataStream.length; i++) {
-                    stream.add(this.Generator(dataStream[i] as any));
-                }
-                stream.end();
-            })();
+            const res = dbStream<
+                Structable<T & typeof globalCols>
+            >(this.database, this.table, squeal);
+            
+            res.pipe(d => stream.add(this.Generator(d)));
+            // (async () => {
+            //     const dataStream = await get() as Structable<T & typeof globalCols>[];
+            //     for (let i = 0; i < dataStream.length; i++) {
+            //         stream.add(this.Generator(dataStream[i] as any));
+            //     }
+            //     stream.end();
+            // })();
             return stream;
         } else {
             return attemptAsync(async () => {
-                const data = await get() as Structable<T & typeof globalCols>[] | Structable<T & typeof globalCols> | number;
+                const data = await get(squeal) as Structable<T & typeof globalCols>[] | Structable<T & typeof globalCols> | number;
                 if (Array.isArray(data)) {
                     return data.map(d => this.Generator(d));
                 } else if (typeof data === 'object') {
@@ -1788,18 +1791,18 @@ export class Struct<T extends Blank = any, Name extends string = any> {
         includeArchived?: boolean;
     }): Promise<Result<number>>;
     fromProperty<K extends keyof (T & typeof globalCols)>(property: K, value: TsType<(T & typeof globalCols)[K]['_']['dataType']>, config: MultiConfig): StructStream<T, Name> | Promise<Result<StructData<T, Name>[] | StructData<T, Name> | undefined | number, Error>> {
-        const get = async () => {
+        let squeal: SQL;
+        if (config.includeArchived) {
+            squeal = sql`${this.table[property]} = ${value}`;
+        } else {
+            squeal = sql`${this.table[property]} = ${value} AND ${this.table.archived} = ${false}`;
+        }
+        const get = async (squeal: SQL) => {
             this.apiQuery('from-property', {
                 property: String(property),
                 value,
             });
 
-            let squeal: SQL;
-            if (config.includeArchived) {
-                squeal = sql`${this.table[property]} = ${value}`;
-            } else {
-                squeal = sql`${this.table[property]} = ${value} AND ${this.table.archived} = ${false}`;
-            }
 
             if (config.type === 'count') {
                 const res = await this.database.select({
@@ -1822,17 +1825,22 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 
         if (config.type === 'stream') {
             const stream = new StructStream(this);
-            (async () => {
-                const dataStream = await get() as Structable<T & typeof globalCols>[];
-                for (let i = 0; i < dataStream.length; i++) {
-                    stream.add(this.Generator(dataStream[i] as any));
-                }
-                stream.end();
-            })();
+            const res = dbStream<
+                Structable<T & typeof globalCols>
+            >(this.database, this.table, squeal);
+
+            res.pipe(d => stream.add(this.Generator(d)));
+            // (async () => {
+            //     const dataStream = await get(squeal) as Structable<T & typeof globalCols>[];
+            //     for (let i = 0; i < dataStream.length; i++) {
+            //         stream.add(this.Generator(dataStream[i] as any));
+            //     }
+            //     stream.end();
+            // })();
             return stream;
         } else {
             return attemptAsync(async () => {
-                const data = await get() as Structable<T & typeof globalCols>[] | Structable<T & typeof globalCols> | number;
+                const data = await get(squeal) as Structable<T & typeof globalCols>[] | Structable<T & typeof globalCols> | number;
                 if (Array.isArray(data)) {
                     return data.map(d => this.Generator(d));
                 } else if (typeof data === 'object') {
@@ -1872,20 +1880,22 @@ export class Struct<T extends Blank = any, Name extends string = any> {
         [K in keyof T]?: TsType<T[K]['_']['dataType']>;
     }, config: MultiConfig): StructStream<T, Name> | Promise<Result<StructData<T, Name>[] | StructData<T, Name> | undefined | number, Error>> {
         console.warn(`Struct.get() This method is unstable, use with caution. fromProperty is recommended at this time`);
-        const get = async () => {
+        let squeal = sql`1 = 1`;
+        for (const key in props) {
+            if (squeal) {
+                squeal = sql`${squeal} AND ${this.table[key]} = ${props[key]}`;
+            } else {
+                squeal = sql`${this.table[key]} = ${props[key]}`;
+            }
+        }
+
+        const get = async (squeal: SQL) => {
             // this.apiQuery('get', {
             //     props,
             // });
 
             // const squeal = sql.join(Object.keys(props).map(k => sql`${this.table[k]} = ${props[k]}`), sql` AND `);
-            let squeal = sql`1 = 1`;
-            for (const key in props) {
-                if (squeal) {
-                    squeal = sql`${squeal} AND ${this.table[key]} = ${props[key]}`;
-                } else {
-                    squeal = sql`${this.table[key]} = ${props[key]}`;
-                }
-            }
+
 
             if (config.type === 'count') {
                 const res = await this.database.select({
@@ -1908,17 +1918,22 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 
         if (config.type === 'stream') {
             const stream = new StructStream(this);
-            (async () => {
-                const dataStream = await get() as Structable<T & typeof globalCols>[];
-                for (let i = 0; i < dataStream.length; i++) {
-                    stream.add(this.Generator(dataStream[i] as any));
-                }
-                stream.end();
-            })();
+            const res = dbStream<
+                Structable<T & typeof globalCols>
+            >(this.database, this.table, squeal);
+
+            res.pipe(d => stream.add(this.Generator(d)));
+            // (async () => {
+            //     const dataStream = await get() as Structable<T & typeof globalCols>[];
+            //     for (let i = 0; i < dataStream.length; i++) {
+            //         stream.add(this.Generator(dataStream[i] as any));
+            //     }
+            //     stream.end();
+            // })();
             return stream;
         } else {
             return attemptAsync(async () => {
-                const data = await get() as Structable<T & typeof globalCols>[] | Structable<T & typeof globalCols> | number;
+                const data = await get(squeal) as Structable<T & typeof globalCols>[] | Structable<T & typeof globalCols> | number;
                 if (Array.isArray(data)) {
                     return data.map(d => this.Generator(d));
                 } else if (typeof data === 'object') {
@@ -2058,16 +2073,17 @@ export class Struct<T extends Blank = any, Name extends string = any> {
         type: 'count';
     }): Promise<Result<number>>;
     getLifetimeItems(config: MultiConfig): StructStream<T, Name> | Promise<Result<StructData<T, Name>[] | undefined | StructData<T, Name> | number, Error>> {
-        const get = async () => {
+        let squeal: SQL;
+        if (config.includeArchived) {
+            squeal = sql`${this.table.lifetime} > 0`;
+        } else {
+            squeal = sql`${this.table.lifetime} > 0 AND ${this.table.archived} = ${false}`;
+        }
+
+        const get = async (squeal: SQL) => {
             // this.apiQuery('get-lifetime-items', {});
 
             // const squeal = sql`${this.table.lifetime} > 0 AND ${this.table.archived} = ${false}`;
-            let squeal: SQL;
-            if (config.includeArchived) {
-                squeal = sql`${this.table.lifetime} > 0`;
-            } else {
-                squeal = sql`${this.table.lifetime} > 0 AND ${this.table.archived} = ${false}`;
-            }
 
             if (config.type === 'count') {
                 const res = await this.database.select({
@@ -2090,17 +2106,22 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 
         if (config.type === 'stream') {
             const stream = new StructStream(this);
-            (async () => {
-                const dataStream = await get() as Structable<T & typeof globalCols>[];
-                for (let i = 0; i < dataStream.length; i++) {
-                    stream.add(this.Generator(dataStream[i] as any));
-                }
-                stream.end();
-            })();
+            const res = dbStream<
+                Structable<T & typeof globalCols>
+            >(this.database, this.table, squeal);
+
+            res.pipe(d => stream.add(this.Generator(d)));
+            // (async () => {
+            //     const dataStream = await get() as Structable<T & typeof globalCols>[];
+            //     for (let i = 0; i < dataStream.length; i++) {
+            //         stream.add(this.Generator(dataStream[i] as any));
+            //     }
+            //     stream.end();
+            // })();
             return stream;
         } else {
             return attemptAsync(async () => {
-                const data = await get() as Structable<T & typeof globalCols>[] | Structable<T & typeof globalCols> | number;
+                const data = await get(squeal) as Structable<T & typeof globalCols>[] | Structable<T & typeof globalCols> | number;
                 if (Array.isArray(data)) {
                     return data.map(d => this.Generator(d));
                 } else if (typeof data === 'object') {
