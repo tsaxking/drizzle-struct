@@ -36,7 +36,7 @@
 		"prettier": "^3.4.2",
 		"prettier-plugin-svelte": "^3.3.2",
 		"proper-lockfile": "^4.1.2",
-		"svelte": "^5.16.0",
+		"svelte": "^5.16.1",
 		"ts-node": "^10.9.2",
 		"ts-utils": "github:tsaxking/global-ts-utilities",
 		"typescript": "^5.7.2",
@@ -47,7 +47,7 @@
 		"@esbuild-kit/esm-loader": "^2.6.5",
 		"@types/express": "^5.0.0",
 		"@types/pg": "^8.11.10",
-		"drizzle-kit": "^0.22.0",
+		"drizzle-kit": "^0.22.8",
 		"vitest": "^2.1.8"
 	},
 	"exports": {
