@@ -24,6 +24,6 @@ export const dbStream = <T>(db: PostgresJsDatabase, table: Table, query: SQL, co
             }
         };
         fetch();
-    }, config?.wait || 10);
+    }, config?.wait || 0);
     return stream;
 };
