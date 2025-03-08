@@ -721,7 +721,7 @@ export class DataArr<T extends Blank> implements Readable<StructData<T>[]> {
 
 	private get filtered() {
 		return this.data
-			.filter(this._filter)
+			// .filter(this._filter)
 			.sort(this._sort);
 	}
 }
