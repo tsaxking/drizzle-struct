@@ -738,8 +738,7 @@ export class StructData<T extends Blank = any, Name extends string = any> {
 	makeVersion() {
 		return attemptAsync(async () => {
 			if (!this.struct.versionTable)
-				throw new StructError(
-					this.struct,
+				throw new Error(
 					`Struct ${this.struct.name} does not have a version table`
 				);
 			this.log('Making version');

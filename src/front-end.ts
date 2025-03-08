@@ -653,9 +653,8 @@ export class DataArr<T extends Blank> implements Readable<StructData<T>[]> {
 	 */
 	private apply(value: StructData<T>[]): void {
 		this.data = value
-			.filter((v, i, a) => a.findIndex((_v) => _v.data.id === v.data.id) === i)
-			.sort(this._sort);
-		this.subscribers.forEach((fn) => fn(this.data));
+			.filter((v, i, a) => a.findIndex((_v) => _v.data.id === v.data.id) === i);
+		this.inform();
 		this.struct.log('Applied Data:', this.data);
 	}
 
@@ -698,13 +697,32 @@ export class DataArr<T extends Blank> implements Readable<StructData<T>[]> {
 
 	private _sort: (a: StructData<T>, b: StructData<T>) => number = (a, b) => 0;
 
+	/**
+	 * Sorts the data array and updates the subscribers
+	 * @param fn 
+	 */
 	sort(fn: (a: StructData<T>, b: StructData<T>) => number) {
 		this._sort = fn;
 		this.apply(this.data);
 	}
 
+	/**
+	 * Inform all subscribers of the new data
+	 */
 	inform() {
-		this.apply(this.data);
+		this.apply(this.filtered);
+	}
+
+	private _filter = (data: StructData<T>) => true;
+
+	filter(fn: (data: StructData<T>) => boolean) {
+		this._filter = fn;
+	}
+
+	private get filtered() {
+		return this.data
+			.filter(this._filter)
+			.sort(this._sort);
 	}
 }
 
@@ -1288,10 +1306,14 @@ export class Struct<T extends Blank> {
 		const remove = (d: StructData<T>) => {
 			newArr.remove(d);
 		};
+		const update = (d: StructData<T>) => {
+			newArr.inform();
+		};
 		this.on('new', add);
 		this.on('delete', remove);
 		this.on('archive', remove);
 		this.on('restore', add);
+		this.on('update', update);
 
 		getStream().pipe(add);
 		newArr.onAllUnsubscribe(() => {
@@ -1299,6 +1321,7 @@ export class Struct<T extends Blank> {
 			this.off('delete', remove);
 			this.off('archive', remove);
 			this.off('restore', add);
+			this.off('update', update);
 			this.writables.delete('all');
 		});
 		return newArr;
@@ -1338,9 +1361,13 @@ export class Struct<T extends Blank> {
 		const remove = (d: StructData<T>) => {
 			newArr.remove(d);
 		};
+		const update = (d: StructData<T>) => {
+			newArr.inform();
+		};
 		this.on('delete', remove);
 		this.on('archive', add);
 		this.on('restore', remove);
+		this.on('update', update);
 
 		getStream().pipe(add);
 
@@ -1348,6 +1375,7 @@ export class Struct<T extends Blank> {
 			this.off('delete', remove);
 			this.off('archive', add);
 			this.off('restore', remove);
+			this.off('update', update);
 			this.writables.delete('archived');
 		});
 
@@ -1411,6 +1439,8 @@ export class Struct<T extends Blank> {
 				arr.add(d);
 			} else if ((d.data as any)[key] !== value) {
 				arr.remove(d);
+			} else {
+				arr.inform();
 			}
 		};
 
@@ -1473,10 +1503,15 @@ export class Struct<T extends Blank> {
 			arr.remove(d);
 		};
 
+		const update = (d: StructData<T>) => {
+			arr.inform();
+		};
+
 		this.on('new', add);
 		this.on('archive', remove);
 		this.on('restore', add);
 		this.on('delete', remove);
+		this.on('update', update);
 
 		s.pipe((d) => {
 			arr.add(d);
@@ -1487,6 +1522,7 @@ export class Struct<T extends Blank> {
 			this.off('archive', remove);
 			this.off('restore', add);
 			this.off('delete', remove);
+			this.off('update', update);
 			this.writables.delete(`universe:${universe}`);
 		});
 		return arr;
@@ -1571,6 +1607,12 @@ export class Struct<T extends Blank> {
 			}
 		};
 
+		const update = (d: StructData<T>) => {
+			if (config.satisfies?.(d)) {
+				arr.inform();
+			}
+		};
+
 		this.on('new', add);
 		if (!config.includeArchive) this.on('restore', add);
 		this.on('archive', remove);
@@ -1585,6 +1627,7 @@ export class Struct<T extends Blank> {
 			this.off('restore', add);
 			this.off('archive', remove);
 			this.off('delete', remove);
+			this.off('update', update);
 		});
 
 		return arr;
