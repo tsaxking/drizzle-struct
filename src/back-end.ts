@@ -3294,7 +3294,8 @@ const sessionSampleStructCols = {
 	ip: text('ip').notNull(),
 	userAgent: text('user_agent').notNull(),
 	requests: integer('requests').notNull(),
-	prevUrl: text('prev_url').notNull()
+	prevUrl: text('prev_url').notNull(),
+	latency: integer('latency').notNull().default(0),
 }
 
 export type Session = StructData<typeof sessionSampleStructCols, 'session'>;
