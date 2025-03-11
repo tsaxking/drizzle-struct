@@ -924,6 +924,14 @@ export class Struct<T extends Blank> {
 		});
 	}
 
+	get sample(): StructData<T> {
+		throw new Error('Sample is not meant to used at runtime.');
+	}
+
+	get vhSample(): StructDataVersion<T> {
+		throw new Error('vhSample is not meant to be used at runtime');
+	}
+
 	/**
 	 * Sets listeners for the struct. Runs when the struct is built
 	 *
