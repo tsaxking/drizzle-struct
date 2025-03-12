@@ -606,7 +606,9 @@ export class StructData<T extends Blank> implements Writable<PartialStructable<T
  * @template {Blank} T
  * @implements {Readable<StructData<T>[]>}
  */
-export class DataArr<T extends Blank> implements Readable<StructData<T>[]> {
+export class DataArr<T extends Blank> implements Writable<StructData<T>[]> {
+	private readonly dataset: Set<StructData<T>>;
+
 	/**
 	 * Creates an instance of DataArr.
 	 *
@@ -616,8 +618,10 @@ export class DataArr<T extends Blank> implements Readable<StructData<T>[]> {
 	 */
 	constructor(
 		public readonly struct: Struct<T>,
-		public data: StructData<T>[]
-	) {}
+		data: StructData<T>[]
+	) {
+		this.dataset = new Set(data);
+	}
 
 	/**
 	 * All subscribers to the data array
@@ -626,6 +630,17 @@ export class DataArr<T extends Blank> implements Readable<StructData<T>[]> {
 	 * @type {*}
 	 */
 	private readonly subscribers = new Set<(value: StructData<T>[]) => void>();
+
+	public get data() {
+		return Array.from(this.dataset);
+	}
+
+	public set data(value: StructData<T>[]) {
+		this.dataset.clear();
+		for (let i = 0; i < value.length; i++) {
+			this.dataset.add(value[i]);
+		}
+	}
 
 	/**
 	 * Subscribe to the data array
@@ -653,7 +668,6 @@ export class DataArr<T extends Blank> implements Readable<StructData<T>[]> {
 	 */
 	private apply(value: StructData<T>[]): void {
 		this.data = value
-			.filter((v, i, a) => a.findIndex((_v) => _v.data.id === v.data.id) === i)
 			.sort(this._sort);
 		this.subscribers.forEach((fn) => fn(this.data));
 		this.struct.log('Applied Data:', this.data);
@@ -705,6 +719,14 @@ export class DataArr<T extends Blank> implements Readable<StructData<T>[]> {
 
 	inform() {
 		this.apply(this.data);
+	}
+
+	public set(value: StructData<T>[]) {
+		this.apply(value);
+	}
+
+	public update(fn: (data: StructData<T>[]) => StructData<T>[]) {
+		this.apply(fn(this.data));
 	}
 }
 
@@ -1287,7 +1309,9 @@ export class Struct<T extends Blank> {
 		if (asStream) return getStream();
 		const arr = this.writables.get('all');
 		if (arr) return arr;
-		const newArr = new DataArr(this, []);
+		const newArr = new DataArr(this, [
+			...this.cache.values(),
+		]);
 		this.writables.set('all', newArr);
 
 		const add = (d: StructData<T>) => {
@@ -1305,7 +1329,9 @@ export class Struct<T extends Blank> {
 		this.on('restore', add);
 		this.on('update', update);
 
-		getStream().pipe(add);
+		const stream = getStream();
+		stream.once('data', (data) => newArr.set([data]));
+		stream.pipe(add);
 		newArr.onAllUnsubscribe(() => {
 			this.off('new', add);
 			this.off('delete', remove);
@@ -1342,7 +1368,9 @@ export class Struct<T extends Blank> {
 		if (asStream) return getStream();
 		const arr = this.writables.get('archived');
 		if (arr) return arr;
-		const newArr = new DataArr(this, []);
+		const newArr = new DataArr(this, [
+			...this.cache.values(),
+		].filter(d => d.data.archived));
 		this.writables.set('archived', newArr);
 
 		const add = (d: StructData<T>) => {
@@ -1359,7 +1387,9 @@ export class Struct<T extends Blank> {
 		this.on('restore', remove);
 		this.on('update', update);
 
-		getStream().pipe(add);
+		const stream = getStream();
+		stream.once('data', (data) => newArr.set([data]));
+		stream.pipe(add);
 
 		newArr.onAllUnsubscribe(() => {
 			this.off('delete', remove);
@@ -1411,11 +1441,13 @@ export class Struct<T extends Blank> {
 		value: ColTsType<(T & GlobalCols)[K]>,
 		asStream: boolean
 	) {
-		const s = this.getStream('property', { key: String(key), value });
-		if (asStream) return s;
+		const getStream = () => this.getStream('property', { key: String(key), value });
+		if (asStream) return getStream();
 		const arr =
 			this.writables.get(`property:${String(key)}:${JSON.stringify(value)}`) ||
-			new DataArr(this, []);
+			new DataArr(this, [
+				...this.cache.values(),
+			].filter(d => d.data[key] === value));
 		this.writables.set(`property:${String(key)}:${JSON.stringify(value)}`, arr);
 
 		const add = (d: StructData<T>) => {
@@ -1440,9 +1472,9 @@ export class Struct<T extends Blank> {
 		this.on('delete', remove);
 		this.on('update', update);
 
-		s.pipe((d) => {
-			arr.add(d);
-		});
+		const stream = getStream();
+		stream.once('data', (data) => arr.set([data]));
+		stream.pipe(add);
 
 		arr.onAllUnsubscribe(() => {
 			this.off('new', add);
@@ -1479,9 +1511,11 @@ export class Struct<T extends Blank> {
 	 * @returns
 	 */
 	fromUniverse(universe: string, asStream: boolean) {
-		const s = this.getStream('universe', universe);
-		if (asStream) return s;
-		const arr = this.writables.get(`universe:${universe}`) || new DataArr(this, []);
+		const getStream = () => this.getStream('universe', universe);
+		if (asStream) return getStream();
+		const arr = this.writables.get(`universe:${universe}`) || new DataArr(this, [
+			...this.cache.values(),
+		].filter(d => d.data.universe === universe));
 		this.writables.set(`universe:${universe}`, arr);
 
 		const add = (d: StructData<T>) => {
@@ -1503,9 +1537,9 @@ export class Struct<T extends Blank> {
 		this.on('delete', remove);
 		this.on('update', update);
 
-		s.pipe((d) => {
-			arr.add(d);
-		});
+		const stream = getStream();
+		stream.once('data', (data) => arr.set([data]));
+		stream.pipe(add);
 
 		arr.onAllUnsubscribe(() => {
 			this.off('new', add);
@@ -1581,9 +1615,10 @@ export class Struct<T extends Blank> {
 		const exists = this.writables.get(`custom:${query}:${JSON.stringify(data)}`);
 		if (exists) return exists;
 
-		const arr = new DataArr(this, []);
+		const arr = new DataArr(this, [
+			...this.cache.values(),
+		].filter(d => config.satisfies?.(d) || false));
 
-		const res = get();
 
 		const add = (d: StructData<T>) => {
 			if (config.satisfies?.(d)) {
@@ -1607,7 +1642,8 @@ export class Struct<T extends Blank> {
 		if (!config.includeArchive) this.on('restore', add);
 		this.on('archive', remove);
 		if (!config.includeArchive) this.on('delete', remove);
-
+		const res = get();
+		res.once('data', (d) => arr.set([d]));
 		res.pipe((d) => arr.add(d));
 
 		arr.onAllUnsubscribe(() => {
