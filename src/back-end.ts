@@ -642,6 +642,7 @@ export class StructData<T extends Blank = any, Name extends string = any> {
 			delete newData.universe;
 			delete newData.attributes;
 			delete newData.lifetime;
+			delete newData.serial;
 			await this.database
 				.update(this.struct.table)
 				.set({
@@ -2505,6 +2506,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 				attributes: createSchema(z.string(), 'attributes'),
 				lifetime: createSchema(z.number(), 'lifetime'),
 				canUpdate: createSchema(z.boolean(), 'canUpdate'),
+				serial: createSchema(z.number(), 'serial'),
 				...Object.fromEntries(
 					Object.entries(this.data.structure).map(([k, v]) => {
 						if (this.data.validators && this.data.validators[k]) {
