@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { pgTable, text, timestamp, boolean, integer, serial } from 'drizzle-orm/pg-core';
 import type { PgColumnBuilderBase, PgTableWithColumns } from 'drizzle-orm/pg-core';
-import { count, eq, SQL, sql, type BuildColumns } from 'drizzle-orm';
+import { and, count, eq, SQL, sql, type BuildColumns } from 'drizzle-orm';
 import { attempt, attemptAsync, resolveAll, type Result } from 'ts-utils/check';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import { type ColumnDataType } from 'drizzle-orm';
@@ -1154,6 +1154,7 @@ export type MultiConfig = {
 	includeArchived?: boolean;
 	limit?: number;
 	offset?: number;
+	wait?: number;
 };
 
 /**
@@ -1816,7 +1817,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 	//     }
 	// }
 
-	all(config: { type: 'stream'; limit?: number; offset?: number }): StructStream<T, Name>;
+	all(config: { type: 'stream'; limit?: number; offset?: number, wait?: number }): StructStream<T, Name>;
 	all(config: {
 		type: 'array';
 		limit: number;
@@ -1864,7 +1865,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 					stream.add(this.Generator(dataStream[i] as any));
 				}
 				stream.end();
-			});
+			}, config.wait);
 			return stream;
 		} else {
 			return attemptAsync(async () => {
@@ -1883,7 +1884,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 		}
 	}
 
-	archived(config: { type: 'stream'; limit?: number; offset?: number }): StructStream<T, Name>;
+	archived(config: { type: 'stream'; limit?: number; offset?: number, wait?: number }): StructStream<T, Name>;
 	archived(config: {
 		type: 'array';
 		limit: number;
@@ -1895,6 +1896,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 		type: 'stream' | 'array' | 'single' | 'count';
 		limit?: number;
 		offset?: number;
+		wait?: number;
 	}):
 		| StructStream<T, Name>
 		| Promise<Result<StructData<T, Name>[] | StructData<T, Name> | undefined | number, Error>> {
@@ -1933,7 +1935,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 					stream.add(this.Generator(dataStream[i] as any));
 				}
 				stream.end();
-			});
+			}, config.wait);
 			return stream;
 		} else {
 			return attemptAsync(async () => {
@@ -1960,6 +1962,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 			limit?: number;
 			offset?: number;
 			includeArchived?: boolean;
+			wait?: number;
 		}
 	): StructStream<T, Name>;
 	fromProperty<K extends keyof (T & typeof globalCols)>(
@@ -2038,7 +2041,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 					stream.add(this.Generator(dataStream[i] as any));
 				}
 				stream.end();
-			});
+			}, config.wait);
 			return stream;
 		} else {
 			return attemptAsync(async () => {
@@ -2065,6 +2068,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 			type: 'stream';
 			limit?: number;
 			offset?: number;
+			wait?: number;
 		}
 	): StructStream<T, Name>;
 	get(
@@ -2110,14 +2114,11 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 			// });
 
 			// const squeal = sql.join(Object.keys(props).map(k => sql`${this.table[k]} = ${props[k]}`), sql` AND `);
-			let squeal = sql`1 = 1`;
-			for (const key in props) {
-				if (squeal) {
-					squeal = sql`${squeal} AND ${this.table[key]} = ${props[key]}`;
-				} else {
-					squeal = sql`${this.table[key]} = ${props[key]}`;
-				}
-			}
+			let squeal = and(
+				...Object.entries(props).map(([k, v]) => eq(
+					this.table[k] as any, v as any,
+				)),
+			);
 
 			if (config.type === 'count') {
 				const res = await this.database
@@ -2149,7 +2150,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 					stream.add(this.Generator(dataStream[i] as any));
 				}
 				stream.end();
-			});
+			}, config.wait);
 			return stream;
 		} else {
 			return attemptAsync(async () => {
@@ -2290,6 +2291,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 		type: 'stream';
 		limit?: number;
 		offset?: number;
+		wait?: number;
 	}): StructStream<T, Name>;
 	getLifetimeItems(config: {
 		type: 'array';
@@ -2346,7 +2348,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 					stream.add(this.Generator(dataStream[i] as any));
 				}
 				stream.end();
-			});
+			}, config.wait);
 			return stream;
 		} else {
 			return attemptAsync(async () => {
@@ -3294,7 +3296,8 @@ const sessionSampleStructCols = {
 	ip: text('ip').notNull(),
 	userAgent: text('user_agent').notNull(),
 	requests: integer('requests').notNull(),
-	prevUrl: text('prev_url').notNull()
+	prevUrl: text('prev_url').notNull(),
+	latency: integer('latency').notNull().default(0),
 }
 
 export type Session = StructData<typeof sessionSampleStructCols, 'session'>;
