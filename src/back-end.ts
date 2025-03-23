@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { pgTable, text, timestamp, boolean, integer } from 'drizzle-orm/pg-core';
+import { pgTable, text, timestamp, boolean, integer, serial } from 'drizzle-orm/pg-core';
 import type { PgColumnBuilderBase, PgTableWithColumns } from 'drizzle-orm/pg-core';
 import { count, eq, SQL, sql, type BuildColumns } from 'drizzle-orm';
 import { attempt, attemptAsync, resolveAll, type Result } from 'ts-utils/check';
@@ -250,7 +250,8 @@ export const globalCols = {
 	universe: text('universe').notNull(),
 	attributes: text('attributes').notNull(),
 	lifetime: integer('lifetime').notNull(),
-	canUpdate: boolean<'can_update'>('can_update').default(true).notNull()
+	canUpdate: boolean<'can_update'>('can_update').default(true).notNull(),
+	serial: serial('serial').notNull(),
 };
 
 /**
@@ -969,6 +970,7 @@ export class StructData<T extends Blank = any, Name extends string = any> {
 		for (const key of omit) {
 			delete (data as any)[key];
 		}
+		delete (data as any).serial;
 		return data as any;
 	}
 	/**
