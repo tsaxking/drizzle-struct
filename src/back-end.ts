@@ -2,7 +2,7 @@
 import { pgTable, text, timestamp, boolean, integer } from 'drizzle-orm/pg-core';
 import type { PgColumnBuilderBase, PgTableWithColumns } from 'drizzle-orm/pg-core';
 import { count, eq, SQL, sql, type BuildColumns } from 'drizzle-orm';
-import { attempt, attemptAsync, resolveAll, type Result } from 'ts-utils/check';
+import { attempt, attemptAsync, resolveAll, type Result, ResultPromise } from 'ts-utils/check';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import { type ColumnDataType } from 'drizzle-orm';
 import { EventEmitter } from 'ts-utils/event-emitter';
@@ -1334,7 +1334,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 	 * @param {RequestEvent} event
 	 * @returns {Promise<Result<Response>>}
 	 */
-	public static handler(event: RequestEvent): Promise<Result<Response>> {
+	public static handler(event: RequestEvent): ResultPromise<Response> {
 		return attemptAsync(async () => {
 			const body: unknown = await event.request.json();
 
@@ -1819,14 +1819,14 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 		type: 'array';
 		limit: number;
 		offset: number;
-	}): Promise<Result<StructData<T, Name>[], Error>>;
-	all(config: { type: 'single' }): Promise<Result<StructData<T, Name> | undefined, Error>>;
-	all(config: { type: 'count' }): Promise<Result<number>>;
+	}): ResultPromise<StructData<T, Name>[], Error>;
+	all(config: { type: 'single' }): ResultPromise<StructData<T, Name> | undefined, Error>;
+	all(config: { type: 'count' }): ResultPromise<number>;
 	all(
 		config: MultiConfig
 	):
 		| StructStream<T, Name>
-		| Promise<Result<StructData<T, Name>[] | undefined | StructData<T, Name> | number, Error>> {
+		| ResultPromise<StructData<T, Name>[] | undefined | StructData<T, Name> | number, Error> {
 		const get = async () => {
 			this.apiQuery('all', {});
 
@@ -1886,16 +1886,16 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 		type: 'array';
 		limit: number;
 		offset: number;
-	}): Promise<Result<StructData<T, Name>[], Error>>;
-	archived(config: { type: 'single' }): Promise<Result<StructData<T, Name> | undefined, Error>>;
-	archived(config: { type: 'count' }): Promise<Result<number>>;
+	}): ResultPromise<StructData<T, Name>[], Error>;
+	archived(config: { type: 'single' }): ResultPromise<StructData<T, Name> | undefined, Error>;
+	archived(config: { type: 'count' }): ResultPromise<number>;
 	archived(config: {
 		type: 'stream' | 'array' | 'single' | 'count';
 		limit?: number;
 		offset?: number;
 	}):
 		| StructStream<T, Name>
-		| Promise<Result<StructData<T, Name>[] | StructData<T, Name> | undefined | number, Error>> {
+		| ResultPromise<StructData<T, Name>[] | StructData<T, Name> | undefined | number, Error> {
 		const get = async () => {
 			this.apiQuery('archived', {});
 
@@ -1969,7 +1969,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 			offset: number;
 			includeArchived?: boolean;
 		}
-	): Promise<Result<StructData<T, Name>[], Error>>;
+	): ResultPromise<StructData<T, Name>[], Error>;
 	fromProperty<K extends keyof (T & typeof globalCols)>(
 		property: K,
 		value: TsType<(T & typeof globalCols)[K]['_']['dataType']>,
@@ -1977,7 +1977,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 			type: 'single';
 			includeArchived?: boolean;
 		}
-	): Promise<Result<StructData<T, Name> | undefined, Error>>;
+	): ResultPromise<StructData<T, Name> | undefined, Error>;
 	fromProperty<K extends keyof (T & typeof globalCols)>(
 		property: K,
 		value: TsType<(T & typeof globalCols)[K]['_']['dataType']>,
@@ -1985,14 +1985,14 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 			type: 'count';
 			includeArchived?: boolean;
 		}
-	): Promise<Result<number>>;
+	): ResultPromise<number>;
 	fromProperty<K extends keyof (T & typeof globalCols)>(
 		property: K,
 		value: TsType<(T & typeof globalCols)[K]['_']['dataType']>,
 		config: MultiConfig
 	):
 		| StructStream<T, Name>
-		| Promise<Result<StructData<T, Name>[] | StructData<T, Name> | undefined | number, Error>> {
+		| ResultPromise<StructData<T, Name>[] | StructData<T, Name> | undefined | number, Error> {
 		const get = async () => {
 			this.apiQuery('from-property', {
 				property: String(property),
@@ -2074,7 +2074,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 			limit: number;
 			offset: number;
 		}
-	): Promise<Result<StructData<T, Name>[], Error>>;
+	): ResultPromise<StructData<T, Name>[], Error>;
 	get(
 		props: {
 			[K in keyof T]?: TsType<T[K]['_']['dataType']>;
@@ -2082,7 +2082,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 		config: {
 			type: 'single';
 		}
-	): Promise<Result<StructData<T, Name> | undefined, Error>>;
+	): ResultPromise<StructData<T, Name> | undefined, Error>;
 	get(
 		props: {
 			[K in keyof T]?: TsType<T[K]['_']['dataType']>;
@@ -2090,7 +2090,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 		config: {
 			type: 'count';
 		}
-	): Promise<Result<number>>;
+	): ResultPromise<number>;
 	get(
 		props: {
 			[K in keyof T]?: TsType<T[K]['_']['dataType']>;
@@ -2098,7 +2098,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 		config: MultiConfig
 	):
 		| StructStream<T, Name>
-		| Promise<Result<StructData<T, Name>[] | StructData<T, Name> | undefined | number, Error>> {
+		| ResultPromise<StructData<T, Name>[] | StructData<T, Name> | undefined | number, Error> {
 		console.warn(
 			`Struct.get() This method is unstable, use with caution. fromProperty is recommended at this time`
 		);
@@ -2177,16 +2177,16 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 	//     limit: number;
 	//     offset: number;
 	//     includeArchived?: boolean;
-	// }): Promise<Result<StructData<T, Name>[], Error>>;
+	// }): ResultPromise<StructData<T, Name>[], Error>;
 	// fromUniverse(universe: string, config: {
 	//     type: 'single';
 	//     includeArchived?: boolean;
-	// }): Promise<Result<StructData<T, Name> | undefined, Error>>;
+	// }): ResultPromise<StructData<T, Name> | undefined, Error>;
 	// fromUniverse(universe: string, config: {
 	//     type: 'count';
 	//     includeArchived?: boolean;
-	// }): Promise<Result<number>>;
-	// fromUniverse(universe: string, config: MultiConfig): StructStream<T, Name> | Promise<Result<StructData<T, Name>[] | undefined | StructData<T, Name> | number, Error>> {
+	// }): ResultPromise<number>;
+	// fromUniverse(universe: string, config: MultiConfig): StructStream<T, Name> | ResultPromise<StructData<T, Name>[] | undefined | StructData<T, Name> | number, Error> {
 	// const get = async () => {
 	//     this.apiQuery('from-universe', {
 	//         universe,
@@ -2293,16 +2293,16 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 		type: 'array';
 		limit: number;
 		offset: number;
-	}): Promise<Result<StructData<T, Name>[], Error>>;
+	}): ResultPromise<StructData<T, Name>[], Error>;
 	getLifetimeItems(config: {
 		type: 'single';
-	}): Promise<Result<StructData<T, Name> | undefined, Error>>;
-	getLifetimeItems(config: { type: 'count' }): Promise<Result<number>>;
+	}): ResultPromise<StructData<T, Name> | undefined, Error>;
+	getLifetimeItems(config: { type: 'count' }): ResultPromise<number>;
 	getLifetimeItems(
 		config: MultiConfig
 	):
 		| StructStream<T, Name>
-		| Promise<Result<StructData<T, Name>[] | undefined | StructData<T, Name> | number, Error>> {
+		| ResultPromise<StructData<T, Name>[] | undefined | StructData<T, Name> | number, Error> {
 		const get = async () => {
 			// this.apiQuery('get-lifetime-items', {});
 
@@ -3292,7 +3292,8 @@ const sessionSampleStructCols = {
 	ip: text('ip').notNull(),
 	userAgent: text('user_agent').notNull(),
 	requests: integer('requests').notNull(),
-	prevUrl: text('prev_url').notNull()
+	prevUrl: text('prev_url').notNull(),
+	latency: integer('latency').notNull(),
 }
 
 export type Session = StructData<typeof sessionSampleStructCols, 'session'>;
