@@ -1822,7 +1822,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 	}): ResultPromise<StructData<T, Name>[], Error>;
 	all(config: { type: 'single' }): ResultPromise<StructData<T, Name> | undefined, Error>;
 	all(config: { type: 'count' }): ResultPromise<number>;
-	all(config: { type: 'all' }): ResultPromise<StructData<T, Name>[] | undefined, Error>;
+	all(config: { type: 'all' }): ResultPromise<StructData<T, Name>[], Error>;
 	all(
 		config: MultiConfig
 	):
@@ -1890,7 +1890,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 	}): ResultPromise<StructData<T, Name>[], Error>;
 	archived(config: { type: 'single' }): ResultPromise<StructData<T, Name> | undefined, Error>;
 	archived(config: { type: 'count' }): ResultPromise<number>;
-	archived(config: { type: 'all' }): ResultPromise<StructData<T, Name>[] | undefined, Error>;
+	archived(config: { type: 'all' }): ResultPromise<StructData<T, Name>[], Error>;
 	archived(config: {
 		type: 'stream' | 'array' | 'single' | 'count' | 'all';
 		limit?: number;
@@ -1995,7 +1995,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 			type: 'all';
 			includeArchived?: boolean;
 		}
-	): ResultPromise<StructData<T, Name>[] | undefined, Error>;
+	): ResultPromise<StructData<T, Name>[], Error>;
 	fromProperty<K extends keyof (T & typeof globalCols)>(
 		property: K,
 		value: TsType<(T & typeof globalCols)[K]['_']['dataType']>,
@@ -2108,7 +2108,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 		config: {
 			type: 'all';
 		}
-	): ResultPromise<StructData<T, Name>[] | undefined, Error>;
+	): ResultPromise<StructData<T, Name>[], Error>;
 	get(
 		props: {
 			[K in keyof T]?: TsType<T[K]['_']['dataType']>;
@@ -2316,7 +2316,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 		type: 'single';
 	}): ResultPromise<StructData<T, Name> | undefined, Error>;
 	getLifetimeItems(config: { type: 'count' }): ResultPromise<number>;
-	getLifetimeItems(config: { type: 'all' }): ResultPromise<StructData<T, Name>[] | undefined, Error>;
+	getLifetimeItems(config: { type: 'all' }): ResultPromise<StructData<T, Name>[], Error>;
 	getLifetimeItems(
 		config: MultiConfig
 	):
