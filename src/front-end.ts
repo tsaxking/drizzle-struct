@@ -1234,9 +1234,9 @@ export class Struct<T extends Blank> {
 			this.log('Stream Result:', response);
 
 			if (response.headers.get('Content-Type') === 'application/json') {
-				return setTimeout(() => {
+				return setTimeout(async () => {
 					this.log('Recieved Streamable JSON');
-					const data = response.json();
+					const data = await response.json();
 					this.log('Stream Data:', data);
 					const parsed = z.object({
 						success: z.boolean(),
