@@ -1233,7 +1233,7 @@ export class Struct<T extends Blank> {
 			const response = res.unwrap();
 			this.log('Stream Result:', response);
 
-			if (response.headers.get('Content-Type') === 'application/json') {
+			// if (response.headers.get('Content-Type') === 'application/json') {
 				return setTimeout(async () => {
 					this.log('Recieved Streamable JSON');
 					const data = await response.json();
@@ -1250,57 +1250,57 @@ export class Struct<T extends Blank> {
 						s.add(this.Generator(d as any));
 					}
 				});
-			}
+			// }
 
-			const reader = response.body?.getReader();
-			if (!reader) {
-				return;
-			}
+			// const reader = response.body?.getReader();
+			// if (!reader) {
+			// 	return;
+			// }
 
-			this.log('Stream Reader:', reader);
+			// this.log('Stream Reader:', reader);
 
-			let buffer = '';
+			// let buffer = '';
 
-			reader.read().then(({ done, value }) => {
-				this.log('Stream Read:', done, value);
-				const text = new TextDecoder().decode(value);
-				let chunks = text.split('\n\n');
-				this.log('Stream Chunks:', ...chunks);
+			// reader.read().then(({ done, value }) => {
+			// 	this.log('Stream Read:', done, value);
+			// 	const text = new TextDecoder().decode(value);
+			// 	let chunks = text.split('\n\n');
+			// 	this.log('Stream Chunks:', ...chunks);
 
-				if (buffer) {
-					chunks[0] = buffer + chunks[0];
-					buffer = '';
-				}
+			// 	if (buffer) {
+			// 		chunks[0] = buffer + chunks[0];
+			// 		buffer = '';
+			// 	}
 
-				if (!text.endsWith('\n\n')) {
-					buffer = chunks.pop() || '';
-				}
+			// 	if (!text.endsWith('\n\n')) {
+			// 		buffer = chunks.pop() || '';
+			// 	}
 
-				chunks = chunks.filter((i) => {
-					if (i === 'end') done = true;
-					try {
-						JSON.parse(i);
-						return true;
-					} catch {
-						return false;
-					}
-				});
+			// 	chunks = chunks.filter((i) => {
+			// 		if (i === 'end') done = true;
+			// 		try {
+			// 			JSON.parse(i);
+			// 			return true;
+			// 		} catch {
+			// 			return false;
+			// 		}
+			// 	});
 
-				for (const chunk of chunks) {
-					try {
-						const data = JSON.parse(decode(chunk));
-						this.log('Stream Data:', data);
-						s.add(this.Generator(data));
-					} catch (error) {
-						console.error('Invalid JSON:', chunk);
-					}
-				}
+			// 	for (const chunk of chunks) {
+			// 		try {
+			// 			const data = JSON.parse(decode(chunk));
+			// 			this.log('Stream Data:', data);
+			// 			s.add(this.Generator(data));
+			// 		} catch (error) {
+			// 			console.error('Invalid JSON:', chunk);
+			// 		}
+			// 	}
 
-				if (done) {
-					this.log('Stream Done');
-					s.end();
-				}
-			});
+			// 	if (done) {
+			// 		this.log('Stream Done');
+			// 		s.end();
+			// 	}
+			// });
 		});
 		return s;
 	}
