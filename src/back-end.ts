@@ -1337,6 +1337,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 	public static handler(event: RequestEvent): ResultPromise<Response> {
 		return attemptAsync(async () => {
 			const body: unknown = await event.request.json();
+			if (!body) return new Response('Invalid body', { status: 400 });
 
 			if (typeof body !== 'object' || body === null)
 				return new Response('Invalid body', { status: 400 });
@@ -1402,10 +1403,15 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 					}
 
 					if (!res) {
-						return new Response(JSON.stringify('Not found'), {
+						return new Response(JSON.stringify({
+							success: false,
+							message: 'No data found'
+						}), {
 							status: 404
 						});
 					}
+
+					if (res instanceof StructStream){
 
 					const stream = new ReadableStream({
 						start(controller) {
@@ -1432,7 +1438,14 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 						headers: {
 							'Content-Type': 'text/event-stream'
 						}
-					});
+					});} else {
+						return new Response(JSON.stringify(res), {
+							status: 200,
+							headers: {
+								'Content-Type': 'application/json'
+							}
+						});
+					}
 				}
 
 				if (body.type === 'retrieve') {
@@ -3049,7 +3062,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 			fn: (
 				event: RequestEvent,
 				data: unknown
-			) => StructStream<T, Name> | Error | Promise<StructStream<T, Name> | Error>;
+			) => StructStream<T, Name> | Error | Promise<StructStream<T, Name> | Error> | StructData<T, Name> | Promise<StructData<T, Name>> | StructData<T, Name>[] | Promise<StructData<T, Name>[]>;
 			filter?: (data: StructData<T, Name>) => boolean;
 		}
 	>();
