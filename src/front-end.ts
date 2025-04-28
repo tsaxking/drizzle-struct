@@ -1240,14 +1240,16 @@ export class Struct<T extends Blank> {
 					this.log('Stream Data:', data);
 					const parsed = z.object({
 						success: z.boolean(),
-						data: z.array(z.unknown()),
+						data: z.array(z.unknown()).optional(),
 					}).parse(data);
 					if (!parsed.success) {
 						this.log('Stream Error:', parsed);
 						return s.end();
 					}
-					for (const d of parsed.data) {
-						s.add(this.Generator(d as any));
+					if (parsed.data) {
+						for (const d of parsed.data) {
+							s.add(this.Generator(d as any));
+						}
 					}
 				});
 			// }
