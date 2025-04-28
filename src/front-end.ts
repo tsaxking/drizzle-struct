@@ -1230,8 +1230,28 @@ export class Struct<T extends Blank> {
 			type,
 			args
 		}).then((res) => {
-			this.log('Stream Result:', res);
-			const reader = res.unwrap().body?.getReader();
+			const response = res.unwrap();
+			this.log('Stream Result:', response);
+
+			if (response.headers.get('Content-Type') === 'application/json') {
+				return setTimeout(() => {
+					const data = response.json();
+					this.log('Stream Data:', data);
+					const parsed = z.object({
+						success: z.boolean(),
+						data: z.array(z.unknown()),
+					}).parse(data);
+					if (!parsed.success) {
+						this.log('Stream Error:', parsed);
+						return s.end();
+					}
+					for (const d of parsed.data) {
+						s.add(this.Generator(d as any));
+					}
+				});
+			}
+
+			const reader = response.body?.getReader();
 			if (!reader) {
 				return;
 			}
