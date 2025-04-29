@@ -1397,7 +1397,10 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 					const res = await query.fn(event, args.data);
 
 					if (res instanceof Error) {
-						return new Response(JSON.stringify(res.message), {
+						return new Response(JSON.stringify({
+							success: false,
+							message: res.message
+						}), {
 							status: 500
 						});
 					}
@@ -1439,7 +1442,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 							'Content-Type': 'text/event-stream'
 						}
 					});} else {
-						return new Response(JSON.stringify(res), {
+						return new Response(JSON.stringify(res.map(d => d.safe())), {
 							status: 200,
 							headers: {
 								'Content-Type': 'application/json'
