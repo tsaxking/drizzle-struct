@@ -1442,7 +1442,10 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 							'Content-Type': 'text/event-stream'
 						}
 					});} else {
-						return new Response(JSON.stringify(res.map(d => d.safe())), {
+						return new Response(JSON.stringify({
+							success: true,
+							data: JSON.stringify(res.map(d => d.safe())),
+						}), {
 							status: 200,
 							headers: {
 								'Content-Type': 'application/json'
