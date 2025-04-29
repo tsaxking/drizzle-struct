@@ -446,7 +446,10 @@ export class StructData<T extends Blank> implements Writable<PartialStructable<T
 			delete result.attributes;
 			delete result.canUpdate;
 
-			const res = (await this.struct.post(PropertyAction.Update, result)).unwrap();
+			const res = (await this.struct.post(PropertyAction.Update, {
+				...result,
+				id: this.data.id,
+			})).unwrap();
 			return {
 				result: (await res.json()) as StatusMessage,
 				undo: () => this.update(() => prev)
@@ -1241,6 +1244,7 @@ export class Struct<T extends Blank> {
 					const parsed = z.object({
 						success: z.boolean(),
 						data: z.array(z.unknown()).optional(),
+						message: z.string().optional()
 					}).parse(data);
 					if (!parsed.success) {
 						this.log('Stream Error:', parsed);
