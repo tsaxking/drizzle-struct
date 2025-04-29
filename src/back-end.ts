@@ -3062,7 +3062,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 			fn: (
 				event: RequestEvent,
 				data: unknown
-			) => StructStream<T, Name> | Error | Promise<StructStream<T, Name> | Error> | StructData<T, Name> | Promise<StructData<T, Name>> | StructData<T, Name>[] | Promise<StructData<T, Name>[]>;
+			) => StructStream<T, Name> | Error | Promise<StructStream<T, Name> | Error> | StructData<T, Name>[] | Promise<StructData<T, Name>[]>;
 			filter?: (data: StructData<T, Name>) => boolean;
 		}
 	>();
@@ -3072,7 +3072,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 		fn: (
 			event: RequestEvent,
 			data: unknown
-		) => StructStream<T, Name> | Error | Promise<StructStream<T, Name> | Error>,
+		) => StructStream<T, Name> | Error | Promise<StructStream<T, Name> | Error> | StructData<T, Name>[] | Promise<StructData<T, Name>[]>,
 		filter?: (data: StructData<T, Name>) => boolean
 	) {
 		this.queryListeners.set(event, {
