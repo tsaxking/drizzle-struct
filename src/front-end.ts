@@ -1254,6 +1254,7 @@ export class Struct<T extends Blank> {
 						for (const d of parsed.data) {
 							s.add(this.Generator(d as any));
 						}
+						s.end();
 					}
 				});
 			// }
