@@ -479,6 +479,16 @@ export class DataVersion<T extends Blank, Name extends string> {
 	log(...data: unknown[]) {
 		this.struct.log(chalk.magenta(`${this.id}`), chalk.green(`(${this.vhId})`), ...data);
 	}
+
+	getAttributes() {
+		return attempt(() => {
+			const a = JSON.parse(this.data.attributes);
+			if (!Array.isArray(a)) throw new DataError(this.struct, 'Attributes must be an array');
+			if (!a.every((i) => typeof i === 'string'))
+				throw new DataError(this.struct, 'Attributes must be an array of strings');
+			return a;
+		});
+	}
 }
 
 /**
