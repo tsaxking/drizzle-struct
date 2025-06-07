@@ -1159,9 +1159,7 @@ export class Struct<T extends Blank> {
 					'Content-Type': 'application/json',
 					...Object.fromEntries(Struct.headers.entries())
 				},
-				body: JSON.stringify({
-					data
-				})
+				body: JSON.stringify(data)
 			});
 			this.log('Post:', action, data, res);
 			return res;
