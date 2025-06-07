@@ -9,6 +9,22 @@ import type { Readable, Writable } from 'svelte/store';
 import { type ColType } from './types';
 import { z } from 'zod';
 
+export enum FetchActions {
+	Create = 'create',
+	Delete = 'delete',
+	Archive = 'archive',
+	RestoreArchive = 'restore-archive',
+	RestoreVersion = 'restore-version',
+	DeleteVersion = 'delete-version',
+	ReadVersionHistory = 'read-version-history',
+	ReadArchive = 'read-archive',
+	Read = 'read',
+	Update = 'update',
+	Call = 'call',
+	Query = 'query',
+	// Retrieve = 'retrieve',
+}
+
 // TODO: Batching?
 
 /**
@@ -447,7 +463,7 @@ export class StructData<T extends Blank> implements Writable<PartialStructable<T
 			delete result.canUpdate;
 
 			const res = (await this.struct.post(PropertyAction.Update, {
-				...result,
+				data: result,
 				id: this.data.id,
 			})).unwrap();
 			return {
@@ -543,23 +559,6 @@ export class StructData<T extends Blank> implements Writable<PartialStructable<T
 		return w;
 	}
 
-	// /**
-	//  * Retrieves all universes the data is in
-	//  *
-	//  * @returns {*}
-	//  */
-	// getUniverses() {
-	//     return attempt(() => {
-	//         const a = JSON.parse(this.data.universes);
-	//         if (!Array.isArray(a)) throw new DataError('Universes must be an array');
-	//         if (!a.every(i => typeof i === 'string')) throw new DataError('Universes must be an array of strings');
-	//         return a;
-	//     });
-	// }
-	// addUniverses(...universes: string[]) {}
-	// removeUniverses(...universes: string[]) {}
-	// setUniverses(...universes: string[]) {}
-
 	/**
 	 * Retrieves all attributes the data has
 	 *
@@ -574,9 +573,6 @@ export class StructData<T extends Blank> implements Writable<PartialStructable<T
 			return a;
 		});
 	}
-	// addAttributes(...attributes: string[]) {}
-	// removeAttributes(...attributes: string[]) {}
-	// setAttributes(...attributes: string[]) {}
 
 	/**
 	 * Retrieves all versions of the data
@@ -586,7 +582,7 @@ export class StructData<T extends Blank> implements Writable<PartialStructable<T
 	getVersions() {
 		return attemptAsync(async () => {
 			const versions = (await this.struct
-				.post(DataAction.ReadVersionHistory, {
+				.post(PropertyAction.ReadVersionHistory, {
 					id: this.data.id
 				})
 				.then((r) => r.unwrap().json())) as StatusMessage<VersionStructable<T>[]>;
@@ -943,9 +939,12 @@ export class Struct<T extends Blank> {
 	 * @param {Structable<T>} data
 	 * @returns {*}
 	 */
-	new(data: Structable<T>) {
+	new(data: Structable<T>, attributes: string[] = []) {
 		return attemptAsync<StatusMessage>(async () => {
-			return this.post(DataAction.Create, data).then((r) => r.unwrap().json());
+			return this.post(DataAction.Create, {
+				data,
+				attributes
+			}).then((r) => r.unwrap().json());
 		});
 	}
 
@@ -1154,15 +1153,13 @@ export class Struct<T extends Blank> {
 				throw new StructError(
 					'Currently not in a browser environment. Will not run a fetch request'
 				);
-			const res = await fetch('/struct', {
+			const res = await fetch(`/struct/${this.data.name}/${action}`, {
 				method: 'POST',
 				headers: {
 					'Content-Type': 'application/json',
 					...Object.fromEntries(Struct.headers.entries())
 				},
 				body: JSON.stringify({
-					struct: this.data.name,
-					action,
 					data
 				})
 			});
@@ -1200,13 +1197,12 @@ export class Struct<T extends Blank> {
 			message: string;
 		}>(async () => {
 			this.log('Connecting to struct:', this.data.name);
-			const res = await fetch('/struct/connect', {
+			const res = await fetch(`/struct/${this.data.name}/connect`, {
 				method: 'POST',
 				headers: {
 					'Content-Type': 'application/json'
 				},
 				body: JSON.stringify({
-					name: this.data.name,
 					structure: this.data.structure
 				})
 			}).then((r) => r.json());
@@ -1229,10 +1225,7 @@ export class Struct<T extends Blank> {
 	public getStream<K extends keyof ReadTypes>(type: K, args: ReadTypes[K]): StructStream<T> {
 		this.log('Stream:', type, args);
 		const s = new StructStream(this);
-		this.post(PropertyAction.Read, {
-			type,
-			args
-		}).then((res) => {
+		this.post(`${PropertyAction.Read}/${type}`, args).then((res) => {
 			const response = res.unwrap();
 			this.log('Stream Result:', response);
 
@@ -1590,7 +1583,9 @@ export class Struct<T extends Blank> {
 		return attemptAsync(async () => {
 			const has = this.cache.get(id);
 			if (has) return has;
-			const res = await this.post(PropertyAction.Read, { type: 'id', data: id });
+			const res = await this.post(`${PropertyAction.Read}/from-id`, {
+				id,
+			});
 			const data = await res.unwrap().json();
 			return this.Generator(data);
 		});
@@ -1704,7 +1699,7 @@ export class Struct<T extends Blank> {
 	call(event: string, data: unknown) {
 		return attemptAsync(async () => {
 			const res = await (
-				await this.post('custom', {
+				await this.post('call', {
 					event,
 					data
 				})

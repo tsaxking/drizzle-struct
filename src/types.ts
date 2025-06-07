@@ -1,6 +1,8 @@
 export enum PropertyAction {
 	Read = 'read',
-	Update = 'update'
+	Update = 'update',
+	ReadArchive = 'read-archive',
+	ReadVersionHistory = 'read-version-history',
 }
 
 // these are not property specific
@@ -11,8 +13,8 @@ export enum DataAction {
 	RestoreArchive = 'restore-archive',
 	RestoreVersion = 'restore-version',
 	DeleteVersion = 'delete-version',
-	ReadVersionHistory = 'read-version-history',
-	ReadArchive = 'read-archive'
+	// ReadVersionHistory = 'read-version-history',
+	// ReadArchive = 'read-archive'
 }
 
 export type ColType =

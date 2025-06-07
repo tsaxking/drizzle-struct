@@ -5,7 +5,7 @@ import { count, eq, SQL, sql, type BuildColumns } from 'drizzle-orm';
 import { attempt, attemptAsync, resolveAll, type Result, ResultPromise } from 'ts-utils/check';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import { type ColumnDataType } from 'drizzle-orm';
-import { EventEmitter } from 'ts-utils/event-emitter';
+import { ComplexEventEmitter, EventEmitter } from 'ts-utils/event-emitter';
 import { Loop } from 'ts-utils/loop';
 import { Stream } from 'ts-utils/stream';
 import { z } from 'zod';
@@ -1065,22 +1065,22 @@ export const toJson = <T extends Blank>(
  * @template {string} Name
  */
 export type StructEvents<T extends Blank, Name extends string> = {
-	update: {
+	update: [{
 		from: Structable<T & typeof globalCols>;
 		to: StructData<T, Name>;
-	};
-	archive: StructData<T, Name>;
-	delete: StructData<T, Name>;
-	restore: StructData<T, Name>;
-	create: StructData<T, Name>;
-	'delete-version': DataVersion<T, Name>;
-	'restore-version': DataVersion<T, Name>;
+	}];
+	archive: [StructData<T, Name>];
+	delete: [StructData<T, Name>];
+	restore: [StructData<T, Name>];
+	create: [StructData<T, Name>];
+	'delete-version': [DataVersion<T, Name>];
+	'restore-version': [DataVersion<T, Name>];
 
 	build: void;
-	error: StructError;
-	'fatal-error': FatalStructError;
-	'data-error': DataError;
-	'fatal-data-error': FatalDataError;
+	error: [StructError];
+	'fatal-error': [FatalStructError];
+	'data-error': [DataError];
+	'fatal-data-error': [FatalDataError];
 };
 
 /**
@@ -1309,10 +1309,10 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 	 */
 	public static async buildAll(
 		database: PostgresJsDatabase,
-		handler?: (event: RequestAction) => Promise<Response> | Response
+		// handler?: (event: RequestAction) => Promise<Response> | Response
 	) {
 		return resolveAll(
-			await Promise.all([...Struct.structs.values()].map((s) => s.build(database, handler)))
+			await Promise.all([...Struct.structs.values()].map((s) => s.build(database, /*handler*/)))
 		);
 	}
 
@@ -1334,151 +1334,151 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 	 * @param {RequestEvent} event
 	 * @returns {Promise<Result<Response>>}
 	 */
-	public static handler(event: RequestEvent): ResultPromise<Response> {
-		return attemptAsync(async () => {
-			const body: unknown = await event.request.json();
-			if (!body) return new Response('Invalid body', { status: 400 });
+	// public static handler(event: RequestEvent): ResultPromise<Response> {
+	// 	return attemptAsync(async () => {
+	// 		const body: unknown = await event.request.json();
+	// 		if (!body) return new Response('Invalid body', { status: 400 });
 
-			if (typeof body !== 'object' || body === null)
-				return new Response('Invalid body', { status: 400 });
-			if (!Object.hasOwn(body, 'struct')) return new Response('Missing struct', { status: 400 });
-			if (!Object.hasOwn(body, 'action')) return new Response('Missing action', { status: 400 });
-			if (!Object.hasOwn(body, 'data')) return new Response('Missing data', { status: 400 });
+	// 		if (typeof body !== 'object' || body === null)
+	// 			return new Response('Invalid body', { status: 400 });
+	// 		if (!Object.hasOwn(body, 'struct')) return new Response('Missing struct', { status: 400 });
+	// 		if (!Object.hasOwn(body, 'action')) return new Response('Missing action', { status: 400 });
+	// 		if (!Object.hasOwn(body, 'data')) return new Response('Missing data', { status: 400 });
 
-			const B = body as {
-				struct: string;
-				action: DataAction | PropertyAction | string;
-				data: unknown;
-			};
+	// 		const B = body as {
+	// 			struct: string;
+	// 			action: DataAction | PropertyAction | string;
+	// 			data: unknown;
+	// 		};
 
-			const struct = Struct.structs.get(B.struct);
-			if (!struct) return new Response('Struct not found', { status: 404 });
+	// 		const struct = Struct.structs.get(B.struct);
+	// 		if (!struct) return new Response('Struct not found', { status: 404 });
 
-			const blocked = struct.blocks.get(B.action);
-			if (blocked && blocked.fn(event, B.data))
-				return new Response(`Blocked: ${blocked.message}`, { status: 403 });
+	// 		const blocked = struct.blocks.get(B.action);
+	// 		if (blocked && blocked.fn(event, B.data))
+	// 			return new Response(`Blocked: ${blocked.message}`, { status: 403 });
 
-			if (B.action === 'custom') {
-				const body = z
-					.object({
-						event: z.string(),
-						data: z.unknown()
-					})
-					.parse(B.data);
+	// 		if (B.action === 'custom') {
+	// 			const body = z
+	// 				.object({
+	// 					event: z.string(),
+	// 					data: z.unknown()
+	// 				})
+	// 				.parse(B.data);
 
-				const fn = struct.callListeners.get(body.event);
-				if (fn) {
-					const res = await fn(event, body.data);
-					return new Response(JSON.stringify(res), {
-						status: 200
-					});
-				}
-			}
+	// 			const fn = struct.callListeners.get(body.event);
+	// 			if (fn) {
+	// 				const res = await fn(event, body.data);
+	// 				return new Response(JSON.stringify(res), {
+	// 					status: 200
+	// 				});
+	// 			}
+	// 		}
 
-			CUSTOM_READ: if (B.action === 'read') {
-				const body = z
-					.object({
-						type: z.string(),
-						args: z.unknown()
-					})
-					.parse(B.data);
+	// 		CUSTOM_READ: if (B.action === 'read') {
+	// 			const body = z
+	// 				.object({
+	// 					type: z.string(),
+	// 					args: z.unknown()
+	// 				})
+	// 				.parse(B.data);
 
-				if (body.type === 'custom') {
-					const args = z
-						.object({
-							query: z.string(),
-							data: z.unknown()
-						})
-						.parse(body.args);
+	// 			if (body.type === 'custom') {
+	// 				const args = z
+	// 					.object({
+	// 						query: z.string(),
+	// 						data: z.unknown()
+	// 					})
+	// 					.parse(body.args);
 
-					const query = await struct.queryListeners.get(args.query);
-					if (!query) break CUSTOM_READ;
+	// 				const query = await struct.queryListeners.get(args.query);
+	// 				if (!query) break CUSTOM_READ;
 
-					const res = await query.fn(event, args.data);
+	// 				const res = await query.fn(event, args.data);
 
-					if (res instanceof Error) {
-						return new Response(JSON.stringify({
-							success: false,
-							message: res.message
-						}), {
-							status: 500
-						});
-					}
+	// 				if (res instanceof Error) {
+	// 					return new Response(JSON.stringify({
+	// 						success: false,
+	// 						message: res.message
+	// 					}), {
+	// 						status: 500
+	// 					});
+	// 				}
 
-					if (!res) {
-						return new Response(JSON.stringify({
-							success: false,
-							message: 'No data found'
-						}), {
-							status: 404
-						});
-					}
+	// 				if (!res) {
+	// 					return new Response(JSON.stringify({
+	// 						success: false,
+	// 						message: 'No data found'
+	// 					}), {
+	// 						status: 404
+	// 					});
+	// 				}
 
-					if (res instanceof StructStream){
+	// 				if (res instanceof StructStream){
 
-					const stream = new ReadableStream({
-						start(controller) {
-							res.on('end', () => {
-								controller.enqueue('end\n\n');
-								controller.close();
-							});
+	// 				const stream = new ReadableStream({
+	// 					start(controller) {
+	// 						res.on('end', () => {
+	// 							controller.enqueue('end\n\n');
+	// 							controller.close();
+	// 						});
 
-							res.pipe((d) =>
-								controller.enqueue(
-									encode(JSON.stringify(query.filter ? query.filter(d) : d.safe())) + '\n\n'
-								)
-							);
-						},
-						cancel() {
-							res.off('end');
-							res.off('data');
-							res.off('error');
-						}
-					});
+	// 						res.pipe((d) =>
+	// 							controller.enqueue(
+	// 								encode(JSON.stringify(query.filter ? query.filter(d) : d.safe())) + '\n\n'
+	// 							)
+	// 						);
+	// 					},
+	// 					cancel() {
+	// 						res.off('end');
+	// 						res.off('data');
+	// 						res.off('error');
+	// 					}
+	// 				});
 
-					return new Response(stream, {
-						status: 200,
-						headers: {
-							'Content-Type': 'text/event-stream'
-						}
-					});} else {
-						return new Response(JSON.stringify({
-							success: true,
-							data: res.map(d => d.safe()),
-						}), {
-							status: 200,
-							headers: {
-								'Content-Type': 'application/json'
-							}
-						});
-					}
-				}
+	// 				return new Response(stream, {
+	// 					status: 200,
+	// 					headers: {
+	// 						'Content-Type': 'text/event-stream'
+	// 					}
+	// 				});} else {
+	// 					return new Response(JSON.stringify({
+	// 						success: true,
+	// 						data: res.map(d => d.safe()),
+	// 					}), {
+	// 						status: 200,
+	// 						headers: {
+	// 							'Content-Type': 'application/json'
+	// 						}
+	// 					});
+	// 				}
+	// 			}
 
-				if (body.type === 'retrieve') {
-					const args = z
-						.object({
-							name: z.string(),
-							data: z.unknown()
-						})
-						.parse(body.args);
-					const listener = struct.sendListeners.get(args.name);
-					if (!listener) return new Response('Not found', { status: 404 });
-					const res = await listener(event, args.data);
-					return new Response(JSON.stringify(res), { status: 200 });
-				}
-			}
+	// 			if (body.type === 'retrieve') {
+	// 				const args = z
+	// 					.object({
+	// 						name: z.string(),
+	// 						data: z.unknown()
+	// 					})
+	// 					.parse(body.args);
+	// 				const listener = struct.sendListeners.get(args.name);
+	// 				if (!listener) return new Response('Not found', { status: 404 });
+	// 				const res = await listener(event, args.data);
+	// 				return new Response(JSON.stringify(res), { status: 200 });
+	// 			}
+	// 		}
 
-			const response = await struct._eventHandler?.({
-				action: B.action,
-				data: B.data,
-				request: event,
-				struct
-			});
-			if (response) return response;
+	// 		const response = await struct._eventHandler?.({
+	// 			action: B.action,
+	// 			data: B.data,
+	// 			request: event,
+	// 			struct
+	// 		});
+	// 		if (response) return response;
 
-			return new Response('Not implemented', { status: 501 });
-		});
-	}
+	// 		return new Response('Not implemented', { status: 501 });
+	// 	});
+	// }
 
 	/**
 	 * Lifetime loop for all structs, if the data has a lifetime, it will delete it after the lifetime has passed
@@ -1543,7 +1543,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 	 * @readonly
 	 * @type {*}
 	 */
-	private readonly emitter = new EventEmitter<StructEvents<T, Name>>();
+	private readonly emitter = new ComplexEventEmitter<StructEvents<T, Name>>();
 
 	/**
 	 * Listens to an event
@@ -2426,7 +2426,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 	 */
 	build(
 		database: PostgresJsDatabase,
-		handler?: (event: RequestAction) => Promise<Response> | Response
+		// handler?: (event: RequestAction) => Promise<Response> | Response
 	) {
 		if (this.built) throw new FatalStructError(this, `Struct ${this.name} has already been built`);
 		if (this.data.sample)
@@ -2453,13 +2453,13 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 				)
 			).unwrap();
 
-			if (handler) {
-				this.eventHandler(handler);
-			}
+			// if (handler) {
+			// 	this.eventHandler(handler);
+			// }
 
 			this.built = true;
 
-			this.emit('build', undefined);
+			this.emit('build');
 			this.log('Built!');
 		});
 	}
@@ -2470,16 +2470,16 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 	 * @private
 	 * @type {((event: RequestAction) => Promise<Response> | Response) | undefined}
 	 */
-	private _eventHandler: ((event: RequestAction) => Promise<Response> | Response) | undefined;
+	// private _eventHandler: ((event: RequestAction) => Promise<Response> | Response) | undefined;
 
 	/**
 	 * Apply an event handler for sveltekit requests
 	 *
 	 * @param {(event: RequestAction) => Promise<Response> | Response} fn
 	 */
-	eventHandler(fn: (event: RequestAction) => Promise<Response> | Response): void {
-		this._eventHandler = fn;
-	}
+	// eventHandler(fn: (event: RequestAction) => Promise<Response> | Response): void {
+	// 	this._eventHandler = fn;
+	// }
 
 	/**
 	 * Uses zod to validate the data
