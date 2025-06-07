@@ -48,6 +48,10 @@
 		"vitest": "^2.1.8"
 	},
 	"exports": {
+		".": {
+			"import": "./lib/esm/index.js",
+			"require": "./lib/cjs/index.js"
+		},
 		"./back-end": {
 			"import": "./lib/esm/back-end.js",
 			"require": "./lib/cjs/back-end.js"
