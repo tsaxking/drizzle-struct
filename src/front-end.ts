@@ -1655,7 +1655,13 @@ export class Struct<T extends Blank> {
 
 		const update = (d: StructData<T>) => {
 			if (config.satisfies?.(d)) {
-				arr.inform();
+				if (!arr.data.includes(d)) {
+					arr.add(d);
+				} else {
+					arr.inform();
+				}
+			} else {
+				arr.remove(d);
 			}
 		};
 
