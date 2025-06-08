@@ -2616,7 +2616,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 			created: createSchema(z.string(), 'created'),
 			updated: createSchema(z.string(), 'updated'),
 			archived: createSchema(z.boolean(), 'archived'),
-			universe: createSchema(z.string(), 'universe'),
+			// universe: createSchema(z.string(), 'universe'),
 			attributes: createSchema(z.string(), 'attributes'),
 			lifetime: createSchema(z.number(), 'lifetime'),
 			canUpdate: createSchema(z.boolean(), 'canUpdate'),
