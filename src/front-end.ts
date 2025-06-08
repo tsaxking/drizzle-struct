@@ -1666,6 +1666,7 @@ export class Struct<T extends Blank> {
 		const res = get();
 		res.once('data', (d) => arr.set([d]));
 		res.pipe((d) => arr.add(d));
+		this.on('update', update);
 
 		arr.onAllUnsubscribe(() => {
 			this.writables.delete(`custom:${query}:${JSON.stringify(data)}`);
