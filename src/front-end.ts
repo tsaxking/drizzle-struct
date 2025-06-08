@@ -1693,7 +1693,18 @@ export class Struct<T extends Blank> {
 	send<T>(name: string, data: unknown, returnType: z.ZodType<T>) {
 		return attemptAsync<T>(async () => {
 			const res = await this.post(`custom/${name}`, data).then((r) => r.unwrap().json());
-			return returnType.parse(res);
+			const parsed = z.object({
+				success: z.boolean(),
+				data: z.unknown(),
+				message: z.string().optional()
+			}).parse(res);
+			if (!parsed.success) {
+				throw new DataError(parsed.message || 'Failed to send data');
+			}
+			if (!parsed.data) {
+				throw new DataError('No data returned');
+			}
+			return returnType.parse(parsed.data);
 		});
 	}
 
