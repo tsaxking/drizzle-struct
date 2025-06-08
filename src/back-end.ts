@@ -247,7 +247,7 @@ export const globalCols = {
 	updated: text('updated').notNull(),
 	archived: boolean<'archived'>('archived').default(false).notNull(),
 	// universes: text('universes').notNull(),
-	// universe: text('universe').notNull(),
+	universe: text('universe').notNull(),
 	attributes: text('attributes').notNull(),
 	lifetime: integer('lifetime').notNull(),
 	canUpdate: boolean<'can_update'>('can_update').default(true).notNull()
@@ -2551,7 +2551,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 				),
 				archived: createSchema(z.boolean(), 'archived'),
 				// universes: createSchema(z.string(), 'universes'),
-				// universe: createSchema(z.string(), 'universe'),
+				universe: createSchema(z.string(), 'universe'),
 				attributes: createSchema(z.string(), 'attributes'),
 				lifetime: createSchema(z.number(), 'lifetime'),
 				canUpdate: createSchema(z.boolean(), 'canUpdate'),
@@ -2616,7 +2616,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 			created: createSchema(z.string(), 'created'),
 			updated: createSchema(z.string(), 'updated'),
 			archived: createSchema(z.boolean(), 'archived'),
-			// universe: createSchema(z.string(), 'universe'),
+			universe: createSchema(z.string(), 'universe'),
 			attributes: createSchema(z.string(), 'attributes'),
 			lifetime: createSchema(z.number(), 'lifetime'),
 			canUpdate: createSchema(z.boolean(), 'canUpdate'),
@@ -3128,7 +3128,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 		string,
 		{
 			fn: (event: RequestEvent, data: unknown) => boolean | Promise<boolean>;
-			reason: string;
+			message: string;
 		}
 	>();
 
@@ -3139,7 +3139,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 	) {
 		this.blocks.set(event, {
 			fn,
-			reason: reason
+			message: reason
 		});
 	}
 
