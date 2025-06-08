@@ -1648,19 +1648,22 @@ export class Struct<T extends Blank> {
 		};
 
 		const remove = (d: StructData<T>) => {
-			if (config.satisfies?.(d)) {
+			// if (config.satisfies?.(d)) {
 				arr.remove(d);
-			}
+			// }
 		};
 
 		const update = (d: StructData<T>) => {
 			if (config.satisfies?.(d)) {
 				if (!arr.data.includes(d)) {
+					this.log('Adding data to custom query:', d.data);
 					arr.add(d);
 				} else {
+					this.log('Updating data in custom query:', d.data);
 					arr.inform();
 				}
 			} else {
+				this.log('Removing data from custom query:', d.data);
 				arr.remove(d);
 			}
 		};
