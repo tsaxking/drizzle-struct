@@ -165,7 +165,7 @@ export type StructBuilder<T extends Blank, Name extends string> = {
 		fn: (data: StructData<T, Name>, index: number) => void;
 		time: number;
 	};
-	/**.
+	/**
 	 * If this struct is meant to communicate with a front-end struct
 	 */
 	frontend?: boolean;
@@ -1673,6 +1673,10 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 	 */
 	get sample(): StructData<T, Name> {
 		throw new Error('Struct.sample should never be called at runtime, it is only used for testing');
+	}
+
+	get frontend() {
+		return this.data.frontend === undefined ? true : this.data.frontend;
 	}
 
 	/**
