@@ -1317,13 +1317,15 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 	 * @param {?(event: RequestAction) => Promise<Response> | Response} [handler]
 	 * @returns {any) => unknown}
 	 */
-	public static async buildAll(
+	public static buildAll(
 		database: PostgresJsDatabase,
 		// handler?: (event: RequestAction) => Promise<Response> | Response
 	) {
-		return resolveAll(
-			await Promise.all([...Struct.structs.values()].map((s) => s.build(database, /*handler*/)))
-		);
+		return attemptAsync(async () => {
+			return resolveAll(
+				await Promise.all([...Struct.structs.values()].map((s) => s.build(database, /*handler*/)))
+			).unwrap();
+		});
 	}
 
 	/**
@@ -3072,7 +3074,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 		if (this.data.log) console.log(chalk.blue(`[${this.name}]`), ...data);
 	}
 
-	private readonly queryListeners = new Map<
+	public readonly queryListeners = new Map<
 		string,
 		{
 			fn: (
@@ -3097,7 +3099,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 		});
 	}
 
-	private readonly callListeners = new Map<
+	public readonly callListeners = new Map<
 		string,
 		(event: RequestEvent, data: unknown) => StructStatus | Promise<StructStatus>
 	>();
@@ -3109,7 +3111,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 		this.callListeners.set(event, fn);
 	}
 
-	private readonly sendListeners = new Map<
+	public readonly sendListeners = new Map<
 		string,
 		(event: RequestEvent, data: unknown) => unknown
 	>();
@@ -3118,7 +3120,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 		this.sendListeners.set(event, fn);
 	}
 
-	private readonly blocks = new Map<
+	public readonly blocks = new Map<
 		string,
 		{
 			fn: (event: RequestEvent, data: unknown) => boolean | Promise<boolean>;
