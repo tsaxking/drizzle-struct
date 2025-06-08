@@ -247,7 +247,7 @@ export const globalCols = {
 	updated: text('updated').notNull(),
 	archived: boolean<'archived'>('archived').default(false).notNull(),
 	// universes: text('universes').notNull(),
-	universe: text('universe').notNull(),
+	// universe: text('universe').notNull(),
 	attributes: text('attributes').notNull(),
 	lifetime: integer('lifetime').notNull(),
 	canUpdate: boolean<'can_update'>('can_update').default(true).notNull()
@@ -3128,18 +3128,18 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 		string,
 		{
 			fn: (event: RequestEvent, data: unknown) => boolean | Promise<boolean>;
-			message: string;
+			reason: string;
 		}
 	>();
 
 	block(
 		event: DataAction | PropertyAction,
 		fn: (event: RequestEvent, data: unknown) => boolean | Promise<boolean>,
-		message: string
+		reason: string
 	) {
 		this.blocks.set(event, {
 			fn,
-			message
+			reason: reason
 		});
 	}
 
