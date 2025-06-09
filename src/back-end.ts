@@ -2451,8 +2451,8 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 		string,
 		{
 			fn: (event: RequestEvent, data: unknown) => boolean | Promise<boolean>;
-			message: string;
-		}
+			reason: string;
+		}[]
 	>();
 
 	block(
@@ -2460,10 +2460,14 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 		fn: (event: RequestEvent, data: unknown) => boolean | Promise<boolean>,
 		reason: string
 	) {
-		this.blocks.set(event, {
+		if (!this.blocks.has(event)) {
+			this.blocks.set(event, []);
+		}
+		this.blocks.get(event)?.push({
 			fn,
-			message: reason
+			reason
 		});
+		this.log('Added block for', event, 'with reason:', reason);
 	}
 
 	backup(dir: string) {
