@@ -246,7 +246,7 @@ export const globalCols = {
 	created: text('created').notNull(),
 	updated: text('updated').notNull(),
 	archived: boolean<'archived'>('archived').default(false).notNull(),
-	universe: text('universe').notNull(),
+	// universe: text('universe').notNull(),
 	attributes: text('attributes').notNull(),
 	lifetime: integer('lifetime').notNull(),
 	canUpdate: boolean<'can_update'>('can_update').default(true).notNull()
