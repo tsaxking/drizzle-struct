@@ -2407,7 +2407,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 			fn: (
 				event: RequestEvent,
 				data: unknown
-			) => StructStream<T, Name> | Error | Promise<StructStream<T, Name> | Error> | StructData<T, Name>[] | Promise<StructData<T, Name>[]>;
+			) => QueryReturnType<T, Name> | Promise<QueryReturnType<T, Name>>;
 			filter?: (data: StructData<T, Name>) => boolean;
 		}
 	>();
@@ -2417,7 +2417,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 		fn: (
 			event: RequestEvent,
 			data: unknown
-		) => StructStream<T, Name> | Error | Promise<StructStream<T, Name> | Error> | StructData<T, Name>[] | Promise<StructData<T, Name>[]>,
+		) => QueryReturnType<T, Name> | Promise<QueryReturnType<T, Name>>,
 		filter?: (data: StructData<T, Name>) => boolean
 	) {
 		this.queryListeners.set(event, {
@@ -2615,6 +2615,12 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 		});
 	}
 }
+
+
+export type QueryReturnType<T extends Blank, Name extends string> = 
+	StructStream<T, Name> | 
+	StructData<T, Name>[] |
+	Error;
 
 /**
  * Interface for accounts, used for bypasses.
