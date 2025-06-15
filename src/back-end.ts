@@ -2007,9 +2007,15 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 	clear() {
 		return attemptAsync(async () => {
 			this.log('Clearing data...');
-			await this.database.delete(this.table);
+			await this.database.execute(sql`
+				DELETE FROM ${this.table};
+			`);
+			
 			if (this.versionTable) {
-				await this.database.delete(this.versionTable);
+				this.log('Clearing version data...');
+				await this.database.execute(sql`
+					DELETE FROM ${this.versionTable};
+				`);
 			}
 		});
 	}
