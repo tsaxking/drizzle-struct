@@ -1,11 +1,11 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { pgTable, text, timestamp, boolean, integer } from 'drizzle-orm/pg-core';
 import type { PgColumnBuilderBase, PgTableWithColumns } from 'drizzle-orm/pg-core';
-import { and, count, eq, SQL, sql, type BuildColumns } from 'drizzle-orm';
-import { attempt, attemptAsync, resolveAll, type Result } from 'ts-utils/check';
+import { count, eq, SQL, sql, type BuildColumns } from 'drizzle-orm';
+import { attempt, attemptAsync, resolveAll, type Result, ResultPromise } from 'ts-utils/check';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import { type ColumnDataType } from 'drizzle-orm';
-import { EventEmitter } from 'ts-utils/event-emitter';
+import { ComplexEventEmitter, EventEmitter } from 'ts-utils/event-emitter';
 import { Loop } from 'ts-utils/loop';
 import { Stream } from 'ts-utils/stream';
 import { z } from 'zod';
@@ -165,7 +165,7 @@ export type StructBuilder<T extends Blank, Name extends string> = {
 		fn: (data: StructData<T, Name>, index: number) => void;
 		time: number;
 	};
-	/**.
+	/**
 	 * If this struct is meant to communicate with a front-end struct
 	 */
 	frontend?: boolean;
@@ -246,8 +246,7 @@ export const globalCols = {
 	created: text('created').notNull(),
 	updated: text('updated').notNull(),
 	archived: boolean<'archived'>('archived').default(false).notNull(),
-	// universes: text('universes').notNull(),
-	universe: text('universe').notNull(),
+	// universe: text('universe').notNull(),
 	attributes: text('attributes').notNull(),
 	lifetime: integer('lifetime').notNull(),
 	canUpdate: boolean<'can_update'>('can_update').default(true).notNull()
@@ -478,6 +477,16 @@ export class DataVersion<T extends Blank, Name extends string> {
 
 	log(...data: unknown[]) {
 		this.struct.log(chalk.magenta(`${this.id}`), chalk.green(`(${this.vhId})`), ...data);
+	}
+
+	getAttributes() {
+		return attempt(() => {
+			const a = JSON.parse(this.data.attributes);
+			if (!Array.isArray(a)) throw new DataError(this.struct, 'Attributes must be an array');
+			if (!a.every((i) => typeof i === 'string'))
+				throw new DataError(this.struct, 'Attributes must be an array of strings');
+			return a;
+		});
 	}
 }
 
@@ -887,63 +896,6 @@ export class StructData<T extends Blank = any, Name extends string = any> {
 		});
 	}
 
-	// /**
-	//  * Returns an array of universe Ids
-	//  *
-	//  * @returns {*}
-	//  */
-	// getUniverses() {
-	//     return attempt(() => {
-	//         const a = JSON.parse(this.data.universes);
-	//         if (!Array.isArray(a)) throw new DataError(this.struct, 'Universes must be an array');
-	//         if (!a.every(i => typeof i === 'string')) throw new DataError(this.struct, 'Universes must be an array of strings');
-	//         return a;
-	//     });
-	// }
-	// /**
-	//  * Sets the universes
-	//  *
-	//  * @param {string[]} universes
-	//  * @returns {*}
-	//  */
-	// setUniverses(universes: string[]) {
-	//     return attemptAsync(async () => {
-	//         this.log('Setting universes', universes);
-	//         universes = universes
-	//             .filter(i => typeof i === 'string')
-	//             .filter((v, i, a) => a.indexOf(v) === i);
-	//         await this.database.update(this.struct.table).set({
-	//             universes: JSON.stringify(universes),
-	//             updated: new Date(),
-	//         } as any).where(sql`${this.struct.table.id} = ${this.id}`);
-	//     });
-	// }
-	// /**
-	//  * Removes universes
-	//  *
-	//  * @param {...string[]} universes
-	//  * @returns {*}
-	//  */
-	// removeUniverses(...universes: string[]) {
-	//     return attemptAsync(async () => {
-	//         const a = this.getUniverses().unwrap();
-	//         const newUniverses = a.filter(i => !universes.includes(i));
-	//         return (await this.setUniverses(newUniverses)).unwrap()
-	//     });
-	// }
-	// /**
-	//  * Adds universes
-	//  *
-	//  * @param {...string[]} universes
-	//  * @returns {*}
-	//  */
-	// addUniverses(...universes: string[]) {
-	//     return attemptAsync(async () => {
-	//         const a = this.getUniverses().unwrap();
-	//         return (await this.setUniverses([...a, ...universes])).unwrap()
-	//     });
-	// }
-
 	/**
 	 * Returns a safe object of the data, omitting columns that you want removed.
 	 * This isn't typed properly yet, so don't trust the omit types yet.
@@ -1065,22 +1017,22 @@ export const toJson = <T extends Blank>(
  * @template {string} Name
  */
 export type StructEvents<T extends Blank, Name extends string> = {
-	update: {
+	update: [{
 		from: Structable<T & typeof globalCols>;
 		to: StructData<T, Name>;
-	};
-	archive: StructData<T, Name>;
-	delete: StructData<T, Name>;
-	restore: StructData<T, Name>;
-	create: StructData<T, Name>;
-	'delete-version': DataVersion<T, Name>;
-	'restore-version': DataVersion<T, Name>;
+	}];
+	archive: [StructData<T, Name>];
+	delete: [StructData<T, Name>];
+	restore: [StructData<T, Name>];
+	create: [StructData<T, Name>];
+	'delete-version': [DataVersion<T, Name>];
+	'restore-version': [DataVersion<T, Name>];
 
 	build: void;
-	error: StructError;
-	'fatal-error': FatalStructError;
-	'data-error': DataError;
-	'fatal-data-error': FatalDataError;
+	error: [StructError];
+	'fatal-error': [FatalStructError];
+	'data-error': [DataError];
+	'fatal-data-error': [FatalDataError];
 };
 
 /**
@@ -1148,11 +1100,10 @@ export type TsType<T extends ColumnDataType> = T extends 'string'
 //     : never;
 
 export type MultiConfig = {
-	type: 'stream' | 'array' | 'single' | 'count';
+	type: 'stream' | 'array' | 'single' | 'count' | 'all';
 	includeArchived?: boolean;
 	limit?: number;
 	offset?: number;
-	wait?: number;
 };
 
 /**
@@ -1308,13 +1259,15 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 	 * @param {?(event: RequestAction) => Promise<Response> | Response} [handler]
 	 * @returns {any) => unknown}
 	 */
-	public static async buildAll(
+	public static buildAll(
 		database: PostgresJsDatabase,
-		handler?: (event: RequestAction) => Promise<Response> | Response
+		// handler?: (event: RequestAction) => Promise<Response> | Response
 	) {
-		return resolveAll(
-			await Promise.all([...Struct.structs.values()].map((s) => s.build(database, handler)))
-		);
+		return attemptAsync(async () => {
+			return resolveAll(
+				await Promise.all([...Struct.structs.values()].map((s) => s.build(database, /*handler*/)))
+			).unwrap();
+		});
 	}
 
 	/**
@@ -1326,141 +1279,6 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 	 * @type {*}
 	 */
 	public static readonly structs = new Map<string, Struct<Blank, string>>();
-
-	/**
-	 * Global event handler for sveltekit
-	 *
-	 * @public
-	 * @static
-	 * @param {RequestEvent} event
-	 * @returns {Promise<Result<Response>>}
-	 */
-	public static handler(event: RequestEvent): Promise<Result<Response>> {
-		return attemptAsync(async () => {
-			const body: unknown = await event.request.json();
-
-			if (typeof body !== 'object' || body === null)
-				return new Response('Invalid body', { status: 400 });
-			if (!Object.hasOwn(body, 'struct')) return new Response('Missing struct', { status: 400 });
-			if (!Object.hasOwn(body, 'action')) return new Response('Missing action', { status: 400 });
-			if (!Object.hasOwn(body, 'data')) return new Response('Missing data', { status: 400 });
-
-			const B = body as {
-				struct: string;
-				action: DataAction | PropertyAction | string;
-				data: unknown;
-			};
-
-			const struct = Struct.structs.get(B.struct);
-			if (!struct) return new Response('Struct not found', { status: 404 });
-
-			const blocked = struct.blocks.get(B.action);
-			if (blocked && blocked.fn(event, B.data))
-				return new Response(`Blocked: ${blocked.message}`, { status: 403 });
-
-			if (B.action === 'custom') {
-				const body = z
-					.object({
-						event: z.string(),
-						data: z.unknown()
-					})
-					.parse(B.data);
-
-				const fn = struct.callListeners.get(body.event);
-				if (fn) {
-					const res = await fn(event, body.data);
-					return new Response(JSON.stringify(res), {
-						status: 200
-					});
-				}
-			}
-
-			CUSTOM_READ: if (B.action === 'read') {
-				const body = z
-					.object({
-						type: z.string(),
-						args: z.unknown()
-					})
-					.parse(B.data);
-
-				if (body.type === 'custom') {
-					const args = z
-						.object({
-							query: z.string(),
-							data: z.unknown()
-						})
-						.parse(body.args);
-
-					const query = await struct.queryListeners.get(args.query);
-					if (!query) break CUSTOM_READ;
-
-					const res = await query.fn(event, args.data);
-
-					if (res instanceof Error) {
-						return new Response(JSON.stringify(res.message), {
-							status: 500
-						});
-					}
-
-					if (!res) {
-						return new Response(JSON.stringify('Not found'), {
-							status: 404
-						});
-					}
-
-					const stream = new ReadableStream({
-						start(controller) {
-							res.on('end', () => {
-								controller.enqueue('end\n\n');
-								controller.close();
-							});
-
-							res.pipe((d) =>
-								controller.enqueue(
-									encode(JSON.stringify(query.filter ? query.filter(d) : d.safe())) + '\n\n'
-								)
-							);
-						},
-						cancel() {
-							res.off('end');
-							res.off('data');
-							res.off('error');
-						}
-					});
-
-					return new Response(stream, {
-						status: 200,
-						headers: {
-							'Content-Type': 'text/event-stream'
-						}
-					});
-				}
-
-				if (body.type === 'retrieve') {
-					const args = z
-						.object({
-							name: z.string(),
-							data: z.unknown()
-						})
-						.parse(body.args);
-					const listener = struct.sendListeners.get(args.name);
-					if (!listener) return new Response('Not found', { status: 404 });
-					const res = await listener(event, args.data);
-					return new Response(JSON.stringify(res), { status: 200 });
-				}
-			}
-
-			const response = await struct._eventHandler?.({
-				action: B.action,
-				data: B.data,
-				request: event,
-				struct
-			});
-			if (response) return response;
-
-			return new Response('Not implemented', { status: 501 });
-		});
-	}
 
 	/**
 	 * Lifetime loop for all structs, if the data has a lifetime, it will delete it after the lifetime has passed
@@ -1525,7 +1343,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 	 * @readonly
 	 * @type {*}
 	 */
-	private readonly emitter = new EventEmitter<StructEvents<T, Name>>();
+	private readonly emitter = new ComplexEventEmitter<StructEvents<T, Name>>();
 
 	/**
 	 * Listens to an event
@@ -1645,6 +1463,10 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 		throw new Error('Struct.sample should never be called at runtime, it is only used for testing');
 	}
 
+	get frontend() {
+		return this.data.frontend === undefined ? true : this.data.frontend;
+	}
+
 	/**
 	 * Creates a new struct data
 	 *
@@ -1688,7 +1510,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 				updated: new Date().toISOString(),
 				archived: false,
 				// universes: JSON.stringify(this.data.generators?.universes?.() ?? []),
-				universe: this.data.generators?.universe?.(data) ?? '',
+				// universe: this.data.generators?.universe?.(data) ?? '',
 				attributes: JSON.stringify(this.data.generators?.attributes?.(data) ?? []),
 				lifetime: this.data.lifetime || 0,
 				canUpdate: !config.static
@@ -1750,17 +1572,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 				.where(sql`${this.table.id} = ${id}`);
 			const a = data[0];
 			if (!a) {
-				if (this._api) {
-					const apiQueryResult = (
-						await this._api.query(this, 'from-id', {
-							id
-						})
-					).unwrap();
-					if (!apiQueryResult) return;
-					return this.Generator(apiQueryResult as any);
-				} else {
-					return;
-				}
+				return;
 			}
 			return this.Generator(a as any);
 		});
@@ -1815,21 +1627,22 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 	//     }
 	// }
 
-	all(config: { type: 'stream'; limit?: number; offset?: number, wait?: number }): StructStream<T, Name>;
+	all(config: { type: 'stream'; limit?: number; offset?: number }): StructStream<T, Name>;
 	all(config: {
 		type: 'array';
 		limit: number;
 		offset: number;
-	}): Promise<Result<StructData<T, Name>[], Error>>;
-	all(config: { type: 'single' }): Promise<Result<StructData<T, Name> | undefined, Error>>;
-	all(config: { type: 'count' }): Promise<Result<number>>;
+	}): ResultPromise<StructData<T, Name>[], Error>;
+	all(config: { type: 'single' }): ResultPromise<StructData<T, Name> | undefined, Error>;
+	all(config: { type: 'count' }): ResultPromise<number>;
+	all(config: { type: 'all' }): ResultPromise<StructData<T, Name>[], Error>;
 	all(
 		config: MultiConfig
 	):
 		| StructStream<T, Name>
-		| Promise<Result<StructData<T, Name>[] | undefined | StructData<T, Name> | number, Error>> {
+		| ResultPromise<StructData<T, Name>[] | undefined | StructData<T, Name> | number, Error> {
 		const get = async () => {
-			this.apiQuery('all', {});
+			// this.apiQuery('all', {});
 
 			const squeal = config.includeArchived ? sql`1 = 1` : sql`${this.table.archived} = ${false}`;
 
@@ -1863,7 +1676,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 					stream.add(this.Generator(dataStream[i] as any));
 				}
 				stream.end();
-			}, config.wait);
+			});
 			return stream;
 		} else {
 			return attemptAsync(async () => {
@@ -1882,24 +1695,24 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 		}
 	}
 
-	archived(config: { type: 'stream'; limit?: number; offset?: number, wait?: number }): StructStream<T, Name>;
+	archived(config: { type: 'stream'; limit?: number; offset?: number }): StructStream<T, Name>;
 	archived(config: {
 		type: 'array';
 		limit: number;
 		offset: number;
-	}): Promise<Result<StructData<T, Name>[], Error>>;
-	archived(config: { type: 'single' }): Promise<Result<StructData<T, Name> | undefined, Error>>;
-	archived(config: { type: 'count' }): Promise<Result<number>>;
+	}): ResultPromise<StructData<T, Name>[], Error>;
+	archived(config: { type: 'single' }): ResultPromise<StructData<T, Name> | undefined, Error>;
+	archived(config: { type: 'count' }): ResultPromise<number>;
+	archived(config: { type: 'all' }): ResultPromise<StructData<T, Name>[], Error>;
 	archived(config: {
-		type: 'stream' | 'array' | 'single' | 'count';
+		type: 'stream' | 'array' | 'single' | 'count' | 'all';
 		limit?: number;
 		offset?: number;
-		wait?: number;
 	}):
 		| StructStream<T, Name>
-		| Promise<Result<StructData<T, Name>[] | StructData<T, Name> | undefined | number, Error>> {
+		| ResultPromise<StructData<T, Name>[] | StructData<T, Name> | undefined | number, Error> {
 		const get = async () => {
-			this.apiQuery('archived', {});
+			// this.apiQuery('archived', {});
 
 			const squeal = sql`${this.table.archived} = ${true}`;
 
@@ -1933,7 +1746,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 					stream.add(this.Generator(dataStream[i] as any));
 				}
 				stream.end();
-			}, config.wait);
+			});
 			return stream;
 		} else {
 			return attemptAsync(async () => {
@@ -1960,7 +1773,6 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 			limit?: number;
 			offset?: number;
 			includeArchived?: boolean;
-			wait?: number;
 		}
 	): StructStream<T, Name>;
 	fromProperty<K extends keyof (T & typeof globalCols)>(
@@ -1972,7 +1784,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 			offset: number;
 			includeArchived?: boolean;
 		}
-	): Promise<Result<StructData<T, Name>[], Error>>;
+	): ResultPromise<StructData<T, Name>[], Error>;
 	fromProperty<K extends keyof (T & typeof globalCols)>(
 		property: K,
 		value: TsType<(T & typeof globalCols)[K]['_']['dataType']>,
@@ -1980,7 +1792,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 			type: 'single';
 			includeArchived?: boolean;
 		}
-	): Promise<Result<StructData<T, Name> | undefined, Error>>;
+	): ResultPromise<StructData<T, Name> | undefined, Error>;
 	fromProperty<K extends keyof (T & typeof globalCols)>(
 		property: K,
 		value: TsType<(T & typeof globalCols)[K]['_']['dataType']>,
@@ -1988,19 +1800,27 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 			type: 'count';
 			includeArchived?: boolean;
 		}
-	): Promise<Result<number>>;
+	): ResultPromise<number>;
+	fromProperty<K extends keyof (T & typeof globalCols)>(
+		property: K,
+		value: TsType<(T & typeof globalCols)[K]['_']['dataType']>,
+		config: {
+			type: 'all';
+			includeArchived?: boolean;
+		}
+	): ResultPromise<StructData<T, Name>[], Error>;
 	fromProperty<K extends keyof (T & typeof globalCols)>(
 		property: K,
 		value: TsType<(T & typeof globalCols)[K]['_']['dataType']>,
 		config: MultiConfig
 	):
 		| StructStream<T, Name>
-		| Promise<Result<StructData<T, Name>[] | StructData<T, Name> | undefined | number, Error>> {
+		| ResultPromise<StructData<T, Name>[] | StructData<T, Name> | undefined | number, Error> {
 		const get = async () => {
-			this.apiQuery('from-property', {
-				property: String(property),
-				value
-			});
+			// this.apiQuery('from-property', {
+			// 	property: String(property),
+			// 	value
+			// });
 
 			let squeal: SQL;
 			if (config.includeArchived) {
@@ -2039,7 +1859,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 					stream.add(this.Generator(dataStream[i] as any));
 				}
 				stream.end();
-			}, config.wait);
+			});
 			return stream;
 		} else {
 			return attemptAsync(async () => {
@@ -2066,7 +1886,6 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 			type: 'stream';
 			limit?: number;
 			offset?: number;
-			wait?: number;
 		}
 	): StructStream<T, Name>;
 	get(
@@ -2078,7 +1897,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 			limit: number;
 			offset: number;
 		}
-	): Promise<Result<StructData<T, Name>[], Error>>;
+	): ResultPromise<StructData<T, Name>[], Error>;
 	get(
 		props: {
 			[K in keyof T]?: TsType<T[K]['_']['dataType']>;
@@ -2086,7 +1905,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 		config: {
 			type: 'single';
 		}
-	): Promise<Result<StructData<T, Name> | undefined, Error>>;
+	): ResultPromise<StructData<T, Name> | undefined, Error>;
 	get(
 		props: {
 			[K in keyof T]?: TsType<T[K]['_']['dataType']>;
@@ -2094,7 +1913,15 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 		config: {
 			type: 'count';
 		}
-	): Promise<Result<number>>;
+	): ResultPromise<number>;
+	get(
+		props: {
+			[K in keyof T]?: TsType<T[K]['_']['dataType']>;
+		},
+		config: {
+			type: 'all';
+		}
+	): ResultPromise<StructData<T, Name>[], Error>;
 	get(
 		props: {
 			[K in keyof T]?: TsType<T[K]['_']['dataType']>;
@@ -2102,7 +1929,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 		config: MultiConfig
 	):
 		| StructStream<T, Name>
-		| Promise<Result<StructData<T, Name>[] | StructData<T, Name> | undefined | number, Error>> {
+		| ResultPromise<StructData<T, Name>[] | StructData<T, Name> | undefined | number, Error> {
 		console.warn(
 			`Struct.get() This method is unstable, use with caution. fromProperty is recommended at this time`
 		);
@@ -2112,11 +1939,14 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 			// });
 
 			// const squeal = sql.join(Object.keys(props).map(k => sql`${this.table[k]} = ${props[k]}`), sql` AND `);
-			let squeal = and(
-				...Object.entries(props).map(([k, v]) => eq(
-					this.table[k] as any, v as any,
-				)),
-			);
+			let squeal = sql`1 = 1`;
+			for (const key in props) {
+				if (squeal) {
+					squeal = sql`${squeal} AND ${this.table[key]} = ${props[key]}`;
+				} else {
+					squeal = sql`${this.table[key]} = ${props[key]}`;
+				}
+			}
 
 			if (config.type === 'count') {
 				const res = await this.database
@@ -2148,7 +1978,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 					stream.add(this.Generator(dataStream[i] as any));
 				}
 				stream.end();
-			}, config.wait);
+			});
 			return stream;
 		} else {
 			return attemptAsync(async () => {
@@ -2167,83 +1997,6 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 		}
 	}
 
-	// fromUniverse(universe: string, config: {
-	//     type: 'stream';
-	//     limit?: number;
-	//     offset?: number;
-	//     includeArchived?: boolean;
-	// }): StructStream<T, Name>;
-	// fromUniverse(universe: string, config: {
-	//     type: 'array';
-	//     limit: number;
-	//     offset: number;
-	//     includeArchived?: boolean;
-	// }): Promise<Result<StructData<T, Name>[], Error>>;
-	// fromUniverse(universe: string, config: {
-	//     type: 'single';
-	//     includeArchived?: boolean;
-	// }): Promise<Result<StructData<T, Name> | undefined, Error>>;
-	// fromUniverse(universe: string, config: {
-	//     type: 'count';
-	//     includeArchived?: boolean;
-	// }): Promise<Result<number>>;
-	// fromUniverse(universe: string, config: MultiConfig): StructStream<T, Name> | Promise<Result<StructData<T, Name>[] | undefined | StructData<T, Name> | number, Error>> {
-	// const get = async () => {
-	//     this.apiQuery('from-universe', {
-	//         universe,
-	//     });
-
-	//     // const squeal = sql`${this.table.universes} @> ${universe} AND ${config.includeArchived ? sql`1 = 1` : sql`${this.table.archived} = ${false}`}`;
-	//     let squeal: SQL;
-	//     if (config.includeArchived) {
-	//         squeal = sql`${this.table.universes} @> ${universe}`;
-	//     } else {
-	//         squeal = sql`${this.table.universes} @> ${universe} AND ${this.table.archived} = ${false}`;
-	//     }
-
-	//     if (config.type === 'count') {
-	//         const res = await this.database.select({
-	//             count: count(),
-	//         }).from(this.table).where(squeal);
-	//         return res[0].count;
-	//     }
-
-	//     if (config.type === 'single') {
-	//         return (await this.database.select().from(this.table).where(squeal))[0];
-	//     }
-
-	//     const { offset, limit } = config;
-	//     if (offset && limit) {
-	//         return this.database.select().from(this.table).where(squeal).offset(offset).limit(limit);
-	//     } else {
-	//         return this.database.select().from(this.table).where(squeal);
-	//     }
-	// }
-
-	// if (config.type === 'stream') {
-	//     const stream = new StructStream(this);
-	//     (async () => {
-	//         const dataStream = await get() as Structable<T & typeof globalCols>[];
-	//         for (let i = 0; i < dataStream.length; i++) {
-	//             stream.add(this.Generator(dataStream[i] as any));
-	//         }
-	//         stream.end();
-	//     })();
-	//     return stream;
-	// } else {
-	//     return attemptAsync(async () => {
-	//         const data = await get() as Structable<T & typeof globalCols>[] | Structable<T & typeof globalCols> | number;
-	//         if (Array.isArray(data)) {
-	//             return data.map(d => this.Generator(d));
-	//         } else if (typeof data === 'object') {
-	//             return this.Generator(data);
-	//         } else {
-	//             return data;
-	//         }
-	//     });
-	// }
-	// }
-
 	/**
 	 * Deletes all data from the struct
 	 * This is a dangerous operation and should be used with caution
@@ -2254,9 +2007,15 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 	clear() {
 		return attemptAsync(async () => {
 			this.log('Clearing data...');
-			await this.database.delete(this.table);
+			await this.database.execute(sql`
+				DELETE FROM ${this.table};
+			`);
+			
 			if (this.versionTable) {
-				await this.database.delete(this.versionTable);
+				this.log('Clearing version data...');
+				await this.database.execute(sql`
+					DELETE FROM ${this.versionTable};
+				`);
 			}
 		});
 	}
@@ -2289,22 +2048,22 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 		type: 'stream';
 		limit?: number;
 		offset?: number;
-		wait?: number;
 	}): StructStream<T, Name>;
 	getLifetimeItems(config: {
 		type: 'array';
 		limit: number;
 		offset: number;
-	}): Promise<Result<StructData<T, Name>[], Error>>;
+	}): ResultPromise<StructData<T, Name>[], Error>;
 	getLifetimeItems(config: {
 		type: 'single';
-	}): Promise<Result<StructData<T, Name> | undefined, Error>>;
-	getLifetimeItems(config: { type: 'count' }): Promise<Result<number>>;
+	}): ResultPromise<StructData<T, Name> | undefined, Error>;
+	getLifetimeItems(config: { type: 'count' }): ResultPromise<number>;
+	getLifetimeItems(config: { type: 'all' }): ResultPromise<StructData<T, Name>[], Error>;
 	getLifetimeItems(
 		config: MultiConfig
 	):
 		| StructStream<T, Name>
-		| Promise<Result<StructData<T, Name>[] | undefined | StructData<T, Name> | number, Error>> {
+		| ResultPromise<StructData<T, Name>[] | undefined | StructData<T, Name> | number, Error> {
 		const get = async () => {
 			// this.apiQuery('get-lifetime-items', {});
 
@@ -2346,7 +2105,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 					stream.add(this.Generator(dataStream[i] as any));
 				}
 				stream.end();
-			}, config.wait);
+			});
 			return stream;
 		} else {
 			return attemptAsync(async () => {
@@ -2390,7 +2149,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 	 */
 	build(
 		database: PostgresJsDatabase,
-		handler?: (event: RequestAction) => Promise<Response> | Response
+		// handler?: (event: RequestAction) => Promise<Response> | Response
 	) {
 		if (this.built) throw new FatalStructError(this, `Struct ${this.name} has already been built`);
 		if (this.data.sample)
@@ -2417,32 +2176,15 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 				)
 			).unwrap();
 
-			if (handler) {
-				this.eventHandler(handler);
-			}
+			// if (handler) {
+			// 	this.eventHandler(handler);
+			// }
 
 			this.built = true;
 
-			this.emit('build', undefined);
+			this.emit('build');
 			this.log('Built!');
 		});
-	}
-
-	/**
-	 * Sveltekit event handler
-	 *
-	 * @private
-	 * @type {((event: RequestAction) => Promise<Response> | Response) | undefined}
-	 */
-	private _eventHandler: ((event: RequestAction) => Promise<Response> | Response) | undefined;
-
-	/**
-	 * Apply an event handler for sveltekit requests
-	 *
-	 * @param {(event: RequestAction) => Promise<Response> | Response} fn
-	 */
-	eventHandler(fn: (event: RequestAction) => Promise<Response> | Response): void {
-		this._eventHandler = fn;
 	}
 
 	/**
@@ -2487,8 +2229,6 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 		const res = z
 			.object({
 				id: createSchema(z.string(), 'id'),
-				// created: createSchema(z.date().refine((d) => !isNaN(d.getTime()), { message: 'Invalid date' }), 'created'),
-				// updated: createSchema(z.date().refine((d) => !isNaN(d.getTime()), { message: 'Invalid date' }), 'updated'),
 				created: createSchema(
 					z.string().refine((arg) => new Date(arg).toString() !== 'Invalid Date'),
 					'created'
@@ -2498,8 +2238,6 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 					'updated'
 				),
 				archived: createSchema(z.boolean(), 'archived'),
-				// universes: createSchema(z.string(), 'universes'),
-				universe: createSchema(z.string(), 'universe'),
 				attributes: createSchema(z.string(), 'attributes'),
 				lifetime: createSchema(z.number(), 'lifetime'),
 				canUpdate: createSchema(z.boolean(), 'canUpdate'),
@@ -2564,7 +2302,6 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 			created: createSchema(z.string(), 'created'),
 			updated: createSchema(z.string(), 'updated'),
 			archived: createSchema(z.boolean(), 'archived'),
-			universe: createSchema(z.string(), 'universe'),
 			attributes: createSchema(z.string(), 'attributes'),
 			lifetime: createSchema(z.number(), 'lifetime'),
 			canUpdate: createSchema(z.boolean(), 'canUpdate'),
@@ -2608,10 +2345,6 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 		return attemptAsync(async () => {
 			this.log('Hashing');
 			const encoder = new TextEncoder();
-			// const data = (await this.all(false)).unwrap()
-			//     .sort((a, b) => a.id.localeCompare(b.id))
-			//     .map(d => JSON.stringify(d.data))
-			//     .join('');
 			let data: string = '';
 			const promises: Promise<void>[] = [];
 			await this.all({
@@ -2633,358 +2366,6 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 			const hashBuffer = await crypto.subtle.digest('SHA-256', buffer);
 			const hashArray = Array.from(new Uint8Array(hashBuffer));
 			return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
-		});
-	}
-
-	/**
-	 * External API for the struct, used for querying data
-	 *
-	 * @private
-	 * @type {(Client | undefined)}
-	 */
-	private _api: Client | undefined = undefined;
-
-	/**
-	 * This will start the reflection process for the struct, allowing updates to be sent and received by the central server
-	 *
-	 * @param {(Server | Client)} api
-	 * @returns {*}
-	 */
-	startReflection(api: Server | Client) {
-		return attempt(() => {
-			this.log('Starting API reflection');
-			if (this.data.reflection && api instanceof Client) {
-				this.log('Applying api onto struct');
-				// this property is only used for querying the data
-				// Because of this, we don't need it for the central server
-				this._api = api;
-			}
-			const em = api.getEmitter<T, Name>(this);
-
-			em.on('archive', async ({ id, timestamp, source }) => {
-				const data = await this.fromId(id);
-				if (data.isErr()) return console.error(data.error);
-				this.log('API Recieved archive', id);
-				data.value?.setArchive(true, {
-					source
-				});
-			});
-			em.on('restore', async ({ id, timestamp, source }) => {
-				const data = await this.fromId(id);
-				if (data.isErr()) return console.error(data.error);
-				this.log('API Recieved restore', id);
-				data.value?.setArchive(false, {
-					source
-				});
-			});
-			em.on('delete', async ({ id, timestamp, source }) => {
-				const data = await this.fromId(id);
-				if (data.isErr()) return console.error(data.error);
-				this.log('API Recieved delete', id);
-				data.value?.delete({
-					source
-				});
-			});
-			em.on('delete-version', async ({ id, timestamp, vhId, source }) => {
-				const data = await this.fromId(id);
-				if (data.isErr()) return console.error(data.error);
-				if (!data) return;
-				const versions = await data.value?.getVersions();
-				if (!versions) return;
-				if (versions.isErr()) return console.error(versions.error);
-				const version = versions.value.find((v) => v.vhId === vhId);
-				this.log('API Recieved delete-version', id, vhId);
-				version?.delete({
-					source
-				});
-			});
-			em.on('restore-version', async ({ id, timestamp, vhId, source }) => {
-				const data = await this.fromId(id);
-				if (data.isErr()) return console.error(data.error);
-				if (!data) return;
-				const versions = await data.value?.getVersions();
-				if (!versions) return;
-				if (versions.isErr()) return console.error(versions.error);
-				const version = versions.value.find((v) => v.vhId === vhId);
-				this.log('API Recieved restore-version', id, vhId);
-				version?.restore({
-					source
-				});
-			});
-			em.on('create', async ({ data, timestamp, source }) => {
-				this.new(data, {
-					overwriteGlobals: true,
-					source
-				});
-			});
-			em.on('update', async ({ data, timestamp, source }) => {
-				const id = z.object({ id: z.string() }).parse(data).id;
-				const d = await this.fromId(id);
-				if (d.isErr()) return console.error(d.error);
-				this.log('API Recieved update', id);
-				if (!d.value) {
-					this.new(data, {
-						overwriteGlobals: true
-					});
-					return;
-				}
-				d.value.update(data, {
-					source
-				});
-			});
-			// em.on('set-attributes', async ({ id, attributes, timestamp }) => {
-			//     const data = await this.fromId(id);
-			//     if (data.isErr()) return console.error(data.error);
-			//     data.value?.setAttributes(attributes);
-			// });
-			// em.on('set-universes', async ({ id, universes, timestamp }) => {
-			//     const data = await this.fromId(id);
-			//     if (data.isErr()) return console.error(data.error);
-			//     data.value?.setUniverses(universes);
-			// });
-
-			this.on('create', async (d) => {
-				if (d.metadata.get('no-emit')) return;
-				this.log('API Sending create', d.data);
-				const res = await api.send(
-					this,
-					'create',
-					{
-						...d.data,
-						source: 'self'
-					},
-					{
-						if: (connection) => {
-							if (connection) {
-								return connection.apiKey !== d.metadata.get('source');
-							}
-							return true;
-						}
-					}
-				);
-				if (res.isErr()) {
-					new StructError(this, res.error.message);
-					d.delete({
-						emit: false
-					});
-				}
-			});
-			this.on('update', async (d) => {
-				const prevState = d.to.metadata.get('prev-state'); // always read so it will delete
-				if (d.to.metadata.get('no-emit')) return;
-				this.log('API Sending update', d.to.data);
-				const res = await api.send(
-					this,
-					'update',
-					{
-						...d.to.data,
-						source: 'self'
-					},
-					{
-						if: (connection) => {
-							if (connection) {
-								return connection.apiKey !== d.to.metadata.get('source');
-							}
-							return true;
-						}
-					}
-				);
-				if (res.isErr()) {
-					new StructError(this, res.error.message);
-					if (prevState) {
-						await d.to.update(JSON.parse(prevState as string), { emit: false });
-					}
-				}
-			});
-			this.on('archive', async (d) => {
-				if (d.metadata.get('no-emit')) return;
-				this.log('API Sending archive', d.id);
-				const res = await api.send(
-					this,
-					'archive',
-					{
-						id: d.id,
-						source: 'self'
-					} as any,
-					{
-						if: (connection) => {
-							if (connection) {
-								return connection.apiKey !== d.metadata.get('source');
-							}
-							return true;
-						}
-					}
-				);
-
-				if (res.isErr()) {
-					new StructError(this, res.error.message);
-					d.setArchive(false, {
-						emit: false
-					});
-				}
-			});
-			this.on('delete', async (d) => {
-				if (d.metadata.get('no-emit')) return;
-				this.log('API Sending delete', d.id);
-				const res = await api.send(
-					this,
-					'delete',
-					{
-						id: d.id,
-						source: 'self'
-					} as any,
-					{
-						if: (connection) => {
-							if (connection) {
-								return connection.apiKey !== d.metadata.get('source');
-							}
-							return true;
-						}
-					}
-				);
-				if (res.isErr()) {
-					new StructError(this, res.error.message);
-					this.new(d.data, {
-						overwriteGlobals: true,
-						emit: false
-					});
-				}
-			});
-			this.on('delete-version', async (d) => {
-				if (d.metadata.get('no-emit')) return;
-				this.log('API Sending delete-version', d.id, d.vhId);
-				api.send(this, 'delete-version', {
-					id: d.id,
-					vhId: d.vhId,
-					source: 'self'
-				} as any);
-			});
-			this.on('restore-version', async (d) => {
-				if (d.metadata.get('no-emit')) return;
-				this.log('API Sending restore-version', d.id, d.vhId);
-				api.send(
-					this,
-					'restore-version',
-					{
-						id: d.id,
-						vhId: d.vhId,
-						source: 'self'
-					} as any,
-					{
-						if: (connection) => {
-							if (connection) {
-								return connection.apiKey !== d.metadata.get('source');
-							}
-							return true;
-						}
-					}
-				);
-			});
-			this.on('restore', async (d) => {
-				if (d.metadata.get('no-emit')) return;
-				this.log('API Sending restore', d.id);
-				const res = await api.send(
-					this,
-					'restore',
-					{
-						id: d.id,
-						source: 'self'
-					} as any,
-					{
-						if: (connection) => {
-							if (connection) {
-								return connection.apiKey !== d.metadata.get('source');
-							}
-							return true;
-						}
-					}
-				);
-				if (res.isErr()) {
-					d.setArchive(true, {
-						emit: false
-					});
-				}
-			});
-		});
-	}
-
-	// If the data is not found in the database, it will be added after the query to the server
-	// I'm guessing this function will cause some overhead, but it's necessary for the reflection system
-	// I don't know how to make it more efficient
-	/**
-	 * Uses the API to query data. If the threshold is reached, it will query the main server for updates.
-	 *
-	 * @private
-	 * @template {keyof QueryType} K
-	 * @param {K} type
-	 * @param {QueryType[K]} data
-	 * @returns {*}
-	 */
-	private apiQuery<K extends keyof QueryType>(type: K, data: QueryType[K]) {
-		return attemptAsync(async () => {
-			if (!this._api) return;
-			this.log('Querying: ', type, data);
-			const lastRead = this._api.getLastRead(this.name, type);
-			const queryThreshold =
-				typeof this.data.reflection === 'object' ? this.data.reflection.queryThreshold : false;
-			// Default to 1 hour
-			if (
-				lastRead === undefined ||
-				Date.now() - lastRead > Number(queryThreshold ?? 1000 * 60 * 60)
-			) {
-				const result = (await this._api.query(this, type, data)).unwrap();
-				if (result instanceof Stream) {
-					const updates: Promise<void>[] = [];
-					let timeout: NodeJS.Timeout;
-					let batch: Structable<T & typeof globalCols>[] = [];
-					let isProcessing = false;
-
-					const save = async () => {
-						if (isProcessing) return; // Prevent overlapping saves
-						isProcessing = true;
-
-						try {
-							await Promise.all(updates);
-							updates.length = 0;
-
-							const cache = [...batch];
-							batch = [];
-							for (const d of cache) {
-								try {
-									const has = await this.fromId(d.id);
-									if (has.isErr()) throw has.error;
-
-									if (!has.value) {
-										await this.new(d, { overwriteGlobals: true, emit: false });
-									} else if (!has.value.isSimilar(d)) {
-										await has.value.update(d, { emit: false });
-									}
-								} catch (err) {
-									console.error('Error processing item:', err);
-								}
-							}
-						} catch (err) {
-							console.error('Error in save():', err);
-						} finally {
-							isProcessing = false;
-						}
-					};
-
-					result.pipe((d) => {
-						if (!d) return;
-						batch.push(d);
-						if (timeout) clearTimeout(timeout);
-
-						if (batch.length >= 100) {
-							updates.push(save());
-						} else {
-							timeout = setTimeout(() => {
-								updates.push(save());
-							}, 100);
-						}
-					});
-				}
-			}
 		});
 	}
 
@@ -3026,13 +2407,13 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 		if (this.data.log) console.log(chalk.blue(`[${this.name}]`), ...data);
 	}
 
-	private readonly queryListeners = new Map<
+	public readonly queryListeners = new Map<
 		string,
 		{
 			fn: (
 				event: RequestEvent,
 				data: unknown
-			) => StructStream<T, Name> | Error | Promise<StructStream<T, Name> | Error>;
+			) => QueryReturnType<T, Name> | Promise<QueryReturnType<T, Name>>;
 			filter?: (data: StructData<T, Name>) => boolean;
 		}
 	>();
@@ -3042,7 +2423,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 		fn: (
 			event: RequestEvent,
 			data: unknown
-		) => StructStream<T, Name> | Error | Promise<StructStream<T, Name> | Error>,
+		) => QueryReturnType<T, Name> | Promise<QueryReturnType<T, Name>>,
 		filter?: (data: StructData<T, Name>) => boolean
 	) {
 		this.queryListeners.set(event, {
@@ -3051,7 +2432,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 		});
 	}
 
-	private readonly callListeners = new Map<
+	public readonly callListeners = new Map<
 		string,
 		(event: RequestEvent, data: unknown) => StructStatus | Promise<StructStatus>
 	>();
@@ -3063,7 +2444,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 		this.callListeners.set(event, fn);
 	}
 
-	private readonly sendListeners = new Map<
+	public readonly sendListeners = new Map<
 		string,
 		(event: RequestEvent, data: unknown) => unknown
 	>();
@@ -3072,23 +2453,27 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 		this.sendListeners.set(event, fn);
 	}
 
-	private readonly blocks = new Map<
+	public readonly blocks = new Map<
 		string,
 		{
 			fn: (event: RequestEvent, data: unknown) => boolean | Promise<boolean>;
-			message: string;
-		}
+			reason: string;
+		}[]
 	>();
 
 	block(
 		event: DataAction | PropertyAction,
 		fn: (event: RequestEvent, data: unknown) => boolean | Promise<boolean>,
-		message: string
+		reason: string
 	) {
-		this.blocks.set(event, {
+		if (!this.blocks.has(event)) {
+			this.blocks.set(event, []);
+		}
+		this.blocks.get(event)?.push({
 			fn,
-			message
+			reason
 		});
+		this.log('Added block for', event, 'with reason:', reason);
 	}
 
 	backup(dir: string) {
@@ -3237,6 +2622,12 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 	}
 }
 
+
+export type QueryReturnType<T extends Blank, Name extends string> = 
+	StructStream<T, Name> | 
+	StructData<T, Name>[] |
+	Error;
+
 /**
  * Interface for accounts, used for bypasses.
  *
@@ -3295,7 +2686,6 @@ const sessionSampleStructCols = {
 	userAgent: text('user_agent').notNull(),
 	requests: integer('requests').notNull(),
 	prevUrl: text('prev_url').notNull(),
-	latency: integer('latency').notNull().default(0),
 }
 
 export type Session = StructData<typeof sessionSampleStructCols, 'session'>;
