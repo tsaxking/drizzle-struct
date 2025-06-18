@@ -8,6 +8,8 @@ import { DataAction, PropertyAction } from './types';
 import type { Readable, Writable } from 'svelte/store';
 import { type ColType } from './types';
 import { z } from 'zod';
+import { v4 as uuid } from 'uuid';
+import { uniqueIndex } from 'drizzle-orm/mysql-core';
 
 // TODO: Batching?
 
@@ -176,6 +178,9 @@ export type StructBuilder<T extends Blank> = {
 	 * Whether the struct is a browser struct, this is used to prevent fetch requests on the server when sveltekit is doing SSR
 	 */
 	browser: boolean;
+
+
+	cacheUpdates?: boolean;
 };
 
 /**
@@ -359,6 +364,104 @@ export class StructDataVersion<T extends Blank> {
 	}
 }
 
+const STRUCT_UPDATE_VERSION = 1;
+
+const StructUpdateSchema = z.record(z.string(), z.record(z.string(), z.array(z.object({
+	id: z.string(),
+	data: z.string(),
+	date: z.string(),
+}))));
+
+class StructUpdate<T extends Blank> {
+	public static runUpdates(struct: Struct<any>) {
+		return attemptAsync(async () => {
+			const data = localStorage.getItem(`struct_update-v${STRUCT_UPDATE_VERSION}`);
+			if (!data) return;
+			const updates = StructUpdateSchema.parse(JSON.parse(data));
+			if (!updates[struct.data.name]) return;
+			const structUpdates = updates[struct.data.name];
+			return Promise.all(Object.keys(structUpdates).map(async id => {
+				return Promise.all(structUpdates[id].map(async update => {
+					const su = new StructUpdate(id, struct.data.name, id, JSON.parse(update.data), new Date(update.date));
+					const res = await struct.post(PropertyAction.Update, {
+						...su.toUpdate,
+						id,
+					}, su.date);
+					if (!res.isOk()) {
+						console.error('Failed to apply update:', res.error);
+						return;
+					}
+					const json = (await res.unwrap().json()) as StatusMessage;
+					if (json.success) {
+						su.delete().unwrap();
+					}
+					return json;
+				}));
+			}));
+		});
+	}
+
+	public static getUpdates(struct: string, id: string) {
+		return attempt(() => {
+			const data = localStorage.getItem(`struct_update-v${STRUCT_UPDATE_VERSION}`);
+			if (!data) return [];
+			const updates = StructUpdateSchema.parse(JSON.parse(data));
+			if (!updates[struct]?.[id]) return [];
+			return updates[struct]?.[id];
+		});
+	}
+
+	public static createUpdate<T extends Blank>(struct: Struct<any>, dataId: string, toUpdate: PartialStructable<T & GlobalCols>) {
+		return attempt(() => {
+			const id = uuid();
+			return new StructUpdate(id, struct.data.name, dataId, toUpdate, new Date());
+		});
+	}
+
+	constructor(
+		public readonly id: string,
+		public readonly struct: string,
+		public readonly dataId: string,
+		public readonly toUpdate: PartialStructable<T & GlobalCols>,
+		public readonly date: Date,
+	) {}
+
+	save() {
+		return attempt(() => {
+			const updates = StructUpdate.getUpdates(this.struct, this.dataId).unwrap();
+			if (!updates) return;
+			const index = updates.findIndex((update) => update.id === this.id);
+			if (index !== -1) {
+				updates[index].data = JSON.stringify(this.toUpdate);
+				updates[index].date = this.date.toISOString();
+			} else {
+				updates.push({
+					id: this.id,
+					data: JSON.stringify(this.toUpdate),
+					date: this.date.toISOString()
+				});
+			}
+
+			const json = StructUpdateSchema.parse(updates);
+			json[this.struct][this.dataId] = updates;
+			localStorage.setItem(`struct_update-v${STRUCT_UPDATE_VERSION}`, JSON.stringify(json));
+		});
+	}
+
+
+	delete() {
+		return attempt(() => {
+			const updates = StructUpdate.getUpdates(this.struct, this.dataId).unwrap();
+			const index = updates.findIndex((update) => update.id === this.id);
+			if (index === -1) return;
+			updates.splice(index, 1);
+			const json = StructUpdateSchema.parse(updates);
+			json[this.struct][this.dataId] = updates;
+			localStorage.setItem(`struct_update-v${STRUCT_UPDATE_VERSION}`, JSON.stringify(json));
+		});
+	}
+}
+
 /**
  * Struct data for a single data point
  *
@@ -435,6 +538,7 @@ export class StructData<T extends Blank> implements Writable<PartialStructable<T
 		>
 	) {
 		return attemptAsync(async () => {
+			if (!this.data.id) throw new StructError('Unable to update data, no id found');
 			const prev = { ...this.data };
 
 			const result = fn(this.data);
@@ -445,12 +549,17 @@ export class StructData<T extends Blank> implements Writable<PartialStructable<T
 			delete result.universes;
 			delete result.attributes;
 			delete result.canUpdate;
-
+			const su = this.struct.cacheUpdates ? StructUpdate.createUpdate<T>(this.struct, this.data.id, result).unwrap() : undefined;
+			su?.save().unwrap();
 			const res = (await this.struct.post(PropertyAction.Update, result)).unwrap();
-			return {
+			const json =  {
 				result: (await res.json()) as StatusMessage,
 				undo: () => this.update(() => prev)
 			};
+			if (json.result.success) {
+				su?.delete().unwrap();
+			}
+			return json;
 		});
 	}
 
@@ -886,6 +995,8 @@ export class Struct<T extends Blank> {
 	 */
 	private readonly emitter = new EventEmitter<StructEvents<T>>();
 
+	public readonly cacheUpdates: boolean;
+
 	/**
 	 * Listens to an event
 	 *
@@ -932,6 +1043,7 @@ export class Struct<T extends Blank> {
 	 */
 	constructor(public readonly data: StructBuilder<T>) {
 		Struct.structs.set(data.name, this as any);
+		this.cacheUpdates = data.cacheUpdates ?? true; // default to true
 	}
 
 	/**
@@ -1145,7 +1257,7 @@ export class Struct<T extends Blank> {
 	 * @param {unknown} data
 	 * @returns {*}
 	 */
-	post(action: DataAction | PropertyAction | string, data: unknown) {
+	post(action: DataAction | PropertyAction | string, data: unknown, date?: Date) {
 		return attemptAsync(async () => {
 			if (!this.data.browser)
 				throw new StructError(
@@ -1155,7 +1267,8 @@ export class Struct<T extends Blank> {
 				method: 'POST',
 				headers: {
 					'Content-Type': 'application/json',
-					...Object.fromEntries(Struct.headers.entries())
+					...Object.fromEntries(Struct.headers.entries()),
+					'X-Date': date?.toISOString() || new Date().toISOString(),
 				},
 				body: JSON.stringify({
 					struct: this.data.name,
@@ -1692,5 +1805,24 @@ export class Struct<T extends Blank> {
 				})
 				.parse(res);
 		});
+	}
+
+	arr(dataArray?: StructData<T>[]) {
+		if (!dataArray) {
+			dataArray = [];
+		}
+
+		return new DataArr(this, dataArray);
+	}
+
+	arrGenerator(dataArray: Structable<T & GlobalCols>[]) {
+		const w = new DataArr(this, dataArray.map((d) => this.Generator(d)));
+		setTimeout(() => {
+			this.writables.set('all', w);
+		});
+		w.onAllUnsubscribe(() => {
+			this.writables.delete('all');
+		});
+		return w;
 	}
 }
