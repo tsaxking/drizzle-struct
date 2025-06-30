@@ -10,6 +10,7 @@ import { type ColType } from './types';
 import { z } from 'zod';
 import { v4 as uuid } from 'uuid';
 import { uniqueIndex } from 'drizzle-orm/mysql-core';
+import { Loop } from 'ts-utils/loop';
 
 export enum FetchActions {
 	Create = 'create',
@@ -382,101 +383,93 @@ export class StructDataVersion<T extends Blank> {
 
 const STRUCT_UPDATE_VERSION = 1;
 
-const StructUpdateSchema = z.record(z.string(), z.record(z.string(), z.array(z.object({
+const structUpdateSchema = z.object({
+	struct: z.string(),
+	type: z.string(),
+	data: z.unknown(),
 	id: z.string(),
-	data: z.string(),
-	date: z.string(),
-}))));
+	date: z.string().date()
+});
 
-class StructUpdate<T extends Blank> {
-	public static runUpdates(struct: Struct<any>) {
-		return attemptAsync(async () => {
-			const data = localStorage.getItem(`struct_update-v${STRUCT_UPDATE_VERSION}`);
-			if (!data) return;
-			const updates = StructUpdateSchema.parse(JSON.parse(data));
-			if (!updates[struct.data.name]) return;
-			const structUpdates = updates[struct.data.name];
-			return Promise.all(Object.keys(structUpdates).map(async id => {
-				return Promise.all(structUpdates[id].map(async update => {
-					const su = new StructUpdate(id, struct.data.name, id, JSON.parse(update.data), new Date(update.date));
-					const res = await struct.post(PropertyAction.Update, {
-						...su.toUpdate,
-						id,
-					}, su.date);
-					if (!res.isOk()) {
-						console.error('Failed to apply update:', res.error);
-						return;
-					}
-					const json = (await res.unwrap().json()) as StatusMessage;
-					if (json.success) {
-						su.delete().unwrap();
-					}
-					return json;
-				}));
-			}));
-		});
-	}
+const getStructUpdates = () => {
+	return attempt(() => {
+		const data = window.localStorage.getItem(`struct-updates-v${STRUCT_UPDATE_VERSION}`);
 
-	public static getUpdates(struct: string, id: string) {
-		return attempt(() => {
-			const data = localStorage.getItem(`struct_update-v${STRUCT_UPDATE_VERSION}`);
-			if (!data) return [];
-			const updates = StructUpdateSchema.parse(JSON.parse(data));
-			if (!updates[struct]?.[id]) return [];
-			return updates[struct]?.[id];
-		});
-	}
+		if (!data) return [];
 
-	public static createUpdate<T extends Blank>(struct: Struct<any>, dataId: string, toUpdate: PartialStructable<T & GlobalCols>) {
-		return attempt(() => {
-			const id = uuid();
-			return new StructUpdate(id, struct.data.name, dataId, toUpdate, new Date());
-		});
-	}
-
-	constructor(
-		public readonly id: string,
-		public readonly struct: string,
-		public readonly dataId: string,
-		public readonly toUpdate: PartialStructable<T & GlobalCols>,
-		public readonly date: Date,
-	) {}
-
-	save() {
-		return attempt(() => {
-			const updates = StructUpdate.getUpdates(this.struct, this.dataId).unwrap();
-			if (!updates) return;
-			const index = updates.findIndex((update) => update.id === this.id);
-			if (index !== -1) {
-				updates[index].data = JSON.stringify(this.toUpdate);
-				updates[index].date = this.date.toISOString();
-			} else {
-				updates.push({
-					id: this.id,
-					data: JSON.stringify(this.toUpdate),
-					date: this.date.toISOString()
-				});
-			}
-
-			const json = StructUpdateSchema.parse(updates);
-			json[this.struct][this.dataId] = updates;
-			localStorage.setItem(`struct_update-v${STRUCT_UPDATE_VERSION}`, JSON.stringify(json));
-		});
-	}
-
-
-	delete() {
-		return attempt(() => {
-			const updates = StructUpdate.getUpdates(this.struct, this.dataId).unwrap();
-			const index = updates.findIndex((update) => update.id === this.id);
-			if (index === -1) return;
-			updates.splice(index, 1);
-			const json = StructUpdateSchema.parse(updates);
-			json[this.struct][this.dataId] = updates;
-			localStorage.setItem(`struct_update-v${STRUCT_UPDATE_VERSION}`, JSON.stringify(json));
-		});
-	}
+		return z.array(structUpdateSchema).parse(JSON.parse(data));
+	});
 }
+
+const saveStructUpdate = (data: {
+	struct: string;
+	type: string;
+	data: unknown;
+	id: string;
+}) => {
+	return attempt(() => {
+		const arr = getStructUpdates().unwrap();
+		arr.push({
+			...data,
+			date: new Date().toISOString(),
+		});
+		window.localStorage.setItem(`struct-updates-v${STRUCT_UPDATE_VERSION}`, JSON.stringify(arr));
+		return arr;
+	});
+};
+
+const deleteStructUpdate = (id: string) => {
+	return attempt(() => {
+		const arr = getStructUpdates()
+			.unwrap()
+			.filter(u => u.id !== id);
+		window.localStorage.setItem(`struct-updates-v${STRUCT_UPDATE_VERSION}`, JSON.stringify(arr));
+
+		return arr;
+	});
+}
+
+const sendUpdates = (browser: boolean) => {
+	return attemptAsync(async () => {
+		if (!browser) return;
+		const arr = getStructUpdates().unwrap();
+		const res = await fetch(
+			'/struct/batch',
+			{
+				body: JSON.stringify(arr.filter(u => (new Date(u.date).getTime() - Date.now()) >= 1000 * 60)),
+				method: 'POST',
+				headers: {
+					'Content-Type': 'Application/JSON',
+				}
+			}
+		).then(r => r.json());
+
+		const resArr = z.array(z.object({
+			id: z.string(),
+			success: z.boolean(),
+			message: z.string().optional(),
+		})).parse(res);
+		window.localStorage.setItem(`struct-updates-v${STRUCT_UPDATE_VERSION}`, JSON.stringify(
+			arr.filter(a => !resArr.findIndex(u => a.id === u.id)),
+		));
+		return resArr;
+	});
+};
+
+export const startBatchUpdateLoop = (browser: boolean, interval: number) => {
+	const l = new Loop<{
+		error: Error;
+	}>(async () => {
+		const res = await sendUpdates(browser);
+		if (res.isErr()) {
+			console.error(res.error);
+			l.emit('error', res.error);
+		}
+	}, interval);
+	l.start();
+	return l;
+};
+
 
 /**
  * Struct data for a single data point
@@ -1260,6 +1253,20 @@ export class Struct<T extends Blank> {
 				throw new StructError(
 					'Currently not in a browser environment. Will not run a fetch request'
 				);
+			let id = uuid();
+			if (![
+				PropertyAction.Read,
+				PropertyAction.ReadArchive,
+				PropertyAction.ReadVersionHistory
+			].includes(action as PropertyAction)) {
+				// this is an update, so set up batch updating
+				saveStructUpdate({
+					struct: this.data.name,
+					data,
+					id,
+					type: action,
+				}).unwrap();
+			}
 			const res = await fetch(`/struct/${this.data.name}/${action}`, {
 				method: 'POST',
 				headers: {
@@ -1269,6 +1276,11 @@ export class Struct<T extends Blank> {
 				},
 				body: JSON.stringify(data)
 			});
+
+			if (res.ok) {
+				deleteStructUpdate(id).unwrap();
+			}
+
 			this.log('Post:', action, data, res);
 			return res;
 		});
