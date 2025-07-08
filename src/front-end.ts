@@ -470,6 +470,16 @@ export const startBatchUpdateLoop = (browser: boolean, interval: number) => {
 	return l;
 };
 
+let BATCH_TEST = false;
+
+export const startBatchTest = (): true => {
+	return BATCH_TEST = true;
+};
+
+export const endBatchTest = (): false => {
+	return BATCH_TEST = false;
+};
+
 
 /**
  * Struct data for a single data point
@@ -1266,6 +1276,9 @@ export class Struct<T extends Blank> {
 					id,
 					type: action,
 				}).unwrap();
+			}
+			if (BATCH_TEST) {
+				throw new Error('Batch test is enabled, will not run a fetch request');
 			}
 			const res = await fetch(`/struct/${this.data.name}/${action}`, {
 				method: 'POST',
