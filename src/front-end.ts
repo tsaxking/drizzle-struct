@@ -429,14 +429,16 @@ const deleteStructUpdate = (id: string) => {
 	});
 }
 
-const sendUpdates = (browser: boolean) => {
+const sendUpdates = (browser: boolean, threshold: number) => {
 	return attemptAsync(async () => {
 		if (!browser) return;
 		const arr = getStructUpdates().unwrap();
+
+		if (!arr.length) return [];
 		const res = await fetch(
 			'/struct/batch',
 			{
-				body: JSON.stringify(arr.filter(u => (new Date(u.date).getTime() - Date.now()) >= 1000 * 60)),
+				body: JSON.stringify(arr.filter(u => (new Date(u.date).getTime() - Date.now()) >= threshold)),
 				method: 'POST',
 				headers: {
 					'Content-Type': 'Application/JSON',
@@ -456,11 +458,11 @@ const sendUpdates = (browser: boolean) => {
 	});
 };
 
-export const startBatchUpdateLoop = (browser: boolean, interval: number) => {
+export const startBatchUpdateLoop = (browser: boolean, interval: number, threshold: number) => {
 	const l = new Loop<{
 		error: Error;
 	}>(async () => {
-		const res = await sendUpdates(browser);
+		const res = await sendUpdates(browser, threshold);
 		if (res.isErr()) {
 			console.error(res.error);
 			l.emit('error', res.error);
