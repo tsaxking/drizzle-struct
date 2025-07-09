@@ -388,7 +388,7 @@ const structUpdateSchema = z.object({
 	type: z.string(),
 	data: z.unknown(),
 	id: z.string(),
-	date: z.string().date()
+	date: z.string()
 });
 
 const getStructUpdates = () => {
