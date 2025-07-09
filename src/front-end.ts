@@ -391,7 +391,7 @@ const structUpdateSchema = z.object({
 	date: z.string()
 });
 
-const getStructUpdates = () => {
+export const getStructUpdates = () => {
 	return attempt(() => {
 		const data = window.localStorage.getItem(`struct-updates-v${STRUCT_UPDATE_VERSION}`);
 
@@ -401,7 +401,7 @@ const getStructUpdates = () => {
 	});
 }
 
-const saveStructUpdate = (data: {
+export const saveStructUpdate = (data: {
 	struct: string;
 	type: string;
 	data: unknown;
@@ -418,7 +418,7 @@ const saveStructUpdate = (data: {
 	});
 };
 
-const deleteStructUpdate = (id: string) => {
+export const deleteStructUpdate = (id: string) => {
 	return attempt(() => {
 		const arr = getStructUpdates()
 			.unwrap()
@@ -429,7 +429,7 @@ const deleteStructUpdate = (id: string) => {
 	});
 }
 
-const sendUpdates = (browser: boolean, threshold: number) => {
+export const sendUpdates = (browser: boolean, threshold: number) => {
 	return attemptAsync(async () => {
 		if (!browser) return;
 		const arr = getStructUpdates().unwrap();
@@ -438,7 +438,7 @@ const sendUpdates = (browser: boolean, threshold: number) => {
 		const res = await fetch(
 			'/struct/batch',
 			{
-				body: JSON.stringify(arr.filter(u => (new Date(u.date).getTime() - Date.now()) >= threshold)),
+				body: JSON.stringify(arr.filter(u => (Date.now() - new Date(u.date).getTime()) >= threshold)),
 				method: 'POST',
 				headers: {
 					'Content-Type': 'Application/JSON',
@@ -470,6 +470,13 @@ export const startBatchUpdateLoop = (browser: boolean, interval: number, thresho
 	}, interval);
 	l.start();
 	return l;
+};
+
+export const clearStructUpdates = () => {
+	return attempt(() => {
+		window.localStorage.removeItem(`struct-updates-v${STRUCT_UPDATE_VERSION}`);
+		return [];
+	});
 };
 
 let BATCH_TEST = false;
