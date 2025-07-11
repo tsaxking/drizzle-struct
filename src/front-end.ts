@@ -910,11 +910,11 @@ export class StructStream<T extends Blank> extends Stream<StructData<T>> {
  * @template {Blank} T
  */
 export type StructEvents<T extends Blank> = {
-	new: StructData<T>;
-	update: StructData<T>;
-	delete: StructData<T>;
-	archive: StructData<T>;
-	restore: StructData<T>;
+	new: [StructData<T>];
+	update: [StructData<T>];
+	delete: [StructData<T>];
+	archive: [StructData<T>];
+	restore: [StructData<T>];
 
 	connect: void;
 };
