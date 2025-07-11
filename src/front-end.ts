@@ -1280,8 +1280,9 @@ export class Struct<T extends Blank> {
 				PropertyAction.Read,
 				PropertyAction.ReadArchive,
 				PropertyAction.ReadVersionHistory,
-			].includes(action as PropertyAction) || 
-			action !== `${PropertyAction.Read}/custom`
+			].includes(action as PropertyAction) &&
+			action !== `${PropertyAction.Read}/custom` &&
+			!action.startsWith('custom')
 		)) {
 				// this is an update, so set up batch updating
 				saveStructUpdate({
