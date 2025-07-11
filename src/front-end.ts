@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { attempt, attemptAsync } from 'ts-utils/check';
-import { EventEmitter } from 'ts-utils/event-emitter';
+import { EventEmitter, ComplexEventEmitter } from 'ts-utils/event-emitter';
 import { match } from 'ts-utils/match';
 import { Stream } from 'ts-utils/stream';
 import { decode } from 'ts-utils/text';
@@ -915,6 +915,8 @@ export type StructEvents<T extends Blank> = {
 	delete: StructData<T>;
 	archive: StructData<T>;
 	restore: StructData<T>;
+
+	connect: void;
 };
 
 /**
@@ -999,7 +1001,7 @@ export class Struct<T extends Blank> {
 	 * @readonly
 	 * @type {*}
 	 */
-	private readonly emitter = new EventEmitter<StructEvents<T>>();
+	private readonly emitter = new ComplexEventEmitter<StructEvents<T>>();
 
 	public readonly cacheUpdates: boolean;
 
