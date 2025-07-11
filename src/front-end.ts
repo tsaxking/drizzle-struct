@@ -450,6 +450,7 @@ export const sendUpdates = (browser: boolean, threshold: number) => {
 			id: z.string(),
 			success: z.boolean(),
 			message: z.string().optional(),
+			data: z.unknown().optional(),
 		})).parse(res);
 		window.localStorage.setItem(`struct-updates-v${STRUCT_UPDATE_VERSION}`, JSON.stringify(
 			arr.filter(a => !resArr.findIndex(u => a.id === u.id)),
@@ -1275,11 +1276,13 @@ export class Struct<T extends Blank> {
 					'Currently not in a browser environment. Will not run a fetch request'
 				);
 			let id = uuid();
-			if (![
+			if ((![
 				PropertyAction.Read,
 				PropertyAction.ReadArchive,
-				PropertyAction.ReadVersionHistory
-			].includes(action as PropertyAction)) {
+				PropertyAction.ReadVersionHistory,
+			].includes(action as PropertyAction) || 
+			action !== `${PropertyAction.Read}/custom`
+		)) {
 				// this is an update, so set up batch updating
 				saveStructUpdate({
 					struct: this.data.name,
