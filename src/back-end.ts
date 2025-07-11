@@ -1033,6 +1033,8 @@ export type StructEvents<T extends Blank, Name extends string> = {
 	'fatal-error': [FatalStructError];
 	'data-error': [DataError];
 	'fatal-data-error': [FatalDataError];
+
+	connect: void;
 };
 
 /**
@@ -2621,6 +2623,14 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 		});
 	}
 }
+
+
+// // TODO: build a smaller version of the struct, fewer headers
+// export class SmallStruct<T extends Blank, N extends string> {
+
+// }
+
+
 
 
 export type QueryReturnType<T extends Blank, Name extends string> = 
