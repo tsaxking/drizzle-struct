@@ -1634,10 +1634,11 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 		type: 'array';
 		limit: number;
 		offset: number;
+		includeArchived?: boolean;
 	}): ResultPromise<StructData<T, Name>[], Error>;
-	all(config: { type: 'single' }): ResultPromise<StructData<T, Name> | undefined, Error>;
-	all(config: { type: 'count' }): ResultPromise<number>;
-	all(config: { type: 'all' }): ResultPromise<StructData<T, Name>[], Error>;
+	all(config: { type: 'single'; includeArchived?: boolean; }): ResultPromise<StructData<T, Name> | undefined, Error>;
+	all(config: { type: 'count'; includeArchived?: boolean; }): ResultPromise<number>;
+	all(config: { type: 'all'; includeArchived?: boolean; }): ResultPromise<StructData<T, Name>[], Error>;
 	all(
 		config: MultiConfig
 	):
