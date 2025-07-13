@@ -1380,7 +1380,7 @@ export class Struct<T extends Blank> {
 				headers: {
 					'Content-Type': 'application/json',
 					...Object.fromEntries(Struct.headers.entries()),
-					'X-Date': date?.toISOString() || new Date().toISOString(),
+					'X-Date': String(date?.getTime() || new Date().getTime()),
 				},
 				body: JSON.stringify(data)
 			});
