@@ -2686,7 +2686,8 @@ const accountSampleStructCols = {
 	email: text('email').notNull().unique(),
 	picture: text('picture').notNull(),
 	verified: boolean('verified').notNull(),
-	verification: text('verification').notNull()
+	verification: text('verification').notNull(),
+	lastLogin: text('last_login').notNull().default(''),
 };
 
 export type Account = StructData<typeof accountSampleStructCols, 'account'>;
