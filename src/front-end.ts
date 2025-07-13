@@ -1292,8 +1292,8 @@ export class Struct<T extends Blank> {
 	}
 
 	getZodSchema(config?: {
-		optionals?: (keyof T & keyof GlobalCols)[];
-		not?: (keyof T & keyof GlobalCols)[];
+		optionals?: ((keyof T & keyof GlobalCols) | string)[];
+		not?: ((keyof T & keyof GlobalCols) | string)[];
 	}) {
 		const createSchema = (key: keyof T & keyof GlobalCols, type: z.ZodType) => {
 			if (config?.optionals?.includes(key)) return [key, type.optional()];
