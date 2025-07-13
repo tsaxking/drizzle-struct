@@ -729,6 +729,48 @@ export class StructData<T extends Blank> implements Writable<PartialStructable<T
 		});
 	}
 
+	setAttributes(attributes: string[]) {
+		return attemptAsync(async () => {
+			if (!this.data.id) throw new StructError('Unable to set attributes, no id found');
+			if (!Array.isArray(attributes)) {
+				throw new DataError('Attributes must be an array of strings');
+			}
+			if (!attributes.every((a) => typeof a === 'string')) {
+				throw new DataError('Attributes must be an array of strings');
+			}
+
+			const res = await this.struct.post(PropertyAction.SetAttributes, {
+				id: this.data.id,
+				attributes
+			}).unwrap();
+
+			const result = await res.json() as StatusMessage<string[]>;
+			if (!result.success) {
+				throw new DataError(result.message || 'Failed to set attributes');
+			}
+
+			this.data.attributes = JSON.stringify(result.data);
+			return this.getAttributes().unwrap();
+		});
+	}
+
+	addAttributes(...attributes: string[]) {
+		return attemptAsync(async () => {
+			const current = this.getAttributes().unwrap();
+			return this.setAttributes(
+				Array.from(new Set(current))
+			).unwrap();
+		});
+	}
+
+	removeAttributes(...attributes: string[]) {
+		return attemptAsync(async () => {
+			const current = this.getAttributes().unwrap();
+			const newAttributes = current.filter((a) => !attributes.includes(a));
+			return this.setAttributes(newAttributes).unwrap();
+		});
+	}
+
 	/**
 	 * Retrieves all versions of the data
 	 *

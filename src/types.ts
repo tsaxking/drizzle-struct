@@ -3,6 +3,7 @@ export enum PropertyAction {
 	Update = 'update',
 	ReadArchive = 'read-archive',
 	ReadVersionHistory = 'read-version-history',
+	SetAttributes = 'set-attributes', // ADMIN ONLY
 }
 
 // these are not property specific
