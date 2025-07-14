@@ -1029,8 +1029,6 @@ export type GlobalCols = {
 	created: 'date';
 	updated: 'date';
 	archived: 'boolean';
-	universe: 'string';
-	// universes: 'string';
 	attributes: 'string';
 	lifetime: 'number';
 	canUpdate: 'boolean';
@@ -1308,8 +1306,6 @@ export class Struct<T extends Blank> {
 					created: 'date',
 					updated: 'date',
 					archived: 'boolean',
-					universe: 'string',
-					// universes: 'string',
 					attributes: 'string',
 					lifetime: 'number',
 					canUpdate: 'boolean'
