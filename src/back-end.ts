@@ -2697,6 +2697,7 @@ const sessionSampleStructCols = {
 	userAgent: text('user_agent').notNull(),
 	requests: integer('requests').notNull(),
 	prevUrl: text('prev_url').notNull(),
+	tabs: integer('tabs').notNull().default(0),
 }
 
 export type Session = StructData<typeof sessionSampleStructCols, 'session'>;
