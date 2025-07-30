@@ -2684,7 +2684,6 @@ const accountSampleStructCols = {
 	firstName: text('first_name').notNull(),
 	lastName: text('last_name').notNull(),
 	email: text('email').notNull().unique(),
-	picture: text('picture').notNull(),
 	verified: boolean('verified').notNull(),
 	verification: text('verification').notNull(),
 	lastLogin: text('last_login').notNull().default(''),
