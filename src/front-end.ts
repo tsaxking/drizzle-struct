@@ -1454,6 +1454,10 @@ export class Struct<T extends Blank> {
 		return d;
 	}
 
+	Proxy(data: StructData<T & GlobalCols>) {
+		return new StructDataProxy(data);
+	}
+
 	/**
 	 * Validates the data
 	 *
