@@ -5,7 +5,7 @@ import { match } from 'ts-utils/match';
 import { Stream } from 'ts-utils/stream';
 import { decode } from 'ts-utils/text';
 import { DataAction, PropertyAction } from './types';
-import type { Readable, Writable } from 'svelte/store';
+import { writable, type Readable, type Writable, get } from 'svelte/store';
 import { type ColType } from './types';
 import { z } from 'zod';
 import { v4 as uuid } from 'uuid';
@@ -790,6 +790,190 @@ export class StructData<T extends Blank> implements Writable<PartialStructable<T
 
 			return versions.data?.map((v) => new StructDataVersion(this.struct, v)) || [];
 		});
+	}
+}
+
+
+
+/**
+ * A proxy wrapper for StructData that allows local changes to be staged
+ * before being saved to the backend. It tracks both local and remote changes.
+ *
+ * Local changes are made through `data`, and changes will not be pushed
+ * to the backend until `.save()` is called.
+ *
+ * Remote updates from the backend trigger a flag (`remoteUpdated`) but do
+ * not modify the local data until `.pull()` is called.
+ *
+ * @template T The shape of the base struct (excluding global columns).
+ */
+export class StructDataProxy<T extends Blank> implements Writable<PartialStructable<T & GlobalCols>> {
+	/**
+	 * The proxied, locally-editable version of the data.
+	 * Modifying this triggers change tracking but does not affect the backend until `.save()`.
+	 */
+	public data: PartialStructable<T & GlobalCols>;
+
+	/** Tracks whether the backend (remote) data has changed since the last pull. */
+	public readonly remoteUpdated = writable(false);
+
+	/** Tracks whether the local data has been modified since the last save or pull. */
+	public readonly localUpdated = writable(false);
+
+	private dataUnsub: () => void;
+	private readonly subscribers = new Set<(data: PartialStructable<T & GlobalCols>) => void>();
+	private _onAllUnsubscribe = () => {};
+
+	/**
+	 * @param structData The live backend-backed StructData instance to proxy.
+	 */
+	constructor(
+		public readonly structData: StructData<T>,
+	) {
+		this.data = this.makeProxy(structData.data);
+		this.dataUnsub = this.structData.subscribe(() => {
+			this.remoteUpdated.set(true);
+		});
+	}
+
+	/**
+	 * Creates a reactive proxy for the provided data object.
+	 * Any mutation will trigger subscribers and mark the local state as dirty.
+	 */
+	private makeProxy(data: PartialStructable<T & GlobalCols>) {
+		return new Proxy(
+			structuredClone(data),
+			{
+				set: (target, property, value) => {
+					if (target[property as keyof typeof target] !== value) {
+						target[property as keyof typeof target] = value;
+						this.inform();
+						this.localUpdated.set(true);
+					}
+					return true;
+				},
+				deleteProperty: (target, property) => {
+					throw new Error(`Cannot delete property "${String(property)}" from StructDataProxy`);
+				}
+			}
+		);
+	}
+
+	/**
+	 * Subscribes to changes in the local data proxy.
+	 * This is separate from backend changes — only local modifications trigger these.
+	 *
+	 * @param fn The function to call when local data is modified.
+	 * @returns A cleanup function to unsubscribe.
+	 */
+	public subscribe(fn: (data: PartialStructable<T & GlobalCols>) => void) {
+		fn(this.data);
+		this.subscribers.add(fn);
+		return () => {
+			this.subscribers.delete(fn);
+			if (this.subscribers.size === 0) {
+				this._onAllUnsubscribe();
+				this.dataUnsub();
+			}
+		};
+	}
+
+	/**
+	 * Sets a callback that runs when all subscribers have unsubscribed.
+	 *
+	 * @param fn A cleanup function.
+	 */
+	public onAllUnsubscribe(fn: () => void) {
+		this._onAllUnsubscribe = fn;
+	}
+
+	/** Notifies all subscribers of the current local data state. */
+	public inform() {
+		this.subscribers.forEach(fn => fn(this.data));
+	}
+
+	/**
+	 * Replaces the current local data with a new object.
+	 * Triggers change tracking and subscribers.
+	 *
+	 * @param data The new data to replace with.
+	 * @returns The newly proxied data object.
+	 */
+	public set(data: PartialStructable<T & GlobalCols>) {
+		this.data = this.makeProxy(data);
+		this.inform();
+		this.localUpdated.set(true);
+		return this.data;
+	}
+
+	/**
+	 * Applies a transformation function to the local data.
+	 * Triggers change tracking and subscribers.
+	 *
+	 * @param fn A function that receives and returns the new data shape.
+	 * @returns The newly proxied data object.
+	 */
+	public update(fn: (data: PartialStructable<T & GlobalCols>) => PartialStructable<T & GlobalCols>) {
+		this.data = this.makeProxy(fn(this.data));
+		this.inform();
+		this.localUpdated.set(true);
+		return this.data;
+	}
+
+	/**
+	 * Pushes the locally modified data to the backend.
+	 * Only modified fields are merged into the backend struct.
+	 *
+	 * @returns A promise that resolves after backend update completes.
+	 */
+	public save() {
+		this.localUpdated.set(false);
+		return this.structData.update(d => ({
+			...d,
+			...this.data,
+		}));
+	}
+
+	/**
+	 * Resets the local state to match the backend data,
+	 * clearing both local and remote change flags.
+	 */
+	public pull() {
+		this.remoteUpdated.set(false);
+		this.localUpdated.set(false);
+		this.data = this.makeProxy(this.structData.data);
+		this.inform();
+	}
+
+	/**
+	 * Equivalent to `pull()`. Provided for semantic clarity.
+	 */
+	public clear() {
+		return this.pull();
+	}
+
+	/**
+	 * Returns whether the local or remote data has diverged
+	 * from the current proxied state.
+	 *
+	 * @returns `true` if either `localUpdated` or `remoteUpdated` is `true`.
+	 */
+	public isDirty(): boolean {
+		return get(this.localUpdated) || get(this.remoteUpdated);
+	}
+
+	/**
+	 * Returns whether the backend (remote) has changed since the last `pull()`.
+	 */
+	public remoteChanged(): boolean {
+		return get(this.remoteUpdated);
+	}
+
+	/**
+	 * Returns whether the local data has been changed since the last `save()` or `pull()`.
+	 */
+	public localChanged(): boolean {
+		return get(this.localUpdated);
 	}
 }
 
