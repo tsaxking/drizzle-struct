@@ -20,6 +20,7 @@ import chalk from 'chalk';
 import { encode, decode } from 'ts-utils/text';
 import readline from 'readline';
 import { sleep } from 'ts-utils/sleep';
+import { PgSelectBase } from 'drizzle-orm/pg-core';
 
 /**
  * Error thrown for invalid struct state
@@ -1580,55 +1581,6 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 		});
 	}
 
-	// /**
-	//  * Streams all data requested by id from the database
-	//  *
-	//  * @param {string[]} ids IDs of the data to get
-	//  * @param {true} asStream If the data should be streamed
-	//  * @returns {StructStream<T, Name>}
-	//  */
-	// fromIds(ids: string[], asStream: true): StructStream<T, Name>;
-	// /**
-	//  * Returns all data requested by id from the database
-	//  *
-	//  * @param {string[]} ids IDs of the data to get
-	//  * @param {false} asStream If the data should be streamed
-	//  * @returns {Promise<Result<StructData<T, Name>[], Error>>}
-	//  */
-	// fromIds(ids: string[], asStream: false): Promise<Result<StructData<T, Name>[], Error>>;
-	// /**
-	//  * Streams/returns all data requested by id from the database
-	//  *
-	//  * @param {string[]} ids IDs of the data to get
-	//  * @param {boolean} asStream If the data should be streamed
-	//  * @returns
-	//  */
-	// fromIds(ids: string[], asStream: boolean) {
-	//     const get = () => {
-	//         this.apiQuery('from-ids', {
-	//             ids,
-	//         });
-
-	//         return this.database.select().from(this.table).where(sql`${this.table.id} IN (${ids})`);
-	//     }
-	//     if (asStream) {
-	//         const stream = new StructStream(this);
-	//         (async () => {
-	//             const dataStream = await get();
-	//             for (let i = 0; i < dataStream.length; i++) {
-	//                 stream.add(this.Generator(dataStream[i] as any));
-	//             }
-	//             stream.end();
-	//         })();
-	//         return stream;
-	//     } else {
-	//         return attemptAsync(async () => {
-	//             const data = await get();
-	//             return data.map(d => this.Generator(d as any));
-	//         });
-	//     }
-	// }
-
 	all(config: { type: 'stream'; limit?: number; offset?: number }): StructStream<T, Name>;
 	all(config: {
 		type: 'array';
@@ -1645,7 +1597,6 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 		| StructStream<T, Name>
 		| ResultPromise<StructData<T, Name>[] | undefined | StructData<T, Name> | number, Error> {
 		const get = async () => {
-			// this.apiQuery('all', {});
 
 			const squeal = config.includeArchived ? sql`1 = 1` : sql`${this.table.archived} = ${false}`;
 
@@ -1660,14 +1611,14 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 			}
 
 			if (config.type === 'single') {
-				return (await this.database.select().from(this.table).where(squeal))[0];
+				return (await this.database.select().from(this.table).where(squeal).orderBy(this.table.created))[0];
 			}
 
 			const { offset, limit } = config;
 			if (offset !== undefined && limit !== undefined) {
-				return this.database.select().from(this.table).where(squeal).offset(offset).limit(limit);
+				return this.database.select().from(this.table).where(squeal).orderBy(this.table.created).offset(offset).limit(limit);
 			} else {
-				return this.database.select().from(this.table).where(squeal);
+				return this.database.select().from(this.table).where(squeal).orderBy(this.table.created);
 			}
 		};
 
@@ -1715,7 +1666,6 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 		| StructStream<T, Name>
 		| ResultPromise<StructData<T, Name>[] | StructData<T, Name> | undefined | number, Error> {
 		const get = async () => {
-			// this.apiQuery('archived', {});
 
 			const squeal = sql`${this.table.archived} = ${true}`;
 
@@ -1730,14 +1680,14 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 			}
 
 			if (config.type === 'single') {
-				return (await this.database.select().from(this.table).where(squeal))[0];
+				return (await this.database.select().from(this.table).where(squeal).orderBy(this.table.created))[0];
 			}
 
 			const { offset, limit } = config;
 			if (offset && limit) {
-				return this.database.select().from(this.table).where(squeal).offset(offset).limit(limit);
+				return this.database.select().from(this.table).where(squeal).orderBy(this.table.created).offset(offset).limit(limit);
 			} else {
-				return this.database.select().from(this.table).where(squeal);
+				return this.database.select().from(this.table).where(squeal).orderBy(this.table.created);
 			}
 		};
 
@@ -1820,11 +1770,6 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 		| StructStream<T, Name>
 		| ResultPromise<StructData<T, Name>[] | StructData<T, Name> | undefined | number, Error> {
 		const get = async () => {
-			// this.apiQuery('from-property', {
-			// 	property: String(property),
-			// 	value
-			// });
-
 			let squeal: SQL;
 			if (config.includeArchived) {
 				squeal = sql`${this.table[property]} = ${value}`;
@@ -1843,14 +1788,14 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 			}
 
 			if (config.type === 'single') {
-				return (await this.database.select().from(this.table).where(squeal))[0];
+				return (await this.database.select().from(this.table).where(squeal).orderBy(this.table.created))[0];
 			}
 
 			const { offset, limit } = config;
 			if (offset && limit) {
-				return this.database.select().from(this.table).where(squeal).offset(offset).limit(limit);
+				return this.database.select().from(this.table).where(squeal).orderBy(this.table.created).offset(offset).limit(limit);
 			} else {
-				return this.database.select().from(this.table).where(squeal);
+				return this.database.select().from(this.table).where(squeal).orderBy(this.table.created);
 			}
 		};
 
@@ -1937,9 +1882,6 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 			`Struct.get() This method is unstable, use with caution. fromProperty is recommended at this time`
 		);
 		const get = async () => {
-			// this.apiQuery('get', {
-			//     props,
-			// });
 
 			// const squeal = sql.join(Object.keys(props).map(k => sql`${this.table[k]} = ${props[k]}`), sql` AND `);
 			let squeal = sql`1 = 1`;
@@ -1962,14 +1904,14 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 			}
 
 			if (config.type === 'single') {
-				return (await this.database.select().from(this.table).where(squeal))[0];
+				return (await this.database.select().from(this.table).where(squeal).orderBy(this.table.created))[0];
 			}
 
 			const { offset, limit } = config;
 			if (offset && limit) {
-				return this.database.select().from(this.table).where(squeal).offset(offset).limit(limit);
+				return this.database.select().from(this.table).where(squeal).orderBy(this.table.created).offset(offset).limit(limit);
 			} else {
-				return this.database.select().from(this.table).where(squeal);
+				return this.database.select().from(this.table).where(squeal).orderBy(this.table.created);
 			}
 		};
 
@@ -1999,6 +1941,17 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 			});
 		}
 	}
+
+	// query() {
+	// 	if (!this.built) {
+	// 		throw new FatalStructError(
+	// 			this,
+	// 			'Cannot query struct before it is built. Please build the struct first.'
+	// 		);
+	// 	}
+	// 	return this.database.select().from(this.table);
+	// 	// return new StructQuery<T, Name>(this, this.database.select().from(this.table));
+	// }
 
 	/**
 	 * Deletes all data from the struct
