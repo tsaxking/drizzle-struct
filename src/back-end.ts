@@ -2637,7 +2637,6 @@ const accountSampleStructCols = {
 	firstName: text('first_name').notNull(),
 	lastName: text('last_name').notNull(),
 	email: text('email').notNull().unique(),
-	picture: text('picture').notNull(),
 	verified: boolean('verified').notNull(),
 	verification: text('verification').notNull(),
 	lastLogin: text('last_login').notNull().default(''),
@@ -2651,6 +2650,7 @@ const sessionSampleStructCols = {
 	userAgent: text('user_agent').notNull(),
 	requests: integer('requests').notNull(),
 	prevUrl: text('prev_url').notNull(),
+	tabs: integer('tabs').notNull().default(0),
 }
 
 export type Session = StructData<typeof sessionSampleStructCols, 'session'>;
