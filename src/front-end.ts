@@ -906,7 +906,7 @@ export class StructDataProxy<T extends Blank> implements Writable<PartialStructa
 		this.dataUnsub = this.structData.subscribe(() => {
 			this.remoteUpdated.set(true);
 		});
-		this.base = structuredClone(this.data);
+		this.base = JSON.parse(JSON.stringify(this.data)) as PartialStructable<T & GlobalCols>;
 	}
 
 	/**
@@ -915,7 +915,7 @@ export class StructDataProxy<T extends Blank> implements Writable<PartialStructa
 	 */
 	private makeProxy(data: PartialStructable<T & GlobalCols>) {
 		return new Proxy(
-			structuredClone(data),
+			JSON.parse(JSON.stringify(data)) as PartialStructable<T & GlobalCols>,
 			{
 				set: (target, property, value) => {
 					if (this.config.static?.includes(property as keyof T)) {
