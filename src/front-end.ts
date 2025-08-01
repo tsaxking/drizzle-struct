@@ -1013,6 +1013,8 @@ export class StructDataProxy<T extends Blank> implements Writable<PartialStructa
 	 */
 	public rollback() {
 		this.data = this.makeProxy(this.base);
+		this.inform();
+		this.localUpdated.set(false);
 	}
 
 	/**
