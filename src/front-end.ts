@@ -842,6 +842,16 @@ interface MergeState<T> {
 }
 
 /**
+ * Global columns that are always present in every struct data.
+ */
+type StructDataProxyConfig<T extends Blank> = {
+	/**
+	 * Prevents the proxy from modifying these properties.
+	 */
+	static?: (keyof T)[];
+}
+
+/**
  * A proxy wrapper for StructData that allows local changes to be staged
  * before being saved to the backend. It tracks both local and remote changes.
  *
@@ -884,6 +894,7 @@ export class StructDataProxy<T extends Blank> implements Writable<PartialStructa
 	 */
 	constructor(
 		public readonly structData: StructData<T>,
+		public readonly config: StructDataProxyConfig<T> = {}
 	) {
 		this.data = this.makeProxy(structData.data);
 		this.dataUnsub = this.structData.subscribe(() => {
@@ -901,6 +912,9 @@ export class StructDataProxy<T extends Blank> implements Writable<PartialStructa
 			structuredClone(data),
 			{
 				set: (target, property, value) => {
+					if (this.config.static?.includes(property as keyof T)) {
+						throw new Error(`Cannot modify static property "${String(property)}" in StructDataProxy`);
+					}
 					if (target[property as keyof typeof target] !== value) {
 						target[property as keyof typeof target] = value;
 						this.inform();
