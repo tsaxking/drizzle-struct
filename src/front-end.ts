@@ -809,20 +809,26 @@ export class StructData<T extends Blank> implements Writable<PartialStructable<T
 	}
 }
 
-type SaveStrategyFunction<T, K extends keyof T> = (args: {
-	base: T[K];
-	local: T[K];
-	remote: T[K];
-	property: K;
-}) => T[K] | Promise<T[K]>;
+type FullConflictResolver<T extends Blank> = (args: {
+	base: PartialStructable<T & GlobalCols>;
+	local: PartialStructable<T & GlobalCols>;
+	remote: PartialStructable<T & GlobalCols>;
+	conflicts: {
+		property: keyof T;
+		baseValue: PartialStructable<T>[keyof T];
+		localValue: PartialStructable<T>[keyof T];
+		remoteValue: PartialStructable<T>[keyof T];
+	}[];
+}) => PartialStructable<T> | Promise<PartialStructable<T>>;
 
-type SaveStrategy<T, K extends keyof T> =
+type SaveStrategy<T extends Blank> =
 	| 'ifClean'
 	| 'force'
-	| 'mergeClean'
 	| 'preferLocal'
 	| 'preferRemote'
-	| SaveStrategyFunction<T, K>;
+	| 'mergeClean'
+	| 'manual'
+	| FullConflictResolver<T>;
 
 type MergeStatus =
   | 'clean'          // local == remote == base, no changes
@@ -1056,136 +1062,115 @@ export class StructDataProxy<T extends Blank> implements Writable<PartialStructa
 	 *
 	 * After a successful save, the base snapshot is updated and all dirty flags are cleared.
 	 */
-	public save(strategy: SaveStrategy<T, keyof T>) {
-		return attemptAsync(async () => {
-			const local = this.data;
-			const remote = this.structData.data;
-			const base = this.base;
+public async save(strategy: SaveStrategy<T>) {
+	return attemptAsync(async () => {
+		const local = this.data;
+		const remote = this.structData.data;
+		const base = this.base;
 
-			const keys = new Set([
-				...Object.keys(local),
-				...Object.keys(remote),
-				...Object.keys(base)
-			]) as Set<keyof T>;
+		const keys = new Set([
+			...Object.keys(local),
+			...Object.keys(remote),
+			...Object.keys(base)
+		]) as Set<keyof T>;
 
-			// Step 1: Analyze all fields
-			const analysis: {
-				key: keyof T;
-				base: T[keyof T];
-				local: T[keyof T];
-				remote: T[keyof T];
-				localChanged: boolean;
-				remoteChanged: boolean;
-				conflict: boolean;
-			}[] = [];
+		const conflicts: {
+			property: keyof T;
+			baseValue: PartialStructable<T>[keyof T];
+			localValue: PartialStructable<T>[keyof T];
+			remoteValue: PartialStructable<T>[keyof T];
+		}[] = [];
 
-			for (const key of keys) {
-				const localValue = local[key];
-				const remoteValue = remote[key];
-				const baseValue = base[key];
+		const merged: PartialStructable<T> = {};
 
-				if (localValue === undefined || remoteValue === undefined || baseValue === undefined)
-					continue;
+		for (const key of keys) {
+			const baseValue = base[key];
+			const localValue = local[key];
+			const remoteValue = remote[key];
 
-				const localChanged = localValue !== baseValue;
-				const remoteChanged = remoteValue !== baseValue;
-				const conflict = localChanged && remoteChanged && localValue !== remoteValue;
+			const localChanged = localValue !== baseValue;
+			const remoteChanged = remoteValue !== baseValue;
+			const isConflict = localChanged && remoteChanged && localValue !== remoteValue;
 
-				analysis.push({
-					key,
-					base: baseValue as T[keyof T],
-					local: localValue as T[keyof T],
-					remote: remoteValue as T[keyof T],
-					localChanged,
-					remoteChanged,
-					conflict
+			if (isConflict) {
+				conflicts.push({ 
+					property: key, 
+					baseValue: baseValue as PartialStructable<T>[keyof T], 
+					localValue: localValue as PartialStructable<T>[keyof T], 
+					remoteValue: remoteValue as PartialStructable<T>[keyof T],
 				});
 			}
 
-			// Step 2: Handle string-based strategies
 			if (typeof strategy === 'string') {
-				const merged: PartialStructable<T> = {};
-
 				switch (strategy) {
-					case 'ifClean': {
-						if (analysis.some(a => a.remoteChanged))
-							throw new Error('Cannot save: remote has diverged from base');
-						for (const a of analysis) {
-							if (a.localChanged) (merged as any)[a.key] = a.local;
-						}
+					case 'ifClean':
+						if (remoteChanged) throw new Error('Remote has diverged from base');
+						if (localChanged) merged[key] = localValue;
 						break;
-					}
 
-					case 'force': {
-						Object.assign(merged, local);
+					case 'force':
+						merged[key] = localValue;
 						break;
-					}
 
-					case 'preferLocal': {
-						for (const a of analysis) {
-							(merged as any)[a.key] = a.conflict || a.localChanged ? a.local : a.remote;
-						}
+					case 'preferLocal':
+						(merged as any)[key] = isConflict || localChanged ? localValue : remoteValue;
 						break;
-					}
 
-					case 'preferRemote': {
-						for (const a of analysis) {
-							(merged as any)[a.key] = a.conflict || a.remoteChanged ? a.remote : a.local;
-						}
+					case 'preferRemote':
+						(merged as any)[key] = isConflict || remoteChanged ? remoteValue : localValue;
 						break;
-					}
 
-					case 'mergeClean': {
-						if (analysis.some(a => a.conflict))
-							throw new Error('Cannot merge cleanly: conflicts detected');
-						for (const a of analysis) {
-							if (a.localChanged) (merged as any)[a.key] = a.local;
-							else if (a.remoteChanged) (merged as any)[a.key] = a.remote;
-						}
+					case 'mergeClean':
+						if (isConflict) throw new Error('Conflicts prevent mergeClean');
+						if (localChanged) merged[key] = localValue;
+						else if (remoteChanged) (merged as any)[key] = remoteValue;
 						break;
-					}
+
+					case 'manual':
+						if (conflicts.length > 0) {
+							throw {
+								message: 'Manual merge required',
+								base,
+								local,
+								remote,
+								conflicts
+							};
+						}
+						if (localChanged) merged[key] = localValue;
+						break;
 
 					default:
-						throw new Error(`Unknown save strategy: ${strategy satisfies never}`);
+						throw new Error(`Unknown strategy: ${strategy satisfies never}`);
 				}
-
-				if (Object.keys(merged).length > 0) {
-					await this.structData.update(() => merged);
-					this.localUpdated.set(false);
-					this.remoteUpdated.set(false);
-					this.base = structuredClone(this.data);
-					this.inform();
-				}
-
-				return;
 			}
+		}
 
-			// Step 3: If strategy is function (manual resolver)
-			const resolved: Partial<T> = {};
+		if (typeof strategy === 'function') {
+			const resolved = await strategy({
+				base,
+				local,
+				remote,
+				conflicts
+			});
 
-			for (const a of analysis) {
-				if (!a.conflict) continue;
+			Object.assign(merged, resolved);
+		}
 
-				const result = await strategy({
-					property: a.key,
-					base: a.base,
-					local: a.local,
-					remote: a.remote
-				});
+		if (Object.keys(merged).length > 0) {
+			await this.structData.update(d => ({ ...d, ...merged }));
+			this.localUpdated.set(false);
+			this.remoteUpdated.set(false);
+			this.base = structuredClone(this.data);
+			this.inform();
+		}
+	});
+}
 
-				resolved[a.key] = result;
-			}
 
-			if (Object.keys(resolved).length > 0) {
-				await this.structData.update(d => ({ ...d, ...resolved }));
-				this.localUpdated.set(false);
-				this.remoteUpdated.set(false);
-				this.base = structuredClone(this.data);
-				this.inform();
-			}
-		});
-	}
-
+	/**
+	 * 
+	 * @returns {MergeState<T>} The current merge state, including status and any conflicts.
+	 */
 	public getMergeState(): MergeState<T> {
 		const local = this.data;
 		const remote = this.structData.data;
@@ -1331,9 +1316,6 @@ export class StructDataProxyArr<T extends Blank> implements Writable<StructDataP
 	public get() {
 		return this.data;
 	}
-
-
-
 }
 
 /**
