@@ -1942,16 +1942,16 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 		}
 	}
 
-	query() {
-		if (!this.built) {
-			throw new FatalStructError(
-				this,
-				'Cannot query struct before it is built. Please build the struct first.'
-			);
-		}
-		return this.database.select().from(this.table);
-		// return new StructQuery<T, Name>(this, this.database.select().from(this.table));
-	}
+	// query() {
+	// 	if (!this.built) {
+	// 		throw new FatalStructError(
+	// 			this,
+	// 			'Cannot query struct before it is built. Please build the struct first.'
+	// 		);
+	// 	}
+	// 	return this.database.select().from(this.table);
+	// 	// return new StructQuery<T, Name>(this, this.database.select().from(this.table));
+	// }
 
 	/**
 	 * Deletes all data from the struct
