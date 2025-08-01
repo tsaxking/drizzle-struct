@@ -433,7 +433,7 @@ export const saveStructUpdate = (data: {
 		// Add new update
 		arr.push({
 			...data,
-			date: new Date(now).toISOString(),
+			date: new Date(Struct.getDate()).toISOString(),
 		});
 
 		window.localStorage.setItem(`struct-updates-v${STRUCT_UPDATE_VERSION}`, JSON.stringify(arr));
@@ -460,7 +460,7 @@ export const sendUpdates = (browser: boolean, threshold: number) => {
 		const all = getStructUpdates().unwrap();
 		if (!all.length) return [];
 
-		const due = all.filter(u => (Date.now() - new Date(u.date).getTime()) >= threshold);
+		const due = all.filter(u => (Struct.getDate() - new Date(u.date).getTime()) >= threshold);
 		if (!due.length) return [];
 
 		let res: unknown;
@@ -517,6 +517,22 @@ export const clearStructUpdates = () => {
 		return [];
 	});
 };
+
+type BatchUpdate<T extends DataAction | PropertyAction> = {
+	struct: string;
+	type: DataAction | PropertyAction;
+	data: unknown;
+	id: string;
+	date: string;
+}
+
+export const sendBatch = (data: {
+	struct: string;
+	type: DataAction | PropertyAction;
+	data: unknown;
+	id: string;
+	date: string;
+}[]) => {}
 
 let BATCH_TEST = false;
 
@@ -793,7 +809,37 @@ export class StructData<T extends Blank> implements Writable<PartialStructable<T
 	}
 }
 
+type SaveStrategyFunction<T, K extends keyof T> = (args: {
+	base: T[K];
+	local: T[K];
+	remote: T[K];
+	property: K;
+}) => T[K] | Promise<T[K]>;
 
+type SaveStrategy<T, K extends keyof T> =
+	| 'ifClean'
+	| 'force'
+	| 'mergeClean'
+	| 'preferLocal'
+	| 'preferRemote'
+	| SaveStrategyFunction<T, K>;
+
+type MergeStatus =
+  | 'clean'          // local == remote == base, no changes
+  | 'localDiverge'   // local differs from base, remote == base
+  | 'remoteDiverge'  // remote differs from base, local == base
+  | 'diverged'       // local and remote both differ from base, but local == remote (no conflict)
+  | 'conflicted';    // local and remote both differ from base and differ from each other (conflict)
+
+interface MergeState<T> {
+  status: MergeStatus;
+  conflicts: {
+    property: keyof T;
+    localValue: T[keyof T];
+    remoteValue: T[keyof T];
+    baseValue: T[keyof T];
+  }[];
+}
 
 /**
  * A proxy wrapper for StructData that allows local changes to be staged
@@ -813,6 +859,15 @@ export class StructDataProxy<T extends Blank> implements Writable<PartialStructa
 	 * Modifying this triggers change tracking but does not affect the backend until `.save()`.
 	 */
 	public data: PartialStructable<T & GlobalCols>;
+
+	
+	/**
+	 * The base data structure, which is a snapshot of the remote data
+	 *
+	 * @public
+	 * @type {PartialStructable<T & GlobalCols>}
+	 */
+	public base: PartialStructable<T & GlobalCols>;
 
 	/** Tracks whether the backend (remote) data has changed since the last pull. */
 	public readonly remoteUpdated = writable(false);
@@ -834,6 +889,7 @@ export class StructDataProxy<T extends Blank> implements Writable<PartialStructa
 		this.dataUnsub = this.structData.subscribe(() => {
 			this.remoteUpdated.set(true);
 		});
+		this.base = structuredClone(this.data);
 	}
 
 	/**
@@ -919,21 +975,6 @@ export class StructDataProxy<T extends Blank> implements Writable<PartialStructa
 		this.localUpdated.set(true);
 		return this.data;
 	}
-
-	/**
-	 * Pushes the locally modified data to the backend.
-	 * Only modified fields are merged into the backend struct.
-	 *
-	 * @returns A promise that resolves after backend update completes.
-	 */
-	public save() {
-		this.localUpdated.set(false);
-		return this.structData.update(d => ({
-			...d,
-			...this.data,
-		}));
-	}
-
 	/**
 	 * Resets the local state to match the backend data,
 	 * clearing both local and remote change flags.
@@ -942,14 +983,16 @@ export class StructDataProxy<T extends Blank> implements Writable<PartialStructa
 		this.remoteUpdated.set(false);
 		this.localUpdated.set(false);
 		this.data = this.makeProxy(this.structData.data);
+		this.base = structuredClone(this.data);
 		this.inform();
 	}
 
 	/**
-	 * Equivalent to `pull()`. Provided for semantic clarity.
+	 * Reverts all local changes, resetting the data to the base snapshot.
+	 * This does not affect the backend data, nor does it use the current remote state.
 	 */
-	public clear() {
-		return this.pull();
+	public rollback() {
+		this.data = this.makeProxy(this.base);
 	}
 
 	/**
@@ -975,6 +1018,322 @@ export class StructDataProxy<T extends Blank> implements Writable<PartialStructa
 	public localChanged(): boolean {
 		return get(this.localUpdated);
 	}
+
+
+	/**
+	 * Attempts to save local changes to the underlying struct data, resolving any conflicts
+	 * using the specified strategy.
+	 *
+	 * A conflict is defined as a property where:
+	 *   - both the local and remote values differ from the base, and
+	 *   - the local and remote values are not equal.
+	 *
+	 * @param strategy - Determines how to handle differences and conflicts:
+	 *
+	 *  - `"ifClean"`:
+	 *      - Only saves if remote is identical to base.
+	 *      - Throws if any remote change is detected.
+	 *
+	 *  - `"force"`:
+	 *      - Ignores conflicts and always overwrites remote with local values.
+	 *
+	 *  - `"preferLocal"`:
+	 *      - In conflicts, prefers local value.
+	 *      - In non-conflicts, prefers whichever value (local or remote) has changed from base.
+	 *
+	 *  - `"preferRemote"`:
+	 *      - In conflicts, prefers remote value.
+	 *      - In non-conflicts, prefers whichever value (local or remote) has changed from base.
+	 *
+	 *  - `"mergeClean"`:
+	 *      - Throws if any conflicts exist.
+	 *      - Otherwise, merges values that differ from base (either local or remote).
+	 *
+	 *
+	 *  - `function(conflict): value`:
+	 *      - A custom resolver function called for each conflict.
+	 *      - Should return the resolved value for each property.
+	 *
+	 * After a successful save, the base snapshot is updated and all dirty flags are cleared.
+	 */
+	public save(strategy: SaveStrategy<T, keyof T>) {
+		return attemptAsync(async () => {
+			const local = this.data;
+			const remote = this.structData.data;
+			const base = this.base;
+
+			const keys = new Set([
+				...Object.keys(local),
+				...Object.keys(remote),
+				...Object.keys(base)
+			]) as Set<keyof T>;
+
+			// Step 1: Analyze all fields
+			const analysis: {
+				key: keyof T;
+				base: T[keyof T];
+				local: T[keyof T];
+				remote: T[keyof T];
+				localChanged: boolean;
+				remoteChanged: boolean;
+				conflict: boolean;
+			}[] = [];
+
+			for (const key of keys) {
+				const localValue = local[key];
+				const remoteValue = remote[key];
+				const baseValue = base[key];
+
+				if (localValue === undefined || remoteValue === undefined || baseValue === undefined)
+					continue;
+
+				const localChanged = localValue !== baseValue;
+				const remoteChanged = remoteValue !== baseValue;
+				const conflict = localChanged && remoteChanged && localValue !== remoteValue;
+
+				analysis.push({
+					key,
+					base: baseValue as T[keyof T],
+					local: localValue as T[keyof T],
+					remote: remoteValue as T[keyof T],
+					localChanged,
+					remoteChanged,
+					conflict
+				});
+			}
+
+			// Step 2: Handle string-based strategies
+			if (typeof strategy === 'string') {
+				const merged: PartialStructable<T> = {};
+
+				switch (strategy) {
+					case 'ifClean': {
+						if (analysis.some(a => a.remoteChanged))
+							throw new Error('Cannot save: remote has diverged from base');
+						for (const a of analysis) {
+							if (a.localChanged) (merged as any)[a.key] = a.local;
+						}
+						break;
+					}
+
+					case 'force': {
+						Object.assign(merged, local);
+						break;
+					}
+
+					case 'preferLocal': {
+						for (const a of analysis) {
+							(merged as any)[a.key] = a.conflict || a.localChanged ? a.local : a.remote;
+						}
+						break;
+					}
+
+					case 'preferRemote': {
+						for (const a of analysis) {
+							(merged as any)[a.key] = a.conflict || a.remoteChanged ? a.remote : a.local;
+						}
+						break;
+					}
+
+					case 'mergeClean': {
+						if (analysis.some(a => a.conflict))
+							throw new Error('Cannot merge cleanly: conflicts detected');
+						for (const a of analysis) {
+							if (a.localChanged) (merged as any)[a.key] = a.local;
+							else if (a.remoteChanged) (merged as any)[a.key] = a.remote;
+						}
+						break;
+					}
+
+					default:
+						throw new Error(`Unknown save strategy: ${strategy satisfies never}`);
+				}
+
+				if (Object.keys(merged).length > 0) {
+					await this.structData.update(() => merged);
+					this.localUpdated.set(false);
+					this.remoteUpdated.set(false);
+					this.base = structuredClone(this.data);
+					this.inform();
+				}
+
+				return;
+			}
+
+			// Step 3: If strategy is function (manual resolver)
+			const resolved: Partial<T> = {};
+
+			for (const a of analysis) {
+				if (!a.conflict) continue;
+
+				const result = await strategy({
+					property: a.key,
+					base: a.base,
+					local: a.local,
+					remote: a.remote
+				});
+
+				resolved[a.key] = result;
+			}
+
+			if (Object.keys(resolved).length > 0) {
+				await this.structData.update(d => ({ ...d, ...resolved }));
+				this.localUpdated.set(false);
+				this.remoteUpdated.set(false);
+				this.base = structuredClone(this.data);
+				this.inform();
+			}
+		});
+	}
+
+	public getMergeState(): MergeState<T> {
+		const local = this.data;
+		const remote = this.structData.data;
+		const base = this.base;
+
+		const conflicts: MergeState<T>['conflicts'] = [];
+		let hasLocalDiverge = false;
+		let hasRemoteDiverge = false;
+		let hasConflict = false;
+
+		const keys = new Set([
+			...Object.keys(local),
+			...Object.keys(remote),
+			...Object.keys(base),
+		]) as Set<keyof T>;
+
+		for (const key of keys) {
+			const localValue = local[key];
+			const remoteValue = remote[key];
+			const baseValue = base[key];
+
+			if (localValue === undefined || remoteValue === undefined || baseValue === undefined)
+			continue;
+
+			const localChanged = localValue !== baseValue;
+			const remoteChanged = remoteValue !== baseValue;
+
+			if (localChanged) hasLocalDiverge = true;
+			if (remoteChanged) hasRemoteDiverge = true;
+
+			if (localChanged && remoteChanged && localValue !== remoteValue) {
+				hasConflict = true;
+				conflicts.push({ 
+					property: key, 
+					localValue: localValue as T[keyof T], 
+					remoteValue: remoteValue as T[keyof T], 
+					baseValue: baseValue as T[keyof T],
+				});
+			}
+		}
+
+		let status: MergeStatus;
+
+		if (!hasLocalDiverge && !hasRemoteDiverge) status = 'clean';
+		else if (hasConflict) status = 'conflicted';
+		else if (hasLocalDiverge && hasRemoteDiverge) status = 'diverged';
+		else if (hasLocalDiverge) status = 'localDiverge';
+		else /* hasRemoteDiverge */ status = 'remoteDiverge';
+
+		return { status, conflicts };
+	}
+}
+
+
+export class StructDataProxyArr<T extends Blank> implements Writable<StructDataProxy<T>[]> {
+	private readonly dataset: Set<StructDataProxy<T>>;
+
+	private updates: BatchUpdate<DataAction | PropertyAction>[] = [];
+	private _arrUnsubscribe: () => void = () => {};
+	
+	public readonly remoteUpdated = writable(false);
+	public readonly localUpdated = writable(false);
+
+	constructor(
+		private readonly arr: DataArr<T>,
+	) {
+		this.dataset = new Set(arr.data.map(d => new StructDataProxy<T>(d)));
+		this._arrUnsubscribe = arr.subscribe(d => {
+			this.remoteUpdated.set(true);
+		});
+	}
+
+	private readonly subscribers = new Set<(value: StructDataProxy<T>[]) => void>();
+
+	public get data() {
+		return Array.from(this.dataset);
+	}
+
+	public set data(value: StructDataProxy<T>[]) {
+		this.dataset.clear();
+		for (let i = 0; i < value.length; i++) {
+			this.dataset.add(value[i]);
+		}
+		this.inform();
+	}
+
+	_onAllUnsubscribe?: () => void;
+
+	public subscribe(fn: (value: StructDataProxy<T>[]) => void): () => void {
+		this.subscribers.add(fn);
+		fn(this.data);
+		return () => {
+			this.subscribers.delete(fn);
+			if (this.subscribers.size === 0) {
+				this._onAllUnsubscribe?.();
+			}
+		};
+	}
+
+	private inform() {
+		this.subscribers.forEach((fn) => fn(this.data));
+	}
+
+	private apply(value: StructDataProxy<T>[]): void {
+		this.data = value
+			.sort(this._sort)
+			.filter(this._filter);
+		this.subscribers.forEach((fn) => fn(this.data));
+		this.arr.struct.log('Applied Data:', this.data);
+	}
+
+	private _sort: (a: StructDataProxy<T>, b: StructDataProxy<T>) => number = (a, b) => 0;
+	sort(fn: (a: StructDataProxy<T>, b: StructDataProxy<T>) => number) {
+		this._sort = fn;
+		this.inform();
+	}
+	private _filter: (data: StructDataProxy<T>) => boolean = () => true;
+	filter(fn: (data: StructDataProxy<T>) => boolean) {
+		this._filter = fn;
+		this.inform();
+	}
+
+	public add(...values: StructDataProxy<T>[]): void {
+		this.apply([...this.data, ...values]);
+	}
+
+	public remove(...values: StructDataProxy<T>[]): void {
+		this.apply(this.data.filter((value) => !values.includes(value)));
+	}
+
+	public onAllUnsubscribe(fn: () => void): void {
+		this._onAllUnsubscribe = fn;
+	}
+
+	public set(value: StructDataProxy<T>[]) {
+		this.apply(value);
+	}
+
+	public update(fn: (data: StructDataProxy<T>[]) => StructDataProxy<T>[]) {
+		this.apply(fn(this.data));
+	}
+
+	public get() {
+		return this.data;
+	}
+
+
+
 }
 
 /**
@@ -1020,6 +1379,7 @@ export class DataArr<T extends Blank> implements Writable<StructData<T>[]> {
 		for (let i = 0; i < value.length; i++) {
 			this.dataset.add(value[i]);
 		}
+		this.inform();
 	}
 
 	/**
@@ -1048,7 +1408,8 @@ export class DataArr<T extends Blank> implements Writable<StructData<T>[]> {
 	 */
 	private apply(value: StructData<T>[]): void {
 		this.data = value
-			.sort(this._sort);
+			.sort(this._sort)
+			.filter(this._filter);
 		this.subscribers.forEach((fn) => fn(this.data));
 		this.struct.log('Applied Data:', this.data);
 	}
@@ -1094,7 +1455,14 @@ export class DataArr<T extends Blank> implements Writable<StructData<T>[]> {
 
 	sort(fn: (a: StructData<T>, b: StructData<T>) => number) {
 		this._sort = fn;
-		this.apply(this.data);
+		this.inform();
+	}
+
+	private _filter: (data: StructData<T>) => boolean = () => true;
+
+	filter(fn: (data: StructData<T>) => boolean) {
+		this._filter = fn;
+		this.inform();
 	}
 
 	inform() {
@@ -1227,6 +1595,8 @@ export type GlobalCols = {
  * @template {Blank} T
  */
 export class Struct<T extends Blank> {
+	public static getDate: () => number = () => Date.now(); // can be changed for syncing
+
 	public static readonly headers = new Map<string, string>();
 	/**
 	 * All structs that are accessible
@@ -1436,7 +1806,12 @@ export class Struct<T extends Blank> {
 	 * @param {(PartialStructable<T & GlobalCols>)} data
 	 * @returns {StructData<T>}
 	 */
-	Generator(data: PartialStructable<T & GlobalCols>): StructData<T> {
+	Generator(data: PartialStructable<T & GlobalCols>): StructData<T>;
+	Generator(data: PartialStructable<T & GlobalCols>[]): StructData<T>[];
+	Generator(data: PartialStructable<T & GlobalCols> | PartialStructable<T & GlobalCols>[]): StructData<T> | StructData<T>[] {
+		if (Array.isArray(data)) {
+			return data.map((d) => this.Generator(d)) as StructData<T>[];
+		}
 		if (Object.hasOwn(data, 'id')) {
 			const id = (data as { id: string }).id;
 			if (this.cache.has(id)) {
@@ -1564,7 +1939,7 @@ export class Struct<T extends Blank> {
 				headers: {
 					'Content-Type': 'application/json',
 					...Object.fromEntries(Struct.headers.entries()),
-					'X-Date': String(date?.getTime() || new Date().getTime()),
+					'X-Date': String(date?.getTime() || Struct.getDate()),
 				},
 				body: JSON.stringify(data)
 			});
