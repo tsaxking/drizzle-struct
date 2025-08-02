@@ -10,7 +10,8 @@
 		"test": "vitest",
 		"format": "prettier --write .",
 		"lint": "eslint . --ext .ts",
-		"lint:fix": "eslint . --ext .ts --fix"
+		"lint:fix": "eslint . --ext .ts --fix",
+		"doc": "typedoc"
 	},
 	"keywords": [],
 	"author": "",
@@ -47,6 +48,8 @@
 		"@types/express": "^5.0.0",
 		"@types/pg": "^8.11.10",
 		"drizzle-kit": "^0.22.8",
+		"typedoc": "^0.28.9",
+		"typedoc-plugin-markdown": "^4.8.0",
 		"vitest": "^2.1.8"
 	},
 	"exports": {
