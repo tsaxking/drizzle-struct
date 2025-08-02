@@ -1,37 +1,49 @@
-name: Deploy TypeDoc Docs to GitHub Pages
+name: Deploy static content to Pages
 
 on:
   push:
-    branches:
-      - main  # Change if you use a different default branch
+    branches: ["main"]
+  workflow_dispatch:
 
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
 
 jobs:
-  build-deploy-docs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout Repository
+      - name: Checkout
         uses: actions/checkout@v4
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: v22.12.0
+          node-version: 20
+          cache: 'pnpm'
 
-      - name: Install pnpm
-        uses: pnpm/action-setup@v4
+      - name: Install dependencies
+        run: pnpm install --recursive=false
+
+      - name: Generate documentation
+        run: pnpm doc
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
         with:
-          version: 9
-
-      - name: Install Dependencies
-        run: pnpm i
-
-      - name: Generate Documentation
-        run: pnpm doc  # This should output to ./docs folder
+          path: ./docs
 
       - name: Deploy to GitHub Pages
-        uses: peaceiris/actions-gh-pages@v3
+        id: deployment
+        uses: actions/deploy-pages@v4
         with:
-          github_token: ${{ secrets.GH_TOKEN }}
-          publish_dir: ./docs
+          token: ${{ secrets.GH_TOKEN }}
