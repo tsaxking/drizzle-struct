@@ -25,7 +25,7 @@ jobs:
           version: 9
 
       - name: Install Dependencies
-        run: pnpm install
+        run: pnpm i
 
       - name: Generate Documentation
         run: pnpm doc  # This should output to ./docs folder
