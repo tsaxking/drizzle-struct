@@ -922,8 +922,8 @@ export class StructDataProxy<T extends Blank> implements Writable<PartialStructa
 					if (target[property as keyof typeof target] !== value) {
 						target[property as keyof typeof target] = value;
 						this.inform();
-						this.localUpdated.set(true);
 					}
+					this.setLocalChanged();
 					return true;
 				},
 				deleteProperty: (target, property) => {
@@ -931,6 +931,14 @@ export class StructDataProxy<T extends Blank> implements Writable<PartialStructa
 				}
 			}
 		);
+	}
+
+	private setLocalChanged() {
+		if (Object.keys(this.data).every(k => this.data[k] === this.base[k])) {
+			this.localUpdated.set(false);
+		} else {
+			this.localUpdated.set(true);
+		}
 	}
 
 	/**
@@ -1038,10 +1046,8 @@ export class StructDataProxy<T extends Blank> implements Writable<PartialStructa
 
 				if (hasChanges) {
 					this.inform();
-					if (Object.keys(this.data).every(k => this.data[k] === this.base[k])) {
-						this.localUpdated.set(false);
-					}
 				}
+				this.setLocalChanged();
 
 				return;
 			}
