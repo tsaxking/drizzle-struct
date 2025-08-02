@@ -1,0 +1,33 @@
+name: Deploy TypeDoc Docs to GitHub Pages
+
+on:
+  push:
+    branches:
+      - main  # Change if you use a different default branch
+  workflow_dispatch:
+
+jobs:
+  build-deploy-docs:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20  # Or your project's Node version
+          cache: 'pnpm'
+
+      - name: Install Dependencies
+        run: pnpm install
+
+      - name: Generate Documentation
+        run: pnpm doc  # This should output to ./docs folder
+
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./docs
