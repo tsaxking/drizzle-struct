@@ -809,15 +809,18 @@ export class StructData<T extends Blank> implements Writable<PartialStructable<T
 	}
 }
 
+type Conflict<T extends Blank, K extends keyof T> = {
+		property: K;
+		baseValue: PartialStructable<T>[K];
+		localValue: PartialStructable<T>[K];
+		remoteValue: PartialStructable<T>[K];
+}
+
 type FullConflictResolver<T extends Blank> = (args: {
 	base: PartialStructable<T & GlobalCols>;
 	local: PartialStructable<T & GlobalCols>;
 	remote: PartialStructable<T & GlobalCols>;
 	conflicts: {
-		property: keyof T;
-		baseValue: PartialStructable<T>[keyof T];
-		localValue: PartialStructable<T>[keyof T];
-		remoteValue: PartialStructable<T>[keyof T];
 	}[];
 }) => PartialStructable<T> | Promise<PartialStructable<T>>;
 
@@ -837,14 +840,9 @@ type MergeStatus =
   | 'diverged'       // local and remote both differ from base, but local == remote (no conflict)
   | 'conflicted';    // local and remote both differ from base and differ from each other (conflict)
 
-interface MergeState<T> {
+interface MergeState<T extends Blank, K extends keyof T> {
   status: MergeStatus;
-  conflicts: {
-    property: keyof T;
-    localValue: T[keyof T];
-    remoteValue: T[keyof T];
-    baseValue: T[keyof T];
-  }[];
+  conflicts: Conflict<T, keyof T>[];
 }
 
 /**
@@ -1003,19 +1001,58 @@ export class StructDataProxy<T extends Blank> implements Writable<PartialStructa
 		this.remoteUpdated.set(false);
 		this.localUpdated.set(false);
 		this.data = this.makeProxy(this.structData.data);
-		this.base = structuredClone(this.data);
+		this.base = JSON.parse(JSON.stringify(this.data)) as PartialStructable<T & GlobalCols>;
 		this.inform();
 	}
 
 	/**
-	 * Reverts all local changes, resetting the data to the base snapshot.
-	 * This does not affect the backend data, nor does it use the current remote state.
+	 * Reverts local changes, resetting data to the base snapshot.
+	 * This is a **local-only** operation; it does not affect the backend or pull the current remote state.
+	 * 
+	 * - If specific properties are provided, only those will be reset.
+	 * - If no properties are given, the entire object is reset to the base snapshot.
+	 * 
+	 * @param properties - List of property keys to selectively rollback. If empty, resets all properties.
+	 * @throws {Error} If a static property is attempted to be modified.
+	 * @throws {Error} If a given property does not exist in the base snapshot.
 	 */
-	public rollback() {
-		this.data = this.makeProxy(this.base);
-		this.inform();
-		this.localUpdated.set(false);
+	public rollback(...properties: (keyof T)[]) {
+		return attempt(() => {
+				if (properties.length > 0) {
+				let hasChanges = false;
+
+				for (const p of properties) {
+					if (this.config.static?.includes(p)) {
+						throw new Error(`Cannot modify static property "${String(p)}" in StructDataProxy`);
+					}
+					if (p in this.base) {
+						const baseValue = this.base[p];
+						if (this.data[p] !== baseValue) {
+							(this.data as any)[p] = baseValue;
+							hasChanges = true;
+						}
+					} else {
+						throw new Error(`Property "${String(p)}" does not exist in base data`);
+					}
+				}
+
+				if (hasChanges) {
+					this.inform();
+					if (Object.keys(this.data).every(k => this.data[k] === this.base[k])) {
+						this.localUpdated.set(false);
+					}
+				}
+
+				return;
+			}
+
+			// Full rollback
+			this.data = this.makeProxy(this.base);
+			this.inform();
+			this.localUpdated.set(false);
+		});
 	}
+
 
 	/**
 	 * Returns whether the local or remote data has diverged
@@ -1078,121 +1115,121 @@ export class StructDataProxy<T extends Blank> implements Writable<PartialStructa
 	 *
 	 * After a successful save, the base snapshot is updated and all dirty flags are cleared.
 	 */
-public async save(strategy: SaveStrategy<T>) {
-	return attemptAsync(async () => {
-		const local = this.data;
-		const remote = this.structData.data;
-		const base = this.base;
+	public async save(strategy: SaveStrategy<T>) {
+		return attemptAsync(async () => {
+			const local = this.data;
+			const remote = this.structData.data;
+			const base = this.base;
 
-		const keys = new Set([
-			...Object.keys(local),
-			...Object.keys(remote),
-			...Object.keys(base)
-		]) as Set<keyof T>;
+			const keys = new Set([
+				...Object.keys(local),
+				...Object.keys(remote),
+				...Object.keys(base)
+			]) as Set<keyof T>;
 
-		const conflicts: {
-			property: keyof T;
-			baseValue: PartialStructable<T>[keyof T];
-			localValue: PartialStructable<T>[keyof T];
-			remoteValue: PartialStructable<T>[keyof T];
-		}[] = [];
+			const conflicts: {
+				property: keyof T;
+				baseValue: PartialStructable<T>[keyof T];
+				localValue: PartialStructable<T>[keyof T];
+				remoteValue: PartialStructable<T>[keyof T];
+			}[] = [];
 
-		const merged: PartialStructable<T> = {};
+			const merged: PartialStructable<T> = {};
 
-		for (const key of keys) {
-			const baseValue = base[key];
-			const localValue = local[key];
-			const remoteValue = remote[key];
+			for (const key of keys) {
+				const baseValue = base[key];
+				const localValue = local[key];
+				const remoteValue = remote[key];
 
-			const localChanged = localValue !== baseValue;
-			const remoteChanged = remoteValue !== baseValue;
-			const isConflict = localChanged && remoteChanged && localValue !== remoteValue;
+				const localChanged = localValue !== baseValue;
+				const remoteChanged = remoteValue !== baseValue;
+				const isConflict = localChanged && remoteChanged && localValue !== remoteValue;
 
-			if (isConflict) {
-				conflicts.push({ 
-					property: key, 
-					baseValue: baseValue as PartialStructable<T>[keyof T], 
-					localValue: localValue as PartialStructable<T>[keyof T], 
-					remoteValue: remoteValue as PartialStructable<T>[keyof T],
-				});
-			}
+				if (isConflict) {
+					conflicts.push({ 
+						property: key, 
+						baseValue: baseValue as PartialStructable<T>[keyof T], 
+						localValue: localValue as PartialStructable<T>[keyof T], 
+						remoteValue: remoteValue as PartialStructable<T>[keyof T],
+					});
+				}
 
-			if (typeof strategy === 'string') {
-				switch (strategy) {
-					case 'ifClean':
-						if (remoteChanged) throw new Error('Remote has diverged from base');
-						if (localChanged) merged[key] = localValue;
-						break;
+				if (typeof strategy === 'string') {
+					switch (strategy) {
+						case 'ifClean':
+							if (remoteChanged) throw new Error('Remote has diverged from base');
+							if (localChanged) merged[key] = localValue;
+							break;
 
-					case 'force':
-						merged[key] = localValue;
-						break;
+						case 'force':
+							merged[key] = localValue;
+							break;
 
-					case 'preferLocal':
-						(merged as any)[key] = isConflict || localChanged ? localValue : remoteValue;
-						break;
+						case 'preferLocal':
+							(merged as any)[key] = isConflict || localChanged ? localValue : remoteValue;
+							break;
 
-					case 'preferRemote':
-						(merged as any)[key] = isConflict || remoteChanged ? remoteValue : localValue;
-						break;
+						case 'preferRemote':
+							(merged as any)[key] = isConflict || remoteChanged ? remoteValue : localValue;
+							break;
 
-					case 'mergeClean':
-						if (isConflict) throw new Error('Conflicts prevent mergeClean');
-						if (localChanged) merged[key] = localValue;
-						else if (remoteChanged) (merged as any)[key] = remoteValue;
-						break;
+						case 'mergeClean':
+							if (isConflict) throw new Error('Conflicts prevent mergeClean');
+							if (localChanged) merged[key] = localValue;
+							else if (remoteChanged) (merged as any)[key] = remoteValue;
+							break;
 
-					case 'manual':
-						if (conflicts.length > 0) {
-							throw {
-								message: 'Manual merge required',
-								base,
-								local,
-								remote,
-								conflicts
-							};
-						}
-						if (localChanged) merged[key] = localValue;
-						break;
+						case 'manual':
+							if (conflicts.length > 0) {
+								throw {
+									message: 'Manual merge required',
+									base,
+									local,
+									remote,
+									conflicts
+								};
+							}
+							if (localChanged) merged[key] = localValue;
+							break;
 
-					default:
-						throw new Error(`Unknown strategy: ${strategy satisfies never}`);
+						default:
+							throw new Error(`Unknown strategy: ${strategy satisfies never}`);
+					}
 				}
 			}
-		}
 
-		if (typeof strategy === 'function') {
-			const resolved = await strategy({
-				base,
-				local,
-				remote,
-				conflicts
-			});
+			if (typeof strategy === 'function') {
+				const resolved = await strategy({
+					base,
+					local,
+					remote,
+					conflicts
+				});
 
-			Object.assign(merged, resolved);
-		}
+				Object.assign(merged, resolved);
+			}
 
-		if (Object.keys(merged).length > 0) {
-			await this.structData.update(d => ({ ...d, ...merged }));
-			this.localUpdated.set(false);
-			this.remoteUpdated.set(false);
-			this.base = structuredClone(this.data);
-			this.inform();
-		}
-	});
-}
+			if (Object.keys(merged).length > 0) {
+				await this.structData.update(d => ({ ...d, ...merged }));
+				this.localUpdated.set(false);
+				this.remoteUpdated.set(false);
+				this.base = structuredClone(this.data);
+				this.inform();
+			}
+		});
+	}
 
 
 	/**
 	 * 
 	 * @returns {MergeState<T>} The current merge state, including status and any conflicts.
 	 */
-	public getMergeState(): MergeState<T> {
+	public getMergeState(): MergeState<T, keyof T> {
 		const local = this.data;
 		const remote = this.structData.data;
 		const base = this.base;
 
-		const conflicts: MergeState<T>['conflicts'] = [];
+		const conflicts: MergeState<T, keyof T>['conflicts'] = [];
 		let hasLocalDiverge = false;
 		let hasRemoteDiverge = false;
 		let hasConflict = false;
@@ -1221,9 +1258,9 @@ public async save(strategy: SaveStrategy<T>) {
 				hasConflict = true;
 				conflicts.push({ 
 					property: key, 
-					localValue: localValue as T[keyof T], 
-					remoteValue: remoteValue as T[keyof T], 
-					baseValue: baseValue as T[keyof T],
+					localValue: localValue as PartialStructable<T>[keyof T], 
+					remoteValue: remoteValue as PartialStructable<T>[keyof T], 
+					baseValue: baseValue as PartialStructable<T>[keyof T],
 				});
 			}
 		}
