@@ -22,20 +22,24 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
+      - name: Checkout Repository
         uses: actions/checkout@v4
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
-          cache: 'pnpm'
+          node-version: v22.12.0
 
-      - name: Install dependencies
-        run: pnpm install --recursive=false
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
 
-      - name: Generate documentation
-        run: pnpm doc
+      - name: Install Dependencies
+        run: pnpm i
+
+      - name: Generate Documentation
+        run: pnpm doc  # This should output to ./docs folder
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
