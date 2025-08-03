@@ -12,18 +12,60 @@ import { v4 as uuid } from 'uuid';
 import { uniqueIndex } from 'drizzle-orm/mysql-core';
 import { Loop } from 'ts-utils/loop';
 
+/**
+ * All actions that can be performed on the data
+ *
+ * @export
+ * @enum {number}
+ */
 export enum FetchActions {
+	/**
+	 * Create a new data point
+	 */
 	Create = 'create',
+	/**
+	 * Delete a data point
+	 */
 	Delete = 'delete',
+	/**
+	 * Archive a data point
+	 */
 	Archive = 'archive',
+	/**
+	 * Restore an archived data point
+	 */
 	RestoreArchive = 'restore-archive',
+	/**
+	 * Restore a version of a data point
+	 */
 	RestoreVersion = 'restore-version',
+	/**
+	 * Delete a version of a data point
+	 */
 	DeleteVersion = 'delete-version',
+	/**
+	 * Retrieve a data's version history
+	 */
 	ReadVersionHistory = 'read-version-history',
+	/**
+	 * Get the archived data
+	 */
 	ReadArchive = 'read-archive',
+	/**
+	 * Read a data
+	 */
 	Read = 'read',
+	/**
+	 * Update a data point
+	 */
 	Update = 'update',
+	/**
+	 * Run a custom function on the back end
+	 */
 	Call = 'call',
+	/**
+	 * Custom query, this is used if a specific read type doesn't fulfill your needs.
+	 */
 	Query = 'query',
 	// Retrieve = 'retrieve',
 }
@@ -123,7 +165,7 @@ export class FatalStructError extends Error {
  */
 export interface Socket {
 	/**
-	 * Description placeholder
+	 * Event listener for the socket
 	 *
 	 * @param {string} event
 	 * @param {(data: unknown) => void} lisener
@@ -381,8 +423,18 @@ export class StructDataVersion<T extends Blank> {
 	}
 }
 
+/**
+ * The current version for struct updates stored in localStorage
+ *
+ * @type {1}
+ */
 const STRUCT_UPDATE_VERSION = 1;
 
+/**
+ * Batch update schema for struct updates
+ *
+ * @type {*}
+ */
 const structUpdateSchema = z.object({
 	struct: z.string(),
 	type: z.string(),
@@ -391,6 +443,11 @@ const structUpdateSchema = z.object({
 	date: z.string()
 });
 
+/**
+ * Retrieves all cached struct updates from localStorage
+ *
+ * @returns {*} 
+ */
 export const getStructUpdates = () => {
 	return attempt(() => {
 		const data = window.localStorage.getItem(`struct-updates-v${STRUCT_UPDATE_VERSION}`);
@@ -415,6 +472,17 @@ export const getStructUpdates = () => {
 	});
 };
 
+/**
+ * Saves a struct update to localStorage, this will not send the update to the server
+ *
+ * @param {{
+ * 	struct: string;
+ * 	type: string;
+ * 	data: unknown;
+ * 	id: string;
+ * }} data 
+ * @returns {*} 
+ */
 export const saveStructUpdate = (data: {
 	struct: string;
 	type: string;
@@ -442,6 +510,12 @@ export const saveStructUpdate = (data: {
 };
 
 
+/**
+ * Deletes a struct update from localStorage, this will not send the update to the server
+ *
+ * @param {string} id 
+ * @returns {*} 
+ */
 export const deleteStructUpdate = (id: string) => {
 	return attempt(() => {
 		const arr = getStructUpdates()
@@ -453,6 +527,13 @@ export const deleteStructUpdate = (id: string) => {
 	});
 }
 
+/**
+ * Sends all updates that are due to the server in a batch operation, this will not save them to localStorage
+ *
+ * @param {boolean} browser 
+ * @param {number} threshold 
+ * @returns {*} 
+ */
 export const sendUpdates = (browser: boolean, threshold: number) => {
 	return attemptAsync(async () => {
 		if (!browser) return;
@@ -497,6 +578,14 @@ export const sendUpdates = (browser: boolean, threshold: number) => {
 	});
 };
 
+/**
+ * Starts a loop that sends updates to the server at a specified interval
+ *
+ * @param {boolean} browser 
+ * @param {number} interval 
+ * @param {number} threshold 
+ * @returns {*} 
+ */
 export const startBatchUpdateLoop = (browser: boolean, interval: number, threshold: number) => {
 	const l = new Loop<{
 		error: Error;
@@ -511,6 +600,11 @@ export const startBatchUpdateLoop = (browser: boolean, interval: number, thresho
 	return l;
 };
 
+/**
+ * Clears all struct updates from localStorage, this will not send the updates to the server
+ *
+ * @returns {*} 
+ */
 export const clearStructUpdates = () => {
 	return attempt(() => {
 		window.localStorage.removeItem(`struct-updates-v${STRUCT_UPDATE_VERSION}`);
@@ -518,6 +612,12 @@ export const clearStructUpdates = () => {
 	});
 };
 
+/**
+ * Batch update type - used for custom batches
+ *
+ * @typedef {BatchUpdate}
+ * @template {DataAction | PropertyAction} T 
+ */
 type BatchUpdate<T extends DataAction | PropertyAction> = {
 	struct: string;
 	type: DataAction | PropertyAction;
@@ -526,6 +626,17 @@ type BatchUpdate<T extends DataAction | PropertyAction> = {
 	date: string;
 }
 
+/**
+ * This isn't currently implemented, but this is a placeholder for a batch send function, rather than just storing it all in cache
+ * @deprecated
+ * @param {{
+ * 	struct: string;
+ * 	type: DataAction | PropertyAction;
+ * 	data: unknown;
+ * 	id: string;
+ * 	date: string;
+ * }[]} data 
+ */
 export const sendBatch = (data: {
 	struct: string;
 	type: DataAction | PropertyAction;
@@ -534,12 +645,27 @@ export const sendBatch = (data: {
 	date: string;
 }[]) => {}
 
+/**
+ * Sets up a batch test mode. This should only be set to true in a testing environment. Otherwise no data will be sent
+ *
+ * @type {boolean}
+ */
 let BATCH_TEST = false;
 
+/**
+ * Initializes the batch test mode, this will not send any data to the server. This is used for testing purposes only.
+ *
+ * @returns {true} 
+ */
 export const startBatchTest = (): true => {
 	return BATCH_TEST = true;
 };
 
+/**
+ * Ends the batch test mode, this will not send any data to the server. This is used for testing purposes only.
+ *
+ * @returns {false} 
+ */
 export const endBatchTest = (): false => {
 	return BATCH_TEST = false;
 };
@@ -745,6 +871,12 @@ export class StructData<T extends Blank> implements Writable<PartialStructable<T
 		});
 	}
 
+	/**
+	 * Sets the attributes of the data, this will overwrite any existing attributes.
+	 *
+	 * @param {string[]} attributes 
+	 * @returns {*} 
+	 */
 	setAttributes(attributes: string[]) {
 		return attemptAsync(async () => {
 			if (!this.data.id) throw new StructError('Unable to set attributes, no id found');
@@ -770,15 +902,27 @@ export class StructData<T extends Blank> implements Writable<PartialStructable<T
 		});
 	}
 
+	/**
+	 * Adds new attributes to the data, this will not overwrite existing attributes.
+	 *
+	 * @param {...string[]} attributes 
+	 * @returns {*} 
+	 */
 	addAttributes(...attributes: string[]) {
 		return attemptAsync(async () => {
 			const current = this.getAttributes().unwrap();
 			return this.setAttributes(
-				Array.from(new Set(current))
+				Array.from(new Set([...current, ...attributes]))
 			).unwrap();
 		});
 	}
 
+	/**
+	 * Removes attributes from the data, this will not throw an error if the attribute does not exist.
+	 *
+	 * @param {...string[]} attributes 
+	 * @returns {*} 
+	 */
 	removeAttributes(...attributes: string[]) {
 		return attemptAsync(async () => {
 			const current = this.getAttributes().unwrap();
@@ -809,18 +953,40 @@ export class StructData<T extends Blank> implements Writable<PartialStructable<T
 	}
 }
 
+/**
+ * Used in data proxies - a conflict is when both the local and remote data differ from the base data and from each other.
+ *
+ * @typedef {Conflict}
+ * @template {Blank} T 
+ * @template {keyof T} K 
+ */
+type Conflict<T extends Blank, K extends keyof T> = {
+	property: K;
+	baseValue: PartialStructable<T>[K];
+	localValue: PartialStructable<T>[K];
+	remoteValue: PartialStructable<T>[K];
+}
+
+/**
+ * Conflict resolution function
+ *
+ * @typedef {FullConflictResolver}
+ * @template {Blank} T 
+ */
 type FullConflictResolver<T extends Blank> = (args: {
 	base: PartialStructable<T & GlobalCols>;
 	local: PartialStructable<T & GlobalCols>;
 	remote: PartialStructable<T & GlobalCols>;
 	conflicts: {
-		property: keyof T;
-		baseValue: PartialStructable<T>[keyof T];
-		localValue: PartialStructable<T>[keyof T];
-		remoteValue: PartialStructable<T>[keyof T];
 	}[];
 }) => PartialStructable<T> | Promise<PartialStructable<T>>;
 
+/**
+ * Save strategy for struct data, this is used to determine how to handle conflicts when saving data.
+ *
+ * @typedef {SaveStrategy}
+ * @template {Blank} T 
+ */
 type SaveStrategy<T extends Blank> =
 	| 'ifClean'
 	| 'force'
@@ -830,6 +996,11 @@ type SaveStrategy<T extends Blank> =
 	| 'manual'
 	| FullConflictResolver<T>;
 
+/**
+ * Status of a merge operation, this is used to determine the state of the local and remote data in relation to the base data.
+ *
+ * @typedef {MergeStatus}
+ */
 type MergeStatus =
   | 'clean'          // local == remote == base, no changes
   | 'localDiverge'   // local differs from base, remote == base
@@ -837,14 +1008,37 @@ type MergeStatus =
   | 'diverged'       // local and remote both differ from base, but local == remote (no conflict)
   | 'conflicted';    // local and remote both differ from base and differ from each other (conflict)
 
-interface MergeState<T> {
+/**
+ * State of a merge operation, this is used to track the status and conflicts during a merge.
+ *
+ * @interface MergeState
+ * @typedef {MergeState}
+ * @template {Blank} T 
+ * @template {keyof T} K 
+ */
+interface MergeState<T extends Blank, K extends keyof T> {
+  /**
+   * Status of the merge operation, indicating the relationship between local, remote, and base data.
+   *
+   * @type {MergeStatus}
+   */
   status: MergeStatus;
-  conflicts: {
-    property: keyof T;
-    localValue: T[keyof T];
-    remoteValue: T[keyof T];
-    baseValue: T[keyof T];
-  }[];
+  /**
+   * Any local changes that have been made to the data that have not yet been saved and conflict with remote data.
+   *
+   * @type {Conflict<T, keyof T>[]}
+   */
+  conflicts: Conflict<T, keyof T>[];
+}
+
+/**
+ * Global columns that are always present in every struct data.
+ */
+type StructDataProxyConfig<T extends Blank> = {
+	/**
+	 * Prevents the proxy from modifying these properties.
+	 */
+	static?: (keyof T)[];
 }
 
 /**
@@ -881,21 +1075,36 @@ export class StructDataProxy<T extends Blank> implements Writable<PartialStructa
 	/** Tracks whether the local data has been modified since the last save or pull. */
 	public readonly localUpdated = writable(false);
 
+	/**
+	 * Unsubscribe from the StructData's data updates.
+	 *
+	 * @private
+	 * @type {() => void}
+	 */
 	private dataUnsub: () => void;
+	/**
+	 * Set of subscribers that will be notified when the local data changes. 
+	 *
+	 * @private
+	 * @readonly
+	 * @type {*}
+	 */
 	private readonly subscribers = new Set<(data: PartialStructable<T & GlobalCols>) => void>();
+	/** Runs once all subscribers are done */
 	private _onAllUnsubscribe = () => {};
 
 	/**
 	 * @param structData The live backend-backed StructData instance to proxy.
 	 */
 	constructor(
-		public readonly structData: StructData<T>,
+		public readonly structData: StructData<T & GlobalCols>,
+		public readonly config: StructDataProxyConfig<T> = {}
 	) {
 		this.data = this.makeProxy(structData.data);
 		this.dataUnsub = this.structData.subscribe(() => {
 			this.remoteUpdated.set(true);
 		});
-		this.base = structuredClone(this.data);
+		this.base = JSON.parse(JSON.stringify(this.data)) as PartialStructable<T & GlobalCols>;
 	}
 
 	/**
@@ -904,14 +1113,17 @@ export class StructDataProxy<T extends Blank> implements Writable<PartialStructa
 	 */
 	private makeProxy(data: PartialStructable<T & GlobalCols>) {
 		return new Proxy(
-			structuredClone(data),
+			JSON.parse(JSON.stringify(data)) as PartialStructable<T & GlobalCols>,
 			{
 				set: (target, property, value) => {
+					if (this.config.static?.includes(property as keyof T)) {
+						throw new Error(`Cannot modify static property "${String(property)}" in StructDataProxy`);
+					}
 					if (target[property as keyof typeof target] !== value) {
 						target[property as keyof typeof target] = value;
 						this.inform();
-						this.localUpdated.set(true);
 					}
+					this.setLocalChanged();
 					return true;
 				},
 				deleteProperty: (target, property) => {
@@ -919,6 +1131,19 @@ export class StructDataProxy<T extends Blank> implements Writable<PartialStructa
 				}
 			}
 		);
+	}
+
+	/**
+	 * Sets the local change flag based on whether the current data
+	 *
+	 * @private
+	 */
+	private setLocalChanged() {
+		if (Object.keys(this.data).every(k => this.data[k] === this.base[k])) {
+			this.localUpdated.set(false);
+		} else {
+			this.localUpdated.set(true);
+		}
 	}
 
 	/**
@@ -989,17 +1214,56 @@ export class StructDataProxy<T extends Blank> implements Writable<PartialStructa
 		this.remoteUpdated.set(false);
 		this.localUpdated.set(false);
 		this.data = this.makeProxy(this.structData.data);
-		this.base = structuredClone(this.data);
+		this.base = JSON.parse(JSON.stringify(this.data)) as PartialStructable<T & GlobalCols>;
 		this.inform();
 	}
 
 	/**
-	 * Reverts all local changes, resetting the data to the base snapshot.
-	 * This does not affect the backend data, nor does it use the current remote state.
+	 * Reverts local changes, resetting data to the base snapshot.
+	 * This is a **local-only** operation; it does not affect the backend or pull the current remote state.
+	 * 
+	 * - If specific properties are provided, only those will be reset.
+	 * - If no properties are given, the entire object is reset to the base snapshot.
+	 * 
+	 * @param properties - List of property keys to selectively rollback. If empty, resets all properties.
+	 * @throws {Error} If a static property is attempted to be modified.
+	 * @throws {Error} If a given property does not exist in the base snapshot.
 	 */
-	public rollback() {
-		this.data = this.makeProxy(this.base);
+	public rollback(...properties: (keyof T)[]) {
+		return attempt(() => {
+				if (properties.length > 0) {
+				let hasChanges = false;
+
+				for (const p of properties) {
+					if (this.config.static?.includes(p)) {
+						throw new Error(`Cannot modify static property "${String(p)}" in StructDataProxy`);
+					}
+					if (p in this.base) {
+						const baseValue = this.base[p];
+						if (this.data[p] !== baseValue) {
+							(this.data as any)[p] = baseValue;
+							hasChanges = true;
+						}
+					} else {
+						throw new Error(`Property "${String(p)}" does not exist in base data`);
+					}
+				}
+
+				if (hasChanges) {
+					this.inform();
+				}
+				this.setLocalChanged();
+
+				return;
+			}
+
+			// Full rollback
+			this.data = this.makeProxy(this.base);
+			this.inform();
+			this.localUpdated.set(false);
+		});
 	}
+
 
 	/**
 	 * Returns whether the local or remote data has diverged
@@ -1062,121 +1326,121 @@ export class StructDataProxy<T extends Blank> implements Writable<PartialStructa
 	 *
 	 * After a successful save, the base snapshot is updated and all dirty flags are cleared.
 	 */
-public async save(strategy: SaveStrategy<T>) {
-	return attemptAsync(async () => {
-		const local = this.data;
-		const remote = this.structData.data;
-		const base = this.base;
+	public async save(strategy: SaveStrategy<T>) {
+		return attemptAsync(async () => {
+			const local = this.data;
+			const remote = this.structData.data;
+			const base = this.base;
 
-		const keys = new Set([
-			...Object.keys(local),
-			...Object.keys(remote),
-			...Object.keys(base)
-		]) as Set<keyof T>;
+			const keys = new Set([
+				...Object.keys(local),
+				...Object.keys(remote),
+				...Object.keys(base)
+			]) as Set<keyof T>;
 
-		const conflicts: {
-			property: keyof T;
-			baseValue: PartialStructable<T>[keyof T];
-			localValue: PartialStructable<T>[keyof T];
-			remoteValue: PartialStructable<T>[keyof T];
-		}[] = [];
+			const conflicts: {
+				property: keyof T;
+				baseValue: PartialStructable<T>[keyof T];
+				localValue: PartialStructable<T>[keyof T];
+				remoteValue: PartialStructable<T>[keyof T];
+			}[] = [];
 
-		const merged: PartialStructable<T> = {};
+			const merged: PartialStructable<T> = {};
 
-		for (const key of keys) {
-			const baseValue = base[key];
-			const localValue = local[key];
-			const remoteValue = remote[key];
+			for (const key of keys) {
+				const baseValue = base[key];
+				const localValue = local[key];
+				const remoteValue = remote[key];
 
-			const localChanged = localValue !== baseValue;
-			const remoteChanged = remoteValue !== baseValue;
-			const isConflict = localChanged && remoteChanged && localValue !== remoteValue;
+				const localChanged = localValue !== baseValue;
+				const remoteChanged = remoteValue !== baseValue;
+				const isConflict = localChanged && remoteChanged && localValue !== remoteValue;
 
-			if (isConflict) {
-				conflicts.push({ 
-					property: key, 
-					baseValue: baseValue as PartialStructable<T>[keyof T], 
-					localValue: localValue as PartialStructable<T>[keyof T], 
-					remoteValue: remoteValue as PartialStructable<T>[keyof T],
-				});
-			}
+				if (isConflict) {
+					conflicts.push({ 
+						property: key, 
+						baseValue: baseValue as PartialStructable<T>[keyof T], 
+						localValue: localValue as PartialStructable<T>[keyof T], 
+						remoteValue: remoteValue as PartialStructable<T>[keyof T],
+					});
+				}
 
-			if (typeof strategy === 'string') {
-				switch (strategy) {
-					case 'ifClean':
-						if (remoteChanged) throw new Error('Remote has diverged from base');
-						if (localChanged) merged[key] = localValue;
-						break;
+				if (typeof strategy === 'string') {
+					switch (strategy) {
+						case 'ifClean':
+							if (remoteChanged) throw new Error('Remote has diverged from base');
+							if (localChanged) merged[key] = localValue;
+							break;
 
-					case 'force':
-						merged[key] = localValue;
-						break;
+						case 'force':
+							merged[key] = localValue;
+							break;
 
-					case 'preferLocal':
-						(merged as any)[key] = isConflict || localChanged ? localValue : remoteValue;
-						break;
+						case 'preferLocal':
+							(merged as any)[key] = isConflict || localChanged ? localValue : remoteValue;
+							break;
 
-					case 'preferRemote':
-						(merged as any)[key] = isConflict || remoteChanged ? remoteValue : localValue;
-						break;
+						case 'preferRemote':
+							(merged as any)[key] = isConflict || remoteChanged ? remoteValue : localValue;
+							break;
 
-					case 'mergeClean':
-						if (isConflict) throw new Error('Conflicts prevent mergeClean');
-						if (localChanged) merged[key] = localValue;
-						else if (remoteChanged) (merged as any)[key] = remoteValue;
-						break;
+						case 'mergeClean':
+							if (isConflict) throw new Error('Conflicts prevent mergeClean');
+							if (localChanged) merged[key] = localValue;
+							else if (remoteChanged) (merged as any)[key] = remoteValue;
+							break;
 
-					case 'manual':
-						if (conflicts.length > 0) {
-							throw {
-								message: 'Manual merge required',
-								base,
-								local,
-								remote,
-								conflicts
-							};
-						}
-						if (localChanged) merged[key] = localValue;
-						break;
+						case 'manual':
+							if (conflicts.length > 0) {
+								throw {
+									message: 'Manual merge required',
+									base,
+									local,
+									remote,
+									conflicts
+								};
+							}
+							if (localChanged) merged[key] = localValue;
+							break;
 
-					default:
-						throw new Error(`Unknown strategy: ${strategy satisfies never}`);
+						default:
+							throw new Error(`Unknown strategy: ${strategy satisfies never}`);
+					}
 				}
 			}
-		}
 
-		if (typeof strategy === 'function') {
-			const resolved = await strategy({
-				base,
-				local,
-				remote,
-				conflicts
-			});
+			if (typeof strategy === 'function') {
+				const resolved = await strategy({
+					base,
+					local,
+					remote,
+					conflicts
+				});
 
-			Object.assign(merged, resolved);
-		}
+				Object.assign(merged, resolved);
+			}
 
-		if (Object.keys(merged).length > 0) {
-			await this.structData.update(d => ({ ...d, ...merged }));
-			this.localUpdated.set(false);
-			this.remoteUpdated.set(false);
-			this.base = structuredClone(this.data);
-			this.inform();
-		}
-	});
-}
+			if (Object.keys(merged).length > 0) {
+				await this.structData.update(d => ({ ...d, ...merged }));
+				this.localUpdated.set(false);
+				this.remoteUpdated.set(false);
+				this.base = structuredClone(this.data);
+				this.inform();
+			}
+		});
+	}
 
 
 	/**
 	 * 
 	 * @returns {MergeState<T>} The current merge state, including status and any conflicts.
 	 */
-	public getMergeState(): MergeState<T> {
+	public getMergeState(): MergeState<T, keyof T> {
 		const local = this.data;
 		const remote = this.structData.data;
 		const base = this.base;
 
-		const conflicts: MergeState<T>['conflicts'] = [];
+		const conflicts: MergeState<T, keyof T>['conflicts'] = [];
 		let hasLocalDiverge = false;
 		let hasRemoteDiverge = false;
 		let hasConflict = false;
@@ -1205,9 +1469,9 @@ public async save(strategy: SaveStrategy<T>) {
 				hasConflict = true;
 				conflicts.push({ 
 					property: key, 
-					localValue: localValue as T[keyof T], 
-					remoteValue: remoteValue as T[keyof T], 
-					baseValue: baseValue as T[keyof T],
+					localValue: localValue as PartialStructable<T>[keyof T], 
+					remoteValue: remoteValue as PartialStructable<T>[keyof T], 
+					baseValue: baseValue as PartialStructable<T>[keyof T],
 				});
 			}
 		}
@@ -1225,99 +1489,6 @@ public async save(strategy: SaveStrategy<T>) {
 }
 
 
-export class StructDataProxyArr<T extends Blank> implements Writable<StructDataProxy<T>[]> {
-	private readonly dataset: Set<StructDataProxy<T>>;
-
-	private updates: BatchUpdate<DataAction | PropertyAction>[] = [];
-	private _arrUnsubscribe: () => void = () => {};
-	
-	public readonly remoteUpdated = writable(false);
-	public readonly localUpdated = writable(false);
-
-	constructor(
-		private readonly arr: DataArr<T>,
-	) {
-		this.dataset = new Set(arr.data.map(d => new StructDataProxy<T>(d)));
-		this._arrUnsubscribe = arr.subscribe(d => {
-			this.remoteUpdated.set(true);
-		});
-	}
-
-	private readonly subscribers = new Set<(value: StructDataProxy<T>[]) => void>();
-
-	public get data() {
-		return Array.from(this.dataset);
-	}
-
-	public set data(value: StructDataProxy<T>[]) {
-		this.dataset.clear();
-		for (let i = 0; i < value.length; i++) {
-			this.dataset.add(value[i]);
-		}
-		this.inform();
-	}
-
-	_onAllUnsubscribe?: () => void;
-
-	public subscribe(fn: (value: StructDataProxy<T>[]) => void): () => void {
-		this.subscribers.add(fn);
-		fn(this.data);
-		return () => {
-			this.subscribers.delete(fn);
-			if (this.subscribers.size === 0) {
-				this._onAllUnsubscribe?.();
-			}
-		};
-	}
-
-	private inform() {
-		this.subscribers.forEach((fn) => fn(this.data));
-	}
-
-	private apply(value: StructDataProxy<T>[]): void {
-		this.data = value
-			.sort(this._sort)
-			.filter(this._filter);
-		this.subscribers.forEach((fn) => fn(this.data));
-		this.arr.struct.log('Applied Data:', this.data);
-	}
-
-	private _sort: (a: StructDataProxy<T>, b: StructDataProxy<T>) => number = (a, b) => 0;
-	sort(fn: (a: StructDataProxy<T>, b: StructDataProxy<T>) => number) {
-		this._sort = fn;
-		this.inform();
-	}
-	private _filter: (data: StructDataProxy<T>) => boolean = () => true;
-	filter(fn: (data: StructDataProxy<T>) => boolean) {
-		this._filter = fn;
-		this.inform();
-	}
-
-	public add(...values: StructDataProxy<T>[]): void {
-		this.apply([...this.data, ...values]);
-	}
-
-	public remove(...values: StructDataProxy<T>[]): void {
-		this.apply(this.data.filter((value) => !values.includes(value)));
-	}
-
-	public onAllUnsubscribe(fn: () => void): void {
-		this._onAllUnsubscribe = fn;
-	}
-
-	public set(value: StructDataProxy<T>[]) {
-		this.apply(value);
-	}
-
-	public update(fn: (data: StructDataProxy<T>[]) => StructDataProxy<T>[]) {
-		this.apply(fn(this.data));
-	}
-
-	public get() {
-		return this.data;
-	}
-}
-
 /**
  * Svelte store data array, used to store multiple data points and automatically update the view
  *
@@ -1328,6 +1499,13 @@ export class StructDataProxyArr<T extends Blank> implements Writable<StructDataP
  * @implements {Readable<StructData<T>[]>}
  */
 export class DataArr<T extends Blank> implements Writable<StructData<T>[]> {
+	/**
+	 * A set of StructData objects that this DataArr holds.
+	 *
+	 * @private
+	 * @readonly
+	 * @type {Set<StructData<T>>}
+	 */
 	private readonly dataset: Set<StructData<T>>;
 
 	/**
@@ -1352,10 +1530,22 @@ export class DataArr<T extends Blank> implements Writable<StructData<T>[]> {
 	 */
 	private readonly subscribers = new Set<(value: StructData<T>[]) => void>();
 
+	/**
+	 * Retrieves all data points in the array.
+	 *
+	 * @public
+	 * @type {{}}
+	 */
 	public get data() {
 		return Array.from(this.dataset);
 	}
 
+	/**
+	 * Sets the data array to a new value, clearing the existing dataset and adding the new values.
+	 *
+	 * @public
+	 * @type {{}}
+	 */
 	public set data(value: StructData<T>[]) {
 		this.dataset.clear();
 		for (let i = 0; i < value.length; i++) {
@@ -1433,64 +1623,173 @@ export class DataArr<T extends Blank> implements Writable<StructData<T>[]> {
 		this._onAllUnsubscribe = fn;
 	}
 
+	/**
+	 * Sorts the data array using a custom sorting function.
+	 *
+	 * @param {StructData<T>} a 
+	 * @param {StructData<T>} b 
+	 * @returns {number} 
+	 */
 	private _sort: (a: StructData<T>, b: StructData<T>) => number = (a, b) => 0;
 
+	/**
+	 * Sets a custom sorting function for the data array.
+	 *
+	 * @param {(a: StructData<T>, b: StructData<T>) => number} fn 
+	 * @returns {number) => void} 
+	 */
 	sort(fn: (a: StructData<T>, b: StructData<T>) => number) {
 		this._sort = fn;
 		this.inform();
 	}
 
+	/**
+	 * Filters the data array using a custom filtering function.
+	 *
+	 * @returns {true} 
+	 */
 	private _filter: (data: StructData<T>) => boolean = () => true;
 
+	/**
+	 * Sets a custom filtering function for the data array.
+	 *
+	 * @param {(data: StructData<T>) => boolean} fn 
+	 * @returns {boolean) => void} 
+	 */
 	filter(fn: (data: StructData<T>) => boolean) {
 		this._filter = fn;
 		this.inform();
 	}
 
+	/** 
+	 * Informs the array to emit updates without any local changes
+	 */
 	inform() {
 		this.apply(this.data);
 	}
 
+	/**
+	 * Sets the data array to a new value and updates the subscribers.
+	 *
+	 * @public
+	 * @param {StructData<T>[]} value 
+	 */
 	public set(value: StructData<T>[]) {
 		this.apply(value);
 	}
 
+	/**
+	 * Updates the data array using a function that receives the current data.
+	 *
+	 * @public
+	 * @param {(data: StructData<T>[]) => StructData<T>[]} fn 
+	 * @returns {{}) => void} 
+	 */
 	public update(fn: (data: StructData<T>[]) => StructData<T>[]) {
 		this.apply(fn(this.data));
 	}
 }
 
+/**
+ * Writable store that holds a single StructData item and allows updates to it.
+ * This is useful for managing a single piece of data that can be updated and subscribed to.
+ * For example, it can be used to manage a single user profile or settings.
+ * This differs from the StructData class in that it is a writable store and is meant to be used in a reactive context.
+ * This differs from the StructDataProxy in that it does not proxy the data and is meant to be used in a reactive context.
+ * 
+ * @example When you initialize a SingleWritable, you can pass in a default data object (guest user)
+ * 	And then once the user data is retrieved from the server, you can set the data using `set` method and the subscribers will be notified.
+ *
+ * @export
+ * @class SingleWritable
+ * @typedef {SingleWritable}
+ * @template {Blank} T 
+ * @implements {Writable<StructData<T>>}
+ */
 export class SingleWritable<T extends Blank> implements Writable<StructData<T>> {
+	/**
+	 * The current data held by this writable store.
+	 *
+	 * @private
+	 * @type {StructData<T>}
+	 */
 	private data: StructData<T>;
 
+	/**
+	 * Creates an instance of SingleWritable.
+	 *
+	 * @constructor
+	 * @param {StructData<T>} defaultData 
+	 */
 	constructor(defaultData: StructData<T>) {
 		this.data = defaultData;
 	}
-	private _onUnsubscribe?: () => void;
+	/**
+	 * Runs when all subscribers have been removed
+	 *
+	 * @private
+	 * @type {?() => void}
+	 */
+	private _onAllUnsubscribe?: () => void;
+	/**
+	 *  A set of subscribers that will be notified when the data changes.
+	 *
+	 * @private
+	 * @readonly
+	 * @type {*}
+	 */
 	private readonly subscribers = new Set<(data: StructData<T>) => void>();
 
+	/**
+	 * Subscribes to changes in the data.
+	 *
+	 * @param {(data: StructData<T>) => void} fn 
+	 * @returns {void) => () => void} 
+	 */
 	subscribe(fn: (data: StructData<T>) => void) {
 		this.subscribers.add(fn);
 		fn(this.data);
 		return () => {
 			this.subscribers.delete(fn);
-			if (!this.subscribers.size) this._onUnsubscribe?.();
+			if (!this.subscribers.size) this._onAllUnsubscribe?.();
 		};
 	}
 
-	onUnsubscribe(fn: () => void) {
-		this._onUnsubscribe = fn;
+	/**
+	 * Sets a callback that runs when all subscribers have unsubscribed.
+	 *
+	 * @param {() => void} fn 
+	 * @returns {void) => void} 
+	 */
+	onAllUnsubscribe(fn: () => void) {
+		this._onAllUnsubscribe = fn;
 	}
 
+	/**
+	 * Sets the data to a new value and notifies all subscribers.
+	 *
+	 * @param {StructData<T>} data 
+	 */
 	set(data: StructData<T>) {
 		this.data = data;
 		this.subscribers.forEach((fn) => fn(data));
 	}
 
+	/**
+	 * Updates the data using a function that receives the current data.
+	 *
+	 * @param {(data: StructData<T>) => StructData<T>} fn 
+	 * @returns {StructData<T>) => void} 
+	 */
 	update(fn: (data: StructData<T>) => StructData<T>) {
 		this.set(fn(this.data));
 	}
 
+	/**
+	 * Returns the current data held by this writable store.
+	 *
+	 * @returns {StructData<T>} 
+	 */
 	get() {
 		return this.data;
 	}
@@ -1577,8 +1876,22 @@ export type GlobalCols = {
  * @template {Blank} T
  */
 export class Struct<T extends Blank> {
+	/**
+	 * A changable function that can be used to get the current date.
+	 * This is used for syncing date with the server through NTP
+	 *
+	 * @returns {*} 
+	 */
 	public static getDate: () => number = () => Date.now(); // can be changed for syncing
 
+	/**
+	 * Headers that are sent with every request to the server from the struct
+	 *
+	 * @public
+	 * @static
+	 * @readonly
+	 * @type {*}
+	 */
 	public static readonly headers = new Map<string, string>();
 	/**
 	 * All structs that are accessible
@@ -1590,12 +1903,26 @@ export class Struct<T extends Blank> {
 	 */
 	public static readonly structs = new Map<string, Struct<Blank>>();
 
+	/**
+	 * Iterates over all structs and runs a function on each one.
+	 *
+	 * @public
+	 * @static
+	 * @param {(struct: Struct<Blank>) => void} fn 
+	 * @returns {void) => void} 
+	 */
 	public static each(fn: (struct: Struct<Blank>) => void) {
 		for (const struct of Struct.structs.values()) {
 			fn(struct);
 		}
 	}
 
+	/**
+	 * Builds all structs that are registered in the system.
+	 *
+	 * @public
+	 * @static
+	 */
 	public static buildAll() {
 		Struct.each((s) => s.build().then((res) => res.isErr() && console.error(res.error)));
 	}
@@ -1618,6 +1945,13 @@ export class Struct<T extends Blank> {
 	 */
 	private readonly emitter = new ComplexEventEmitter<StructEvents<T>>();
 
+	/**
+	 * Whether to cache updates for this struct.
+	 *
+	 * @public
+	 * @readonly
+	 * @type {boolean}
+	 */
 	public readonly cacheUpdates: boolean;
 
 	/**
@@ -1684,10 +2018,24 @@ export class Struct<T extends Blank> {
 		});
 	}
 
+	/**
+	 * Updates an existing data point, if permitted
+	 * This should never be used in production, just for testing types
+	 *
+	 * @readonly
+	 * @type {StructData<T>}
+	 */
 	get sample(): StructData<T> {
 		throw new Error('Sample is not meant to used at runtime.');
 	}
 
+	/**
+	 * Returns a sample of the struct data, which is a StructData object
+	 * This is used for testing and development purposes only.
+	 *
+	 * @readonly
+	 * @type {StructDataVersion<T>}
+	 */
 	get vhSample(): StructDataVersion<T> {
 		throw new Error('vhSample is not meant to be used at runtime');
 	}
@@ -1783,13 +2131,25 @@ export class Struct<T extends Blank> {
 	}
 
 	/**
-	 * Generates a new StructData or returns the cached version, if exists
+	 * Generates a StructData object from the given data, or returns the cached version if it exists.
 	 *
 	 * @param {(PartialStructable<T & GlobalCols>)} data
 	 * @returns {StructData<T>}
 	 */
 	Generator(data: PartialStructable<T & GlobalCols>): StructData<T>;
+	/**
+	 * Generates an array of StructData from an array of data, or returns the cached versions if they exist
+	 *
+	 * @param {PartialStructable<T & GlobalCols>[]} data 
+	 * @returns {StructData<T>[]} 
+	 */
 	Generator(data: PartialStructable<T & GlobalCols>[]): StructData<T>[];
+	/**
+	 * Generates a StructData object or an array of StructData from the given data.
+	 *
+	 * @param {(PartialStructable<T & GlobalCols> | PartialStructable<T & GlobalCols>[])} data 
+	 * @returns {(StructData<T> | StructData<T>[])} 
+	 */
 	Generator(data: PartialStructable<T & GlobalCols> | PartialStructable<T & GlobalCols>[]): StructData<T> | StructData<T>[] {
 		if (Array.isArray(data)) {
 			return data.map((d) => this.Generator(d)) as StructData<T>[];
@@ -1811,6 +2171,12 @@ export class Struct<T extends Blank> {
 		return d;
 	}
 
+	/**
+	 * Creates a StructDataProxy from the given data.
+	 *
+	 * @param {StructData<T & GlobalCols>} data 
+	 * @returns {StructDataProxy<T & GlobalCols>} 
+	 */
 	Proxy(data: StructData<T & GlobalCols>) {
 		return new StructDataProxy(data);
 	}
@@ -1834,6 +2200,15 @@ export class Struct<T extends Blank> {
 		return true;
 	}
 
+	/**
+	 * Generates a Zod schema for the struct data.
+	 *
+	 * @param {?{
+	 * 		optionals?: ((keyof T & keyof GlobalCols) | string)[];
+	 * 		not?: ((keyof T & keyof GlobalCols) | string)[];
+	 * 	}} [config] 
+	 * @returns {*} 
+	 */
 	getZodSchema(config?: {
 		optionals?: ((keyof T & keyof GlobalCols) | string)[];
 		not?: ((keyof T & keyof GlobalCols) | string)[];
@@ -2370,6 +2745,16 @@ export class Struct<T extends Blank> {
 		}
 	}
 
+	/**
+	 * Sends a custom query to the server and returns the results.
+	 *
+	 * @param {string} query 
+	 * @param {unknown} data 
+	 * @param {{
+	 * 			asStream: true;
+	 * 		}} config 
+	 * @returns {StructStream<T>} 
+	 */
 	query(
 		query: string,
 		data: unknown,
@@ -2377,6 +2762,18 @@ export class Struct<T extends Blank> {
 			asStream: true;
 		}
 	): StructStream<T>;
+	/**
+	 * Sends a custom query to the server and returns the results.
+	 *
+	 * @param {string} query 
+	 * @param {unknown} data 
+	 * @param {{
+	 * 			asStream: false;
+	 * 			satisfies: (data: StructData<T>) => boolean;
+	 * 			includeArchive?: boolean; // default is falsy
+	 * 		}} config 
+	 * @returns {DataArr<T>} 
+	 */
 	query(
 		query: string,
 		data: unknown,
@@ -2386,6 +2783,18 @@ export class Struct<T extends Blank> {
 			includeArchive?: boolean; // default is falsy
 		}
 	): DataArr<T>;
+	/**
+	 * Sends a custom query to the server and returns the results.
+	 *
+	 * @param {string} query 
+	 * @param {unknown} data 
+	 * @param {{
+	 * 			asStream: boolean;
+	 * 			satisfies?: (data: StructData<T>) => boolean;
+	 * 			includeArchive?: boolean;
+	 * 		}} config 
+	 * @returns {boolean; includeArchive?: boolean; }): DataArr<...>; }} 
+	 */
 	query(
 		query: string,
 		data: unknown,
@@ -2459,6 +2868,15 @@ export class Struct<T extends Blank> {
 		return arr;
 	}
 
+	/**
+	 * Sends custom data to the server and returns the result.
+	 *
+	 * @template T 
+	 * @param {string} name 
+	 * @param {unknown} data 
+	 * @param {z.ZodType<T>} returnType 
+	 * @returns {*} 
+	 */
 	send<T>(name: string, data: unknown, returnType: z.ZodType<T>) {
 		return attemptAsync<T>(async () => {
 			const res = await this.post(`custom/${name}`, data).then((r) => r.unwrap().json());
@@ -2478,6 +2896,13 @@ export class Struct<T extends Blank> {
 	}
 
 	// custom functions
+	/**
+	 * Calls a custom event on the server and returns the result.
+	 *
+	 * @param {string} event 
+	 * @param {unknown} data 
+	 * @returns {*} 
+	 */
 	call(event: string, data: unknown) {
 		return attemptAsync(async () => {
 			const res = await (
@@ -2496,6 +2921,13 @@ export class Struct<T extends Blank> {
 		});
 	}
 
+	/**
+	 * Creates a new DataArr instance with the given data array.d
+	 * This does not cache the data, so it is not stored in the writables map.
+	 *
+	 * @param {?StructData<T>[]} [dataArray] 
+	 * @returns {DataArr<T>} 
+	 */
 	arr(dataArray?: StructData<T>[]) {
 		if (!dataArray) {
 			dataArray = [];
@@ -2504,6 +2936,13 @@ export class Struct<T extends Blank> {
 		return new DataArr(this, dataArray);
 	}
 
+	/**
+	 * Creates a new DataArr instance with the given data array.
+	 * @deprecated Use `arr` instead with the `Generator` method.
+	 *
+	 * @param {Structable<T & GlobalCols>[]} dataArray 
+	 * @returns {DataArr<T>} 
+	 */
 	arrGenerator(dataArray: Structable<T & GlobalCols>[]) {
 		const w = new DataArr(this, dataArray.map((d) => this.Generator(d)));
 		setTimeout(() => {
