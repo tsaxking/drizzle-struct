@@ -1788,24 +1788,27 @@ export class Struct<T extends Blank> {
 	 * @param {(PartialStructable<T & GlobalCols>)} data
 	 * @returns {StructData<T>}
 	 */
-	Generator(data: PartialStructable<T & GlobalCols>): StructData<T>;
-	Generator(data: PartialStructable<T & GlobalCols>[]): StructData<T>[];
-	Generator(data: PartialStructable<T & GlobalCols> | PartialStructable<T & GlobalCols>[]): StructData<T> | StructData<T>[] {
+	Generator(data: PartialStructable<T & GlobalCols>): StructData<T & GlobalCols>;
+	Generator(data: PartialStructable<T & GlobalCols>[]): StructData<T & GlobalCols>[];
+	Generator(data: PartialStructable<T & GlobalCols> | PartialStructable<T & GlobalCols>[]): StructData<T & GlobalCols> | StructData<T & GlobalCols>[] {
 		if (Array.isArray(data)) {
-			return data.map((d) => this.Generator(d)) as StructData<T>[];
+			return data.map((d) => this.Generator(d)) as StructData<T & GlobalCols>[];
 		}
 		if (Object.hasOwn(data, 'id')) {
 			const id = (data as { id: string }).id;
-			if (this.cache.has(id)) {
-				return this.cache.get(id) as StructData<T>;
+			const has = this.cache.get(id);
+			if (has) {
+				return has as any;
 			}
 		}
 
 		// TODO: Data validation
-		const d = new StructData(this, data);
+		const d = new StructData<
+			T & GlobalCols
+		>(this as any, data);
 
 		if (Object.hasOwn(data, 'id')) {
-			this.cache.set(data.id as string, d);
+			this.cache.set(data.id as string, d as any);
 		}
 
 		return d;
@@ -2012,7 +2015,7 @@ export class Struct<T extends Blank> {
 					}
 					if (parsed.data) {
 						for (const d of parsed.data) {
-							s.add(this.Generator(d as any));
+							s.add(this.Generator(d as any) as any);
 						}
 						s.end();
 					}
@@ -2505,7 +2508,7 @@ export class Struct<T extends Blank> {
 	}
 
 	arrGenerator(dataArray: Structable<T & GlobalCols>[]) {
-		const w = new DataArr(this, dataArray.map((d) => this.Generator(d)));
+		const w = new DataArr(this, dataArray.map((d) => this.Generator(d) as any));
 		setTimeout(() => {
 			this.writables.set('all', w);
 		});
