@@ -1620,6 +1620,40 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 	}
 
 	/**
+	 * Retrieves a StructData from the struct based on the vhId.
+	 * This is used to retrieve a specific version of the data.
+	 * Useful for if a data is deleted and you want to restore it.
+	 * @param vhId The version history ID to retrieve the data from.
+	 * @throws {FatalStructError} If the struct does not have a version table.
+	 * @returns {ResultPromise<DataVersion<T, Name> | undefined>} The data version or undefined if not found.
+	 * @memberof StructData
+	 * @example
+	 * const version = await struct.fromVhId('some-vh-id').unwrap();
+	 * if (version) {
+	 *   console.log('Retrieved version:', version);
+	 * } else {
+	 *  console.log('Version not found');
+	 * }
+	 */
+	fromVhId(vhId: string) {
+		return attemptAsync(async () => {
+			if (!this.versionTable) {
+				throw new FatalStructError(
+					this,
+					`Struct ${this.name} does not have a version table`
+				);
+			}
+
+			const [data] = await this.database
+				.select()
+				.from(this.versionTable)
+				.where(sql`${this.versionTable.vhId} = ${vhId}`);
+			if (!data) return undefined;
+			return new DataVersion(this, data as any);
+		});
+	}
+
+	/**
 	 * Retrieves all data from the struct based on the config provided.
 	 *
 	 * @param {{ type: 'stream'; limit?: number; offset?: number }} config 
