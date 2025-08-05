@@ -2165,7 +2165,7 @@ export class Struct<T extends Blank> {
 		const d = new StructData(this, data);
 
 		if (Object.hasOwn(data, 'id')) {
-			this.cache.set(data.id as string, d);
+			this.cache.set(data.id as string, d as any);
 		}
 
 		return d;
