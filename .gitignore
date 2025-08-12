@@ -132,3 +132,5 @@ dist
 .pnp.*
 
 docs/
+
+pnpm-workspace.yaml
