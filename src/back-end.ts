@@ -934,14 +934,19 @@ export class StructData<T extends Blank = any, Name extends string = any> {
 	}
 
 	/**
-	 * Returns the data without any safes or omitted keys.
+	 * Returns the data without omitting the global safe keys.
 	 * This is unsafe because it can return data that is not safe to send to the client
 	 * @returns {SafeReturn<T, []>}
 	 */
-	unsafe(): SafeReturn<T, []> {
+	unsafe<Keys extends (keyof (T & typeof globalCols))[]>(omit: Keys): SafeReturn<T, Keys> {
 		// This is a method to return the data without any safes or omitted keys
 		// It is unsafe because it can return data that is not safe to send to the client
-		const data = { ...this.data };
+		const data = { ...this.data }; // copy
+		if (!omit) omit = [] as any;
+
+		for (const key of omit) {
+			delete (data as any)[key];
+		}
 		for (const key in data) {
 			if (data[key] instanceof Date) {
 				// Convert dates to ISO strings
