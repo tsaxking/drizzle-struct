@@ -16,6 +16,7 @@ import { log } from './utils';
 import path from 'path';
 import fs from 'fs';
 import chalk from 'chalk';
+import { RedisStructProxyClient, RedisStructProxyServer } from './redis-struct-proxy';
 
 /**
  * Error thrown for invalid struct state
@@ -226,6 +227,18 @@ export type StructBuilder<T extends Blank, Name extends string> = {
 	validators?: {
 		[key in keyof T]?: z.ZodType<T[key]['_']['dataType']> | ((data: unknown) => boolean);
 	};
+
+	/**
+	 * If you want to proxy this struct through a different microservice
+	 * If you do this, you cannot expose this struct's table(s) directly to drizzle-orm.
+	 * You cannot share a database between different microservices where both have different structs, so use this if you want to share state between different microservices.
+	 */
+	proxyClient?: RedisStructProxyClient<string, string>;
+
+	/**
+	 * Sets up the host for the data for other microservices to connect to
+	 */
+	proxyServer?: RedisStructProxyServer<string>;
 };
 
 /**
@@ -1456,6 +1469,16 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 				...data.structure
 			});
 		}
+
+		if (this.data.proxyServer) {
+			this.log('Setting up proxy server');
+			this.data.proxyServer.setup(this as any);
+		}
+
+		if (this.data.proxyClient) {
+			this.log('Setting up proxy client');
+			this.data.proxyClient.setup(this as any);
+		}
 	}
 
 	/**
@@ -1533,6 +1556,9 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 		}
 	) {
 		return attemptAsync(async () => {
+			if (this.data.proxyClient) {
+				return this.data.proxyClient.new(this, data).unwrap().then(d => this.Generator(d as any));
+			}
 			this.log('Creating new', data, config);
 			const validateRes = this.validate(data, {
 				optionals: config?.overwriteGlobals ? [] : (Object.keys(globalCols) as string[])
