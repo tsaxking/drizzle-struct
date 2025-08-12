@@ -104,23 +104,24 @@ export class RedisStructProxyClient<Name extends string, Target extends string> 
         });
     }
 
-    request<TReq, TRes>(
-        event: `${string}.${'new' | 'delete' | 'update' | 'archive' | 'restore' | 'from-id' | 'from-property' | 'from-vhid' | 'all' | 'get' | 'lifetime-items' | 'archived' | 'get-versions' | 'restore-version' | 'delete-version'}`,
+    request<TReq, TRes, D>(
+        event: `${string}.${'new' | 'delete' | 'update' | 'archive' | 'restore' | 'from-id' | 'from-property' | 'from-vhid' | 'all' | 'get' | 'lifetime-items' | 'archived' | 'get-versions' | 'restore-version' | 'delete-version' | 'get-version-attributes' | 'get-attributes' | 'make-version'}`,
         data: TReq,
         responseSchema: z.ZodType<TRes>,
+        parser: (data: TRes) => D,
         timeoutMs = 5000
     ) {
         const id = this.id++;
 
-        return attemptAsync<TRes>(async () => {
-            return new Promise<TRes>((res, rej) => {
+        return attemptAsync<D>(async () => {
+            return new Promise<D>((res, rej) => {
                 const timeout = setTimeout(rej, timeoutMs);
                 this._send(event, data, id);
 
                 this.pendingRequests.set(id, (data) => {
                     const parsed = responseSchema.safeParse(data);
                     if (parsed.success) {
-                        res(parsed.data);
+                        res(parser(parsed.data));
                         clearTimeout(timeout);
                         this.pendingRequests.delete(id);
                     } else if (parsed.error instanceof z.ZodError) {
@@ -187,42 +188,48 @@ export class RedisStructProxyClient<Name extends string, Target extends string> 
                 data,
                 config
             },
-            struct.getZodSchema()
+            struct.getZodSchema(),
+            (d) => struct.Generator(d as any),
         );
     }
     delete<T extends Blank, Name extends string>(struct: Struct<T, Name>, id: string) {
         return this.request(
             `${struct.name}.delete`,
             { id },
-            z.void()
+            z.void(),
+            () => {}
         );
     }
     update<T extends Blank, Name extends string>(struct: Struct<T, Name>, id: string, data: Partial<Structable<T>>) {
         return this.request(
             `${struct.name}.update`,
             { id, data },
-            z.void()
+            z.void(),
+            () => {}
         );
     }
     archive<T extends Blank, Name extends string>(struct: Struct<T, Name>, id: string) {
         return this.request(
             `${struct.name}.archive`,
             { id },
-            z.void()
+            z.void(),
+            () => {}
         );
     }
     restore<T extends Blank, Name extends string>(struct: Struct<T, Name>, id: string) {
         return this.request(
             `${struct.name}.restore`,
             { id },
-            z.void()
+            z.void(),
+            () => {}
         );
     }
     fromId<T extends Blank, Name extends string>(struct: Struct<T, Name>, id: string) {
         return this.request(
             `${struct.name}.from-id`,
             { id },
-            struct.getZodSchema()
+            struct.getZodSchema(),
+            (d) => struct.Generator(d as any)
         );
     }
     fromProperty<T extends Blank, Name extends string, Prop extends keyof T>(
@@ -234,7 +241,8 @@ export class RedisStructProxyClient<Name extends string, Target extends string> 
         return this.request(
             `${struct.name}.from-property`,
             { property, value, config },
-            z.array(struct.getZodSchema())
+            z.array(struct.getZodSchema()),
+            (d) => d.map((item: any) => struct.Generator(item as any))
         );
     }
     fromVhId<T extends Blank, Name extends string>(
@@ -245,10 +253,15 @@ export class RedisStructProxyClient<Name extends string, Target extends string> 
             `${struct.name}.from-vhid`,
             { vhId },
             z.object({
-                ...struct.getZodSchema().shape,
                 vhId: z.string(),
                 vhCreated: z.string(),
-            })
+                data: struct.getZodSchema()
+            }),
+            (d) => new DataVersion(struct, {
+                ...d,
+                data: undefined,
+                ...d.data,
+            } as any)
         );
     }
     all<T extends Blank, Name extends string>(
@@ -258,7 +271,8 @@ export class RedisStructProxyClient<Name extends string, Target extends string> 
         return this.request(
             `${struct.name}.all`,
             config,
-            z.array(struct.getZodSchema())
+            z.array(struct.getZodSchema()),
+            (d) => d.map((item: any) => struct.Generator(item as any))
         );
     }
     get<T extends Blank, Name extends string>(
@@ -271,7 +285,8 @@ export class RedisStructProxyClient<Name extends string, Target extends string> 
         return this.request(
             `${struct.name}.get`,
             { props, config },
-            z.array(struct.getZodSchema())
+            z.array(struct.getZodSchema()),
+            (d) => d.map((item: any) => struct.Generator(item as any))
         );
     }
     getLifetimeItems<T extends Blank, Name extends string>(
@@ -281,7 +296,8 @@ export class RedisStructProxyClient<Name extends string, Target extends string> 
         return this.request(
             `${struct.name}.lifetime-items`,
             config,
-            z.array(struct.getZodSchema())
+            z.array(struct.getZodSchema()),
+            (d) => d.map((item: any) => struct.Generator(item as any))
         );
     }
     archived<T extends Blank, Name extends string>(
@@ -291,7 +307,8 @@ export class RedisStructProxyClient<Name extends string, Target extends string> 
         return this.request(
             `${struct.name}.archived`,
             config,
-            z.array(struct.getZodSchema())
+            z.array(struct.getZodSchema()),
+            (d) => d.map((item: any) => struct.Generator(item as any))
         );
     }
     getVersions<T extends Blank, Name extends string>(
@@ -305,7 +322,12 @@ export class RedisStructProxyClient<Name extends string, Target extends string> 
                 vhId: z.string(),
                 vhCreated: z.string(),
                 data: struct.getZodSchema()
-            }))
+            })),
+            (d) => d.map((item: any) => new DataVersion(struct, {
+                ...item,
+                data: undefined,
+                ...item.data,
+            } as any))
         );
     }
     restoreVersion<T extends Blank, Name extends string>(
@@ -315,7 +337,8 @@ export class RedisStructProxyClient<Name extends string, Target extends string> 
         return this.request(
             `${struct.name}.restore-version`,
             { vhId },
-            z.void()
+            z.void(),
+            () => {}
         );
     }
     deleteVersion<T extends Blank, Name extends string>(
@@ -325,7 +348,54 @@ export class RedisStructProxyClient<Name extends string, Target extends string> 
         return this.request(
             `${struct.name}.delete-version`,
             { vhId },
-            z.void()
+            z.void(),
+            () => {}
+        );
+    }
+    getVersionAttributes<T extends Blank, Name extends string>(
+        struct: Struct<T, Name>,
+        vhId: string,
+    ) {
+        return this.request(
+            `${struct.name}.get-version-attributes`,
+            { vhId },
+            z.array(z.string()),
+            (d) => d as string[]
+        );
+    }
+    getAttributes<T extends Blank, Name extends string>(
+        struct: Struct<T, Name>,
+        vhId: string,
+    ) {
+        return this.request(
+            `${struct.name}.get-attributes`,
+            { vhId },
+            z.array(z.string()),
+            (d) => d as string[]
+        );
+    }
+    makeVersion<T extends Blank, Name extends string>(
+        struct: Struct<T, Name>,
+        vhId: string,
+        data?: Partial<Structable<T>>,
+    ) {
+        return this.request(
+            `${struct.name}.make-version`,
+            { vhId, data },
+            z.object({
+                id: z.string(),
+                data: struct.getZodSchema(),
+                vhId: z.string(),
+                vhCreated: z.string(),
+            }),
+            (d) => new DataVersion(
+                struct,
+                {
+                    ...d,
+                    data: undefined,
+                    ...d.data,
+                } as any
+            )
         );
     }
 
@@ -1124,6 +1194,138 @@ export class RedisStructProxyServer<Name extends string> {
                                         );
                                     }
                                     return this.reply(parsed.value.target, parsed.value.id, 'get-versions', readRes.value);
+                                }
+                                case 'get-version-attributes': {
+                                    const structInstance = this.structs.get(struct);
+                                    if (!structInstance) {
+                                        return this.reply(
+                                            parsed.value.target,
+                                            parsed.value.id,
+                                            'error',
+                                            new Error(`Struct ${struct} not found`)
+                                        );
+                                    }
+                                    const p = z.object({ vhId: z.string(), }).safeParse(parsed.value.data);
+                                    if (!p.success) {
+                                        structInstance.log('Error parsing data for get-version-attributes:', p.error);
+                                        return this.reply(
+                                            parsed.value.target,
+                                            parsed.value.id,
+                                            'error',
+                                            p.error
+                                        );
+                                    }
+                                    const { vhId } = p.data;
+                                    const res = await structInstance.fromVhId(vhId);
+                                    if (res.isErr()) {
+                                        return this.reply(
+                                            parsed.value.target,
+                                            parsed.value.id,
+                                            'error',
+                                            res.error
+                                        );
+                                    }
+                                    if (!res.value) {
+                                        return this.reply(
+                                            parsed.value.target,
+                                            parsed.value.id,
+                                            'error',
+                                            new Error(`Item with vhId ${vhId} not found`)
+                                        );
+                                    }
+                                    const attributes = res.value.getAttributes();
+                                    return this.reply(parsed.value.target, parsed.value.id, 'get-version-attributes', attributes);
+                                }
+                                case 'get-attributes': {
+                                    const structInstance = this.structs.get(struct);
+                                    if (!structInstance) {
+                                        return this.reply(
+                                            parsed.value.target,
+                                            parsed.value.id,
+                                            'error',
+                                            new Error(`Struct ${struct} not found`)
+                                        );
+                                    }
+                                    const p = z.object({ id: z.string(), }).safeParse(parsed.value.data);
+                                    if (!p.success) {
+                                        structInstance.log('Error parsing data for get-attributes:', p.error);
+                                        return this.reply(
+                                            parsed.value.target,
+                                            parsed.value.id,
+                                            'error',
+                                            p.error
+                                        );
+                                    }
+                                    const { id } = p.data;
+                                    const res = await structInstance.fromId(id);
+                                    if (res.isErr()) {
+                                        return this.reply(
+                                            parsed.value.target,
+                                            parsed.value.id,
+                                            'error',
+                                            res.error
+                                        );
+                                    }
+                                    if (!res.value) {
+                                        return this.reply(
+                                            parsed.value.target,
+                                            parsed.value.id,
+                                            'error',
+                                            new Error(`Item with id ${id} not found`)
+                                        );
+                                    }
+                                    const attributes = res.value.getAttributes();
+                                    return this.reply(parsed.value.target, parsed.value.id, 'get-attributes', attributes);
+                                }
+                                case 'make-version': {
+                                    const structInstance = this.structs.get(struct);
+                                    if (!structInstance) {
+                                        return this.reply(
+                                            parsed.value.target,
+                                            parsed.value.id,
+                                            'error',
+                                            new Error(`Struct ${struct} not found`)
+                                        );
+                                    }
+                                    const p = z.object({ id: z.string(), }).safeParse(parsed.value.data);
+                                    if (!p.success) {
+                                        structInstance.log('Error parsing data for make-version:', p.error);
+                                        return this.reply(
+                                            parsed.value.target,
+                                            parsed.value.id,
+                                            'error',
+                                            p.error
+                                        );
+                                    }
+                                    const { id } = p.data;
+                                    const res = await structInstance.fromId(id);
+                                    if (res.isErr()) {
+                                        return this.reply(
+                                            parsed.value.target,
+                                            parsed.value.id,
+                                            'error',
+                                            res.error
+                                        );
+                                    }
+                                    if (!res.value) {
+                                        return this.reply(
+                                            parsed.value.target,
+                                            parsed.value.id,
+                                            'error',
+                                            new Error(`Item with id ${id} not found`)
+                                        );
+                                    }
+                                    const version = await res.value.makeVersion();
+                                    const readRes = await read(version as any);
+                                    if (readRes.isErr()) {
+                                        return this.reply(
+                                            parsed.value.target,
+                                            parsed.value.id,
+                                            'error',
+                                            readRes.error
+                                        );
+                                    }
+                                    return this.reply(parsed.value.target, parsed.value.id, 'make-version', readRes.value);
                                 }
                             }
                         }

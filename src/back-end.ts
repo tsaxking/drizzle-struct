@@ -194,28 +194,6 @@ export type StructBuilder<T extends Blank, Name extends string> = {
 		type: 'days' | 'versions';
 		amount: number;
 	};
-	/**
-	 * Configure how the reflection API works. Reflections are used to sync data between servers. If a server has a reflection, it will send data to the other server, and receive updates. If there are conflicts, it will prioritize the other server's data. If there are type conflicts, it will throw an error.
-	 * If not set, there will be no reflection.
-	 *
-	 * Be sure to set up the reflection server as well.
-	 * ```ts
-	 * // Imported from 'drizzle-struct/reflection'
-	 * const api = new {Server/Client}(); // Configure respectively
-	 *
-	 * const struct = new Struct(); // Configure struct
-	 * struct.startReflection(api); // Must be called for reflection to work
-	 *
-	 */
-	reflection?:
-		| true
-		| {
-				/**
-				 * The time, in milliseconds, between each sync.
-				 * Basically, if you call Struct.all() it will always return the data it has in the database. If this threshold is reached, it will query the other server for updates. If there are any changes, it will emit batch new/update events so you can handle them.
-				 */
-				queryThreshold?: number;
-		  };
 
 	/**
 	 * Log events to the console
@@ -450,6 +428,9 @@ export class DataVersion<T extends Blank, Name extends string> {
 					this.struct,
 					`Struct ${this.struct.name} does not have a version table`
 				);
+			if (this.struct.data.proxyClient) {
+				return this.struct.data.proxyClient.deleteVersion(this.struct, this.vhId).unwrap();
+			}
 			await this.database
 				.delete(this.struct.versionTable)
 				.where(sql`${this.struct.versionTable.vhId} = ${this.vhId}`);
@@ -478,6 +459,10 @@ export class DataVersion<T extends Blank, Name extends string> {
 		}
 	) {
 		return attemptAsync(async () => {
+			if (this.struct.data.proxyClient) {
+				return this.struct.data.proxyClient.restoreVersion(this.struct, this.vhId).unwrap();
+			}
+
 			const data = (await this.struct.fromId(this.id)).unwrap();
 			if (!data) this.struct.new(this.data);
 			else await data.update(this.data);
@@ -504,6 +489,9 @@ export class DataVersion<T extends Blank, Name extends string> {
 	 */
 	getAttributes() {
 		return attempt(() => {
+			if (this.struct.data.proxyClient) {
+				return this.struct.data.proxyClient.getAttributes(this.struct, this.vhId).unwrap();
+			}
 			const a = JSON.parse(this.data.attributes);
 			if (!Array.isArray(a)) throw new DataError(this.struct, 'Attributes must be an array');
 			if (!a.every((i) => typeof i === 'string'))
@@ -641,6 +629,9 @@ export class StructData<T extends Blank = any, Name extends string = any> {
 		}
 	) {
 		return attemptAsync(async () => {
+			if (this.struct.data.proxyClient) {
+				return this.struct.data.proxyClient.update(this.struct, this.id, data).unwrap();
+			}
 			if (!this.canUpdate) {
 				throw new DataError(this.struct, 'Cannot change static data');
 			}
@@ -716,6 +707,13 @@ export class StructData<T extends Blank = any, Name extends string = any> {
 		}
 	) {
 		return attemptAsync(async () => {
+			if (this.struct.data.proxyClient) {
+				if (archived) {
+					return this.struct.data.proxyClient.archive(this.struct, this.id).unwrap();
+				} else {
+					return this.struct.data.proxyClient.restore(this.struct, this.id).unwrap();
+				}
+			}
 			this.log('Setting archive:', archived);
 			await this.struct.database
 				.update(this.struct.table)
@@ -752,6 +750,9 @@ export class StructData<T extends Blank = any, Name extends string = any> {
 		}
 	) {
 		return attemptAsync(async () => {
+			if (this.struct.data.proxyClient) {
+				return this.struct.data.proxyClient.delete(this.struct, this.id).unwrap();
+			}
 			this.log('Deleting');
 			this.makeVersion();
 			await this.database
@@ -771,6 +772,9 @@ export class StructData<T extends Blank = any, Name extends string = any> {
 	 */
 	makeVersion() {
 		return attemptAsync(async () => {
+			if (this.struct.data.proxyClient) {
+				return this.struct.data.proxyClient.makeVersion(this.struct, this.id).unwrap();
+			}
 			if (!this.struct.versionTable)
 				throw new Error(
 					`Struct ${this.struct.name} does not have a version table`
@@ -813,6 +817,9 @@ export class StructData<T extends Blank = any, Name extends string = any> {
 	 */
 	getVersions() {
 		return attemptAsync(async () => {
+			if (this.struct.data.proxyClient) {
+				return this.struct.data.proxyClient.getVersions(this.struct, this.id).unwrap();
+			}
 			if (!this.struct.versionTable)
 				throw new StructError(
 					this.struct,
