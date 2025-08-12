@@ -244,8 +244,8 @@ export type Data<T extends Struct<Blank, string>> = T['sample'];
  */
 export const globalCols = {
 	id: text('id').primaryKey(),
-	created: text('created').notNull(),
-	updated: text('updated').notNull(),
+	created: timestamp('created').notNull(),
+	updated: timestamp('updated').notNull(),
 	archived: boolean<'archived'>('archived').default(false).notNull(),
 	attributes: text('attributes').notNull(),
 	lifetime: integer('lifetime').notNull(),
@@ -371,7 +371,7 @@ export class DataVersion<T extends Blank, Name extends string> {
 	 * @type {*}
 	 */
 	get created() {
-		return new Date(this.data.created);
+		return this.data.created;
 	}
 
 	/**
@@ -381,7 +381,7 @@ export class DataVersion<T extends Blank, Name extends string> {
 	 * @type {*}
 	 */
 	get updated() {
-		return new Date(this.data.updated);
+		return this.data.updated;
 	}
 
 	/**
@@ -555,7 +555,7 @@ export class StructData<T extends Blank = any, Name extends string = any> {
 	 * @type {*}
 	 */
 	get created() {
-		return new Date(this.data.created);
+		return this.data.created;
 	}
 
 	/**
@@ -565,7 +565,7 @@ export class StructData<T extends Blank = any, Name extends string = any> {
 	 * @type {*}
 	 */
 	get updated() {
-		return new Date(this.data.updated);
+		return this.data.updated;
 	}
 
 	/**
@@ -1098,9 +1098,8 @@ export type TsType<T extends ColumnDataType> = T extends 'string'
 		? number
 		: T extends 'boolean'
 			? boolean
-			: // : T extends 'timestamp' ? Date
-				// : T extends 'date' ? Date
-				never;
+				: T extends 'date' ? Date
+				: never;
 
 // export type SafeTsType<T extends ColumnDataType> = T extends 'string' ? string
 //     : T extends 'number' ? number
@@ -1547,8 +1546,8 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 
 			const globals = {
 				id: this.data.generators?.id?.(data) ?? uuid(),
-				created: new Date().toISOString(),
-				updated: new Date().toISOString(),
+				created: new Date(),
+				updated: new Date(),
 				archived: false,
 				// universes: JSON.stringify(this.data.generators?.universes?.() ?? []),
 				// universe: this.data.generators?.universe?.(data) ?? '',
@@ -3142,4 +3141,4 @@ export type Session = StructData<typeof sessionSampleStructCols, 'session'>;
 //     safes: ['age']
 // });
 
-// test.sample.safe().age;
+// test.sample.safe().age;});
