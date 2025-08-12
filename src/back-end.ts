@@ -903,7 +903,13 @@ export class StructData<T extends Blank = any, Name extends string = any> {
 	 * This isn't typed properly yet, so don't trust the omit types yet.
 	 *
 	 * @param {?(keyof T & keyof typeof globalCols)[]} [omit]
-	 * @returns {*}
+	 * @returns {SafeReturn<T, Keys>}
+	 * @template {keyof T & keyof typeof globalCols} Keys
+	 * @template {T & typeof globalCols} T
+	 * @memberof StructData
+	 * @example
+	 * const data = struct.fromId('id').unwrap();
+	 * const safeData = data.safe('id', 'created'); // This will return the data without the id and created columns
 	 */
 	safe<Keys extends (keyof (T & typeof globalCols))[]>(
 		...omit: Keys
@@ -926,6 +932,26 @@ export class StructData<T extends Blank = any, Name extends string = any> {
 		}
 		return data as any;
 	}
+
+	/**
+	 * Returns the data without any safes or omitted keys.
+	 * This is unsafe because it can return data that is not safe to send to the client
+	 * @returns {SafeReturn<T, []>}
+	 */
+	unsafe(): SafeReturn<T, []> {
+		// This is a method to return the data without any safes or omitted keys
+		// It is unsafe because it can return data that is not safe to send to the client
+		const data = { ...this.data };
+		for (const key in data) {
+			if (data[key] instanceof Date) {
+				// Convert dates to ISO strings
+				(data as any)[key] = (data[key] as Date).toISOString();
+			}
+		}
+		return data as any;
+	}
+
+
 	/**
 	 * If this data is similar to another data
 	 *
