@@ -645,7 +645,7 @@ export class StructData<T extends Blank = any, Name extends string = any> {
 				throw new DataError(this.struct, 'Cannot change static data');
 			}
 			const prev = { ...this.data };
-			const now = new Date().toISOString();
+			const now = new Date();
 			const res = this.struct.validate(
 				{
 					...this.data,
@@ -721,7 +721,7 @@ export class StructData<T extends Blank = any, Name extends string = any> {
 				.update(this.struct.table)
 				.set({
 					archived,
-					updated: new Date().toISOString()
+					updated: new Date()
 				} as any)
 				.where(sql`${this.struct.table.id} = ${this.id}`);
 			Object.assign(this.data, {
@@ -854,7 +854,7 @@ export class StructData<T extends Blank = any, Name extends string = any> {
 			attributes = attributes
 				.filter((i) => typeof i === 'string')
 				.filter((v, i, a) => a.indexOf(v) === i);
-			const updated = new Date().toISOString();
+			const updated = new Date();
 			await this.database
 				.update(this.struct.table)
 				.set({
@@ -1002,7 +1002,7 @@ export class StructData<T extends Blank = any, Name extends string = any> {
 				.update(this.struct.table)
 				.set({
 					canUpdate: !isStatic,
-					updated: new Date().toISOString()
+					updated: new Date()
 				} as any)
 				.where(sql`${this.struct.table.id} = ${this.id}`);
 			Object.assign(this.data, {
