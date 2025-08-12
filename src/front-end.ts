@@ -1,15 +1,13 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { attempt, attemptAsync } from 'ts-utils/check';
-import { EventEmitter, ComplexEventEmitter } from 'ts-utils/event-emitter';
+import { ComplexEventEmitter } from 'ts-utils/event-emitter';
 import { match } from 'ts-utils/match';
 import { Stream } from 'ts-utils/stream';
-import { decode } from 'ts-utils/text';
 import { DataAction, PropertyAction } from './types';
 import { writable, type Readable, type Writable, get } from 'svelte/store';
 import { type ColType } from './types';
 import { z } from 'zod';
 import { v4 as uuid } from 'uuid';
-import { uniqueIndex } from 'drizzle-orm/mysql-core';
 import { Loop } from 'ts-utils/loop';
 
 /**
