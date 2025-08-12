@@ -278,6 +278,19 @@ export type Structable<T extends Blank> = {
 	[K in keyof T]: TsType<T[K]['_']['dataType']>; // | TsType<T[K]['config']['dataType']>;
 };
 
+
+export type SafeStructable<T extends Blank> = {
+	[K in keyof T]: SafeTsType<T[K]['_']['dataType']>;
+}
+
+export type SafeReturn<T extends Blank, Keys extends (keyof T)[]> = Readonly<
+		Omit<
+			SafeStructable<T & typeof globalCols>,
+			Keys[number] // | (this["struct"]["data"]["safes"] extends (keyof T)[] ? this["struct"]["data"]["safes"][number] : never)
+		>
+	>;
+
+
 /**
  * A stream of StructData
  *
@@ -894,12 +907,7 @@ export class StructData<T extends Blank = any, Name extends string = any> {
 	 */
 	safe<Keys extends (keyof (T & typeof globalCols))[]>(
 		...omit: Keys
-	): Readonly<
-		Omit<
-			Structable<T & typeof globalCols>,
-			Keys[number] // | (this["struct"]["data"]["safes"] extends (keyof T)[] ? this["struct"]["data"]["safes"][number] : never)
-		>
-	> {
+	): SafeReturn<T, Keys> {
 		// TODO: Type the omitted columns properly
 		const data = { ...this.data }; // copy
 		if (!omit) omit = [] as any;
@@ -909,6 +917,12 @@ export class StructData<T extends Blank = any, Name extends string = any> {
 
 		for (const key of omit) {
 			delete (data as any)[key];
+		}
+		for (const key in data) {
+			if (data[key] instanceof Date) {
+				// Convert dates to ISO strings
+				(data as any)[key] = (data[key] as Date).toISOString();
+			}
 		}
 		return data as any;
 	}
@@ -1099,6 +1113,17 @@ export type TsType<T extends ColumnDataType> = T extends 'string'
 		: T extends 'boolean'
 			? boolean
 				: T extends 'date' ? Date
+				: never;
+
+type ISOString = `${number}-${number}-${number}T${number}:${number}:${number}.${number}Z`;
+
+export type SafeTsType<T extends ColumnDataType> = T extends 'string'
+	? string
+	: T extends 'number'
+		? number
+		: T extends 'boolean'
+			? boolean
+				: T extends 'date' ? ISOString
 				: never;
 
 // export type SafeTsType<T extends ColumnDataType> = T extends 'string' ? string
