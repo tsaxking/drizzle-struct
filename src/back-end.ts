@@ -2606,11 +2606,11 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 			.object({
 				id: createSchema(z.string(), 'id'),
 				created: createSchema(
-					z.string().refine((arg) => new Date(arg).toString() !== 'Invalid Date'),
+					z.date().refine((arg) => arg.toString() !== 'Invalid Date'),
 					'created'
 				),
 				updated: createSchema(
-					z.string().refine((arg) => new Date(arg).toString() !== 'Invalid Date'),
+					z.date().refine((arg) => arg.toString() !== 'Invalid Date'),
 					'updated'
 				),
 				archived: createSchema(z.boolean(), 'archived'),
