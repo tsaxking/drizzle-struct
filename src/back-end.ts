@@ -244,8 +244,8 @@ export type Data<T extends Struct<Blank, string>> = T['sample'];
  */
 export const globalCols = {
 	id: text('id').primaryKey(),
-	created: timestamp('created').notNull(),
-	updated: timestamp('updated').notNull(),
+	created: timestamp('created', { withTimezone: true}).notNull(),
+	updated: timestamp('updated', { withTimezone: true}).notNull(),
 	archived: boolean<'archived'>('archived').default(false).notNull(),
 	attributes: text('attributes').notNull(),
 	lifetime: integer('lifetime').notNull(),
@@ -2684,8 +2684,8 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 
 		return z.object({
 			id: createSchema(z.string(), 'id'),
-			created: createSchema(z.string(), 'created'),
-			updated: createSchema(z.string(), 'updated'),
+			created: createSchema(z.date(), 'created'),
+			updated: createSchema(z.date(), 'updated'),
 			archived: createSchema(z.boolean(), 'archived'),
 			attributes: createSchema(z.string(), 'attributes'),
 			lifetime: createSchema(z.number(), 'lifetime'),
