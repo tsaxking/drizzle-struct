@@ -54,8 +54,8 @@
 	},
 	"exports": {
 		".": {
-			"import": "./lib/esm/index.js",
-			"require": "./lib/cjs/index.js"
+			"import": "./lib/esm/back-end.js",
+			"require": "./lib/cjs/back-end.js"
 		},
 		"./back-end": {
 			"import": "./lib/esm/back-end.js",
@@ -76,14 +76,6 @@
 		"./unit-tests": {
 			"import": "./lib/esm/unit-tests.js",
 			"require": "./lib/cjs/unit-test.js"
-		},
-		"./reflection": {
-			"import": "./lib/esm/reflection.js",
-			"require": "./lib/cjs/reflection.js"
-		},
-		"./cached-events": {
-			"import": "./lib/esm/cached-events.js",
-			"require": "./lib/cjs/cached-events.js"
 		}
 	}
 }
