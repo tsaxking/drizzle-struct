@@ -17,6 +17,21 @@ import path from 'path';
 import fs from 'fs';
 import chalk from 'chalk';
 import { RedisStructProxyClient, RedisStructProxyServer } from './redis-struct-proxy';
+import { isTesting, noDataError, noTableError, TestTable } from './testing';
+
+
+let hasRunFrontendWarn = false;
+const runFrontendWarn = () => {
+	if (hasRunFrontendWarn) return;
+	hasRunFrontendWarn = true;
+	console.warn(
+		chalk.yellow(
+			'WARNING:',
+		),
+		'All frontend features, such as sendListen, queryListen, and callListen, block, bypass, frontend, etc. will be going away in the future.\n\n',
+		'Use or build other services that will run these systems.'
+	);
+};
 
 /**
  * Error thrown for invalid struct state
@@ -788,6 +803,15 @@ export class StructData<T extends Blank = any, Name extends string = any> {
 			if (this.struct.data.proxyClient) {
 				return this.struct.data.proxyClient.makeVersion(this.struct, this.id).unwrap();
 			}
+
+			if (isTesting(this.struct)) {
+				const table = TestTable.get(this.struct.data.name);
+				if (!table) throw noTableError(this.struct);
+				const data = table.fromId(this.id).unwrap();
+				if (!data) throw noDataError(this);
+				return new DataVersion(this.struct, data.makeVersion().unwrap().data as any);
+			}
+
 			if (!this.struct.versionTable)
 				throw new Error(
 					`Struct ${this.struct.name} does not have a version table`
@@ -833,6 +857,13 @@ export class StructData<T extends Blank = any, Name extends string = any> {
 			if (this.struct.data.proxyClient) {
 				return this.struct.data.proxyClient.getVersions(this.struct, this.id).unwrap();
 			}
+			if (isTesting(this.struct)) {
+				const table = TestTable.get(this.struct.name);
+				if (!table) throw noTableError(this.struct);
+				const data = table.fromId(this.data.id).unwrap();
+				if (!data) throw noDataError(this);
+				return data.getVersions().unwrap().map(v => new DataVersion(this.struct, v.data));
+			}
 			if (!this.struct.versionTable)
 				throw new StructError(
 					this.struct,
@@ -854,6 +885,13 @@ export class StructData<T extends Blank = any, Name extends string = any> {
 	 */
 	getAttributes() {
 		return attempt(() => {
+			if (isTesting(this.struct)) {
+				const table = TestTable.get(this.struct.name);
+				if (!table) throw noTableError(this.struct);
+				const data = table.fromId(this.data.id).unwrap();
+				if (!data) throw noDataError(this);
+				return data.getAttributes().unwrap();
+			}
 			const a = JSON.parse(this.data.attributes);
 			if (!Array.isArray(a)) throw new DataError(this.struct, 'Attributes must be an array');
 			if (!a.every((i) => typeof i === 'string'))
@@ -869,6 +907,13 @@ export class StructData<T extends Blank = any, Name extends string = any> {
 	 */
 	setAttributes(attributes: string[]) {
 		return attemptAsync(async () => {
+			if (isTesting(this.struct)) {
+				const table = TestTable.get(this.struct.name);
+				if (!table) throw noTableError(this.struct);
+				const data = table.fromId(this.data.id).unwrap();
+				if (!data) throw noDataError(this);
+				return data.setAttributes(...attributes).unwrap();
+			}
 			const prev = { ...this.data };
 			this.log('Setting attributes', attributes);
 			attributes = attributes
@@ -900,6 +945,13 @@ export class StructData<T extends Blank = any, Name extends string = any> {
 	 */
 	removeAttributes(...attributes: string[]) {
 		return attemptAsync(async () => {
+			if (isTesting(this.struct)) {
+				const table = TestTable.get(this.struct.name);
+				if (!table) throw noTableError(this.struct);
+				const data = table.fromId(this.data.id).unwrap();
+				if (!data) throw noDataError(this);
+				return data.removeAttributes(...attributes).unwrap();
+			}
 			const a = this.getAttributes().unwrap();
 			const newAttributes = a.filter((i) => !attributes.includes(i));
 			return (await this.setAttributes(newAttributes)).unwrap();
@@ -913,6 +965,13 @@ export class StructData<T extends Blank = any, Name extends string = any> {
 	 */
 	addAttributes(...attributes: string[]) {
 		return attemptAsync(async () => {
+			if (isTesting(this.struct)) {
+				const table = TestTable.get(this.struct.name);
+				if (!table) throw noTableError(this.struct);
+				const data = table.fromId(this.data.id).unwrap();
+				if (!data) throw noDataError(this);
+				return data.addAttributes(...attributes).unwrap();
+			}
 			const a = this.getAttributes().unwrap();
 			return (await this.setAttributes([...a, ...attributes])).unwrap();
 		});
@@ -1659,6 +1718,12 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 				...(!config?.overwriteGlobals ? globals : {})
 			};
 
+			if (isTesting(this)) {
+				const table = TestTable.get(this.data.name);
+				if (!table) throw noTableError(this);
+				return this.Generator(table.new(newData).unwrap().data);
+			}
+
 			await this.database.insert(this.table).values(newData as any);
 
 			const d = this.Generator(newData);
@@ -1695,6 +1760,13 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 	 */
 	fromId(id: string) {
 		return attemptAsync(async () => {
+			if (isTesting(this)) {
+				const table = TestTable.get(this.data.name);
+				if (!table) throw noTableError(this);
+				const res = table.fromId(id).unwrap();
+				if (res) return this.Generator(res.data);
+				return undefined;
+			}
 			const data = await this.database
 				.select()
 				.from(this.table)
@@ -1725,6 +1797,12 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 	 */
 	fromVhId(vhId: string) {
 		return attemptAsync(async () => {
+			if (isTesting(this)) {
+				const table = TestTable.get(this.data.name);
+				if (!table) throw noTableError(this);
+				return table.fromVhId(vhId).unwrap();
+			}
+			
 			if (!this.versionTable) {
 				throw new FatalStructError(
 					this,
@@ -1799,6 +1877,11 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 		| StructStream<T, Name>
 		| ResultPromise<StructData<T, Name>[] | undefined | StructData<T, Name> | number, Error> {
 		const get = async () => {
+			if (isTesting(this)) {
+				const table = TestTable.get(this.data.name);
+				if (!table) throw noTableError(this);
+				return table.all().unwrap().map(d => d.data);
+			}
 
 			const squeal = config.includeArchived ? sql`1 = 1` : sql`${this.table.archived} = ${false}`;
 
@@ -1917,6 +2000,11 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 		| StructStream<T, Name>
 		| ResultPromise<StructData<T, Name>[] | StructData<T, Name> | undefined | number, Error> {
 		const get = async () => {
+			if (isTesting(this)) {
+				const table = TestTable.get(this.data.name);
+				if (!table) throw noTableError(this);
+				return table.archived().unwrap().map(d => d.data);
+			}
 
 			const squeal = sql`${this.table.archived} = ${true}`;
 
@@ -2095,6 +2183,13 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 		| StructStream<T, Name>
 		| ResultPromise<StructData<T, Name>[] | StructData<T, Name> | undefined | number, Error> {
 		const get = async () => {
+			if (isTesting(this)) {
+				const table = TestTable.get(this.data.name);
+				if (!table) throw noTableError(this);
+				return table.fromProperty(property, value).unwrap().map(d => d.data);
+			}
+
+
 			let squeal: SQL;
 			if (config.includeArchived) {
 				squeal = sql`${this.table[property]} = ${value}`;
@@ -2280,6 +2375,11 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 			`Struct.get() This method is unstable, use with caution. fromProperty is recommended at this time`
 		);
 		const get = async () => {
+			if (isTesting(this)) {
+				const table = TestTable.get(this.data.name);
+				if (!table) throw noTableError(this);
+				return table.get(props).unwrap().map(d => d.data);
+			}
 
 			// const squeal = sql.join(Object.keys(props).map(k => sql`${this.table[k]} = ${props[k]}`), sql` AND `);
 			let squeal = sql`1 = 1`;
@@ -2470,7 +2570,11 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 		| StructStream<T, Name>
 		| ResultPromise<StructData<T, Name>[] | undefined | StructData<T, Name> | number, Error> {
 		const get = async () => {
-			// this.apiQuery('get-lifetime-items', {});
+			if (isTesting(this)) {
+				const table = TestTable.get(this.data.name);
+				if (!table) throw noTableError(this);
+				return table.getLifetimeItems().unwrap().map(d => d.data);
+			}
 
 			// const squeal = sql`${this.table.lifetime} > 0 AND ${this.table.archived} = ${false}`;
 			let squeal: SQL;
@@ -2817,6 +2921,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 		action: Action,
 		condition: (account: Account, data?: Structable<T & typeof globalCols>) => boolean
 	) {
+		runFrontendWarn();
 		this.log('Added bypass');
 		this.bypasses.push({ action, condition });
 	}
@@ -2867,6 +2972,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 		) => QueryReturnType<T, Name> | Promise<QueryReturnType<T, Name>>,
 		filter?: (data: StructData<T, Name>) => boolean
 	) {
+		runFrontendWarn();
 		this.queryListeners.set(event, {
 			fn,
 			filter
@@ -2896,6 +3002,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 		event: string,
 		fn: (event: RequestEvent, data: unknown) => StructStatus | Promise<StructStatus>
 	) {
+		runFrontendWarn();
 		this.callListeners.set(event, fn);
 	}
 
@@ -2919,6 +3026,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 	 * @returns {unknown) => void} 
 	 */
 	sendListen(event: string, fn: (event: RequestEvent, data: unknown) => unknown) {
+		runFrontendWarn();
 		this.sendListeners.set(event, fn);
 	}
 
@@ -2950,6 +3058,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 		fn: (event: RequestEvent, data: unknown) => boolean | Promise<boolean>,
 		reason: string
 	) {
+		runFrontendWarn();
 		if (!this.blocks.has(event)) {
 			this.blocks.set(event, []);
 		}
@@ -2968,6 +3077,9 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 	 */
 	backup(dir: string) {
 		return attemptAsync(async () => {
+			if (isTesting(this)) {
+				throw new Error('Cannot backup a struct that is currently in testing mode');
+			}
 			if (!fs.existsSync(dir)) {
 				await fs.promises.mkdir(dir, { recursive: true });
 			}
@@ -3039,6 +3151,9 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 	 */
 	restore(file: string) {
 		return attemptAsync(async () => {
+			if (isTesting(this)) {
+				throw new Error('Cannot restore a struct that is currently in testing mode');
+			}
 			(await this.backup(path.dirname(file))).unwrap();
 			(await this.clear()).unwrap();
 

@@ -77,6 +77,10 @@
 		"./proxy": {
 			"import": "./lib/esm/redis-struct-proxy.js",
 			"require": "./lib/cjs/redis-struct-proxy.js"
+		},
+		"./testing": {
+			"import": "./lib/esm/testing.js",
+			"require": "./lib/cjs/testing.js"
 		}
 	}
 }
