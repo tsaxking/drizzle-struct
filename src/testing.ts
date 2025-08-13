@@ -235,7 +235,10 @@ export class TestRowVersion<T extends TestVersionBlank> {
     getAttrributes() {
         return attempt(() => {
             const attrs = z.array(z.string()).parse(JSON.parse(this.data.attributes));
-            this.table.log(`TestRowVersion.getAttrributes called for vhId=${this.data.vhId}, count=${attrs.length}`);
+    getAttributes() {
+        return attempt(() => {
+            const attrs = z.array(z.string()).parse(JSON.parse(this.data.attributes));
+            this.table.log(`TestRowVersion.getAttributes called for vhId=${this.data.vhId}, count=${attrs.length}`);
             return attrs;
         });
     }
