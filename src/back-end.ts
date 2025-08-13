@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { pgTable, text, boolean, integer } from 'drizzle-orm/pg-core';
+import { pgTable, text, boolean, integer, timestamp } from 'drizzle-orm/pg-core';
 import type { PgColumnBuilderBase, PgTableWithColumns } from 'drizzle-orm/pg-core';
 import { count, SQL, sql, type BuildColumns } from 'drizzle-orm';
 import { attempt, attemptAsync, resolveAll, type Result, ResultPromise } from 'ts-utils/check';
