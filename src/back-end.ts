@@ -1797,7 +1797,11 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 			if (isTesting(this)) {
 				const table = TestTable.get(this.data.name);
 				if (!table) throw noTableError(this);
-				return table.fromVhId(vhId).unwrap();
+				const v = table.fromVhId(vhId).unwrap();
+				if (!v) {
+					throw new Error(`No version found with vhId ${vhId} in ${this.data.name} testing suite`)
+				}
+				return new DataVersion(this, v.data);
 			}
 			
 			if (!this.versionTable) {
