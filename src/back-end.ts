@@ -517,9 +517,6 @@ export class DataVersion<T extends Blank, Name extends string> {
 	 */
 	getAttributes() {
 		return attempt(() => {
-			if (this.struct.data.proxyClient) {
-				return this.struct.data.proxyClient.getAttributes(this.struct, this.vhId).unwrap();
-			}
 			const a = JSON.parse(this.data.attributes);
 			if (!Array.isArray(a)) throw new DataError(this.struct, 'Attributes must be an array');
 			if (!a.every((i) => typeof i === 'string'))
