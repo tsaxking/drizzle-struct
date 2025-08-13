@@ -52,7 +52,7 @@ export const startTesting = (config: {
     maxRows: number;
     log: boolean;
 }) => {
-    log('Initializing tests', ...config.structs.map(s => s.name).join(', '))
+    log('Initializing tests', config.structs.map(s => s.name).join(', '))
     for (const struct of config.structs) {
         TestTable.tables.set(struct.name, new TestTable({
             maxRows: config.maxRows,
