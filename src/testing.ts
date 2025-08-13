@@ -232,9 +232,6 @@ export class TestRowVersion<T extends TestVersionBlank> {
         });
     }
 
-    getAttrributes() {
-        return attempt(() => {
-            const attrs = z.array(z.string()).parse(JSON.parse(this.data.attributes));
     getAttributes() {
         return attempt(() => {
             const attrs = z.array(z.string()).parse(JSON.parse(this.data.attributes));
