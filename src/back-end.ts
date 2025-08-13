@@ -3152,7 +3152,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 	restore(file: string) {
 		return attemptAsync(async () => {
 			if (isTesting(this)) {
-				throw new Error('Cannot restore a struct that is currenlty in testing mode');
+				throw new Error('Cannot restore a struct that is currently in testing mode');
 			}
 			(await this.backup(path.dirname(file))).unwrap();
 			(await this.clear()).unwrap();
