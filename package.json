@@ -62,10 +62,6 @@
 			"import": "./lib/esm/back-end.js",
 			"require": "./lib/cjs/back-end.js"
 		},
-		"./front-end": {
-			"import": "./lib/esm/front-end.js",
-			"require": "./lib/cjs/front-end.js"
-		},
 		"./types": {
 			"import": "./lib/esm/types.js",
 			"require": "./lib/cjs/types.js"
@@ -78,13 +74,9 @@
 			"import": "./lib/esm/unit-tests.js",
 			"require": "./lib/cjs/unit-test.js"
 		},
-		"./reflection": {
-			"import": "./lib/esm/reflection.js",
-			"require": "./lib/cjs/reflection.js"
-		},
-		"./cached-events": {
-			"import": "./lib/esm/cached-events.js",
-			"require": "./lib/cjs/cached-events.js"
+		"./proxy": {
+			"import": "./lib/esm/redis-struct-proxy.js",
+			"require": "./lib/cjs/redis-struct-proxy.js"
 		}
 	}
 }
