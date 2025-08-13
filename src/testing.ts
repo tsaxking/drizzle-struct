@@ -267,7 +267,7 @@ export class TestTable<T extends TestBlank> {
     new(data: T) {
         return attempt(() => {
             this.log(`TestTable.new called for id=${data.id}`);
-            if (this.fromId(data.id)) {
+            if (this.fromId(data.id).unwrap()) {
                 throw new Error('Cannot add duplicate entry')
             }
             if (this.data.length === this.config.maxRows) {
