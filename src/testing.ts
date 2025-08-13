@@ -74,7 +74,7 @@ export const endTesting = (config: {
         if (table) {
             table.clear();
         }
-        TestTable.tables.delete(struct.data.name);
+        TestTable.tables.delete(struct.name);
     }
 }
 
