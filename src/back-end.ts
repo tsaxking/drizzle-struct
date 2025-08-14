@@ -250,8 +250,8 @@ export type Data<T extends Struct<Blank, string>> = T['sample'];
  */
 export const globalCols = {
 	id: text('id').primaryKey(),
-	created: timestamp('created', { withTimezone: true}).notNull(),
-	updated: timestamp('updated', { withTimezone: true}).notNull(),
+	created: timestamp('created', { withTimezone: true}).notNull().default(sql`now()`),
+	updated: timestamp('updated', { withTimezone: true}).notNull().default(sql`now()`),
 	archived: boolean<'archived'>('archived').default(false).notNull(),
 	attributes: text('attributes').notNull(),
 	lifetime: integer('lifetime').notNull(),
@@ -329,7 +329,7 @@ export class StructStream<T extends Blank = Blank, Name extends string = string>
 export const versionGlobalCols = {
 	vhId: text('vh_id').primaryKey(),
 	id: text('id').notNull(), // Used to overwrite the other primary key
-	vhCreated: timestamp('vh_created', { withTimezone: true }).notNull()
+	vhCreated: timestamp('vh_created', { withTimezone: true }).notNull().default(sql`now()`),
 };
 
 /**
