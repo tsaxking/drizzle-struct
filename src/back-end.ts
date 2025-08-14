@@ -329,7 +329,7 @@ export class StructStream<T extends Blank = Blank, Name extends string = string>
 export const versionGlobalCols = {
 	vhId: text('vh_id').primaryKey(),
 	id: text('id').notNull(), // Used to overwrite the other primary key
-	vhCreated: text('vh_created').notNull()
+	vhCreated: timestamp('vh_created', { withTimezone: true }).notNull()
 };
 
 /**
