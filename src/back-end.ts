@@ -815,7 +815,7 @@ export class StructData<T extends Blank = any, Name extends string = any> {
 				);
 			this.log('Making version');
 			const vhId = uuid();
-			const vhCreated = new Date().toISOString();
+			const vhCreated = new Date();
 			const vhData = { ...this.data, vhId, vhCreated } as any;
 			await this.database.insert(this.struct.versionTable).values(vhData);
 
