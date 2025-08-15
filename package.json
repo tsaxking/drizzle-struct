@@ -30,7 +30,7 @@
 		"eslint-plugin-svelte": "^2.46.1",
 		"express": "^4.21.2",
 		"fuzzy-search": "^3.2.1",
-		"math": "git+https://github.com/tsaxking/calculations.git",
+		"math": "git+https://github.com/tsaxking/calculations.git#v1.0.0",
 		"pg": "^8.13.1",
 		"postgres": "^3.4.5",
 		"prettier": "^3.4.2",
@@ -39,7 +39,7 @@
 		"redis": "^5.8.0",
 		"svelte": "^5.16.1",
 		"ts-node": "^10.9.2",
-		"ts-utils": "github:tsaxking/global-ts-utilities",
+		"ts-utils": "github:tsaxking/global-ts-utilities#v1.0.0",
 		"typescript": "^5.7.2",
 		"uuid": "^11.0.3",
 		"zod": "^3.24.1"
