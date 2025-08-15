@@ -524,6 +524,63 @@ export class DataVersion<T extends Blank, Name extends string> {
 			return a;
 		});
 	}
+
+		/**
+	 * Returns a safe object of the data, omitting columns that you want removed.
+	 * This isn't typed properly yet, so don't trust the omit types yet.
+	 *
+	 * @param {?(keyof T & keyof typeof globalCols)[]} [omit]
+	 * @returns {SafeReturn<T, Keys>}
+	 * @template {keyof T & keyof typeof globalCols} Keys
+	 * @template {T & typeof globalCols} T
+	 * @example
+	 * const data = struct.fromId('id').unwrap();
+	 * const safeData = data.safe('id', 'created'); // This will return the data without the id and created columns
+	 */
+	safe<Keys extends (keyof (T & typeof globalCols))[]>(
+		...omit: Keys
+	): SafeReturn<T, Keys> {
+		// TODO: Type the omitted columns properly
+		const data = { ...this.data }; // copy
+		if (!omit) omit = [] as any;
+
+		// Merge omitted keys with safes
+		(omit as any).push(...(this.struct.data.safes || []));
+
+		for (const key of omit) {
+			delete (data as any)[key];
+		}
+		for (const key in data) {
+			if (data[key] instanceof Date) {
+				// Convert dates to ISO strings
+				(data as any)[key] = (data[key] as Date).toISOString();
+			}
+		}
+		return data as any;
+	}
+
+	/**
+	 * Returns the data without omitting the global safe keys.
+	 * This is unsafe because it can return data that is not safe to send to the client
+	 * @returns {SafeReturn<T, []>}
+	 */
+	unsafe<Keys extends (keyof (T & typeof globalCols))[]>(omit: Keys): SafeReturn<T, Keys> {
+		// This is a method to return the data without any safes or omitted keys
+		// It is unsafe because it can return data that is not safe to send to the client
+		const data = { ...this.data }; // copy
+		if (!omit) omit = [] as any;
+
+		for (const key of omit) {
+			delete (data as any)[key];
+		}
+		for (const key in data) {
+			if (data[key] instanceof Date) {
+				// Convert dates to ISO strings
+				(data as any)[key] = (data[key] as Date).toISOString();
+			}
+		}
+		return data as any;
+	}
 }
 
 /**
