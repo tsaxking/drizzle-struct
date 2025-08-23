@@ -262,28 +262,6 @@ export class RedisStructProxyClient<Name extends string, Target extends string, 
             () => {}
         );
     }
-    getVersionAttributes<T extends Blank, Name extends string>(
-        struct: Struct<T, Name>,
-        vhId: string,
-    ) {
-        return this.request(
-            `${struct.name}.get-version-attributes`,
-            { vhId },
-            z.array(z.string()),
-            (d) => d as string[]
-        );
-    }
-    getAttributes<T extends Blank, Name extends string>(
-        struct: Struct<T, Name>,
-        vhId: string,
-    ) {
-        return this.request(
-            `${struct.name}.get-attributes`,
-            { vhId },
-            z.array(z.string()),
-            (d) => d as string[]
-        );
-    }
     makeVersion<T extends Blank, Name extends string>(
         struct: Struct<T, Name>,
         vhId: string,
