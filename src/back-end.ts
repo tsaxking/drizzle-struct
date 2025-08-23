@@ -226,12 +226,12 @@ export type StructBuilder<T extends Blank, Name extends string> = {
 	 * If you do this, you cannot expose this struct's table(s) directly to drizzle-orm.
 	 * You cannot share a database between different microservices where both have different structs, so use this if you want to share state between different microservices.
 	 */
-	proxyClient?: RedisStructProxyClient<string, string>;
+	proxyClient?: RedisStructProxyClient<string, string, string>;
 
 	/**
 	 * Sets up the host for the data for other microservices to connect to
 	 */
-	proxyServer?: RedisStructProxyServer<string>;
+	proxyServer?: RedisStructProxyServer<string, string>;
 };
 
 /**
@@ -457,7 +457,9 @@ export class DataVersion<T extends Blank, Name extends string> {
 					`Struct ${this.struct.name} does not have a version table`
 				);
 			if (this.struct.data.proxyClient) {
-				return this.struct.data.proxyClient.deleteVersion(this.struct, this.vhId).unwrap();
+				const res = await this.struct.data.proxyClient.deleteVersion(this.struct, this.vhId).unwrap();
+				this.struct.emit('delete-version', this);
+				return res;
 			}
 			await this.database
 				.delete(this.struct.versionTable)
@@ -488,7 +490,9 @@ export class DataVersion<T extends Blank, Name extends string> {
 	) {
 		return attemptAsync(async () => {
 			if (this.struct.data.proxyClient) {
-				return this.struct.data.proxyClient.restoreVersion(this.struct, this.vhId).unwrap();
+				const res = await this.struct.data.proxyClient.restoreVersion(this.struct, this.vhId).unwrap();
+				this.struct.emit('restore-version', this);
+				return res;
 			}
 
 			const data = (await this.struct.fromId(this.id)).unwrap();
@@ -711,13 +715,18 @@ export class StructData<T extends Blank = any, Name extends string = any> {
 		}
 	) {
 		return attemptAsync(async () => {
+			const prev = { ...this.data };
 			if (this.struct.data.proxyClient) {
-				return this.struct.data.proxyClient.update(this.struct, this.id, data).unwrap();
+				const res = await this.struct.data.proxyClient.update(this.struct, this.id, data).unwrap();
+				this.struct.emit('update', {
+					from: prev,
+					to: res,
+				});
+				return res;
 			}
 			if (!this.canUpdate) {
 				throw new DataError(this.struct, 'Cannot change static data');
 			}
-			const prev = { ...this.data };
 			const now = new Date();
 			const res = this.struct.validate(
 				{
@@ -791,9 +800,13 @@ export class StructData<T extends Blank = any, Name extends string = any> {
 		return attemptAsync(async () => {
 			if (this.struct.data.proxyClient) {
 				if (archived) {
-					return this.struct.data.proxyClient.archive(this.struct, this.id).unwrap();
+					const res = await this.struct.data.proxyClient.archive(this.struct, this.id).unwrap();
+					this.struct.emit('archive', this);
+					return res;
 				} else {
-					return this.struct.data.proxyClient.restore(this.struct, this.id).unwrap();
+					const res = await this.struct.data.proxyClient.restore(this.struct, this.id).unwrap();
+					this.struct.emit('restore', this);
+					return res;
 				}
 			}
 			this.log('Setting archive:', archived);
@@ -833,7 +846,9 @@ export class StructData<T extends Blank = any, Name extends string = any> {
 	) {
 		return attemptAsync(async () => {
 			if (this.struct.data.proxyClient) {
-				return this.struct.data.proxyClient.delete(this.struct, this.id).unwrap();
+				const res = await this.struct.data.proxyClient.delete(this.struct, this.id).unwrap();
+				this.struct.emit('delete', this);
+				return res;
 			}
 			this.log('Deleting');
 			this.makeVersion();
@@ -961,6 +976,10 @@ export class StructData<T extends Blank = any, Name extends string = any> {
 	 */
 	setAttributes(attributes: string[]) {
 		return attemptAsync(async () => {
+			if (this.struct.data.proxyClient) {
+				return this.struct.data.proxyClient.setAttributes(this.struct, this.id, attributes).unwrap();
+			}
+
 			if (isTesting(this.struct)) {
 				const table = TestTable.get(this.struct.name);
 				if (!table) throw noTableError(this.struct);
@@ -1130,6 +1149,9 @@ export class StructData<T extends Blank = any, Name extends string = any> {
 	 */
 	setStatic(isStatic: boolean) {
 		return attemptAsync(async () => {
+			if (this.struct.data.proxyClient) {
+				throw new DataError(this.struct, 'Cannot set static via proxy client');
+			}
 			this.log('Setting static:', isStatic);
 			await this.database
 				.update(this.struct.table)
@@ -1814,6 +1836,10 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 	 */
 	fromId(id: string) {
 		return attemptAsync(async () => {
+			if (this.data.proxyClient) {
+				return this.data.proxyClient.fromId(this, id).unwrap();
+			}
+
 			if (isTesting(this)) {
 				const table = TestTable.get(this.data.name);
 				if (!table) throw noTableError(this);
@@ -1851,6 +1877,9 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 	 */
 	fromVhId(vhId: string) {
 		return attemptAsync(async () => {
+			if (this.data.proxyClient) {
+				return this.data.proxyClient.fromVhId(this, vhId).unwrap().then(d => d ? new DataVersion(this, d as any) : undefined);
+			}
 			if (isTesting(this)) {
 				const table = TestTable.get(this.data.name);
 				if (!table) throw noTableError(this);
@@ -1935,6 +1964,10 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 		| StructStream<T, Name>
 		| ResultPromise<StructData<T, Name>[] | undefined | StructData<T, Name> | number, Error> {
 		const get = async () => {
+			if (this.data.proxyClient) {
+				return this.data.proxyClient.all(this, config).unwrap(); 
+			}
+
 			if (isTesting(this)) {
 				const table = TestTable.get(this.data.name);
 				if (!table) throw noTableError(this);
@@ -1972,9 +2005,13 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 		if (config.type === 'stream') {
 			const stream = new StructStream(this);
 			setTimeout(async () => {
-				const dataStream = (await get()) as Structable<T & typeof globalCols>[];
-				for (let i = 0; i < dataStream.length; i++) {
-					stream.add(this.Generator(dataStream[i] as any));
+				try {
+					const dataStream = (await get()) as Structable<T & typeof globalCols>[];
+					for (let i = 0; i < dataStream.length; i++) {
+						stream.add(this.Generator(dataStream[i] as any));
+					}
+				} catch {
+					//
 				}
 				stream.end();
 			});
@@ -2058,6 +2095,14 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 		| StructStream<T, Name>
 		| ResultPromise<StructData<T, Name>[] | StructData<T, Name> | undefined | number, Error> {
 		const get = async () => {
+			if (this.data.proxyClient) {
+				return this.data.proxyClient.archived(this, {
+					...config as any,
+					includeArchived: true,
+					type: config.type === 'stream' ? 'all' : config.type,
+				}).unwrap(); 
+			}
+
 			if (isTesting(this)) {
 				const table = TestTable.get(this.data.name);
 				if (!table) throw noTableError(this);
@@ -2091,9 +2136,13 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 		if (config.type === 'stream') {
 			const stream = new StructStream(this);
 			setTimeout(async () => {
-				const dataStream = (await get()) as Structable<T & typeof globalCols>[];
-				for (let i = 0; i < dataStream.length; i++) {
-					stream.add(this.Generator(dataStream[i] as any));
+				try {
+					const dataStream = (await get()) as Structable<T & typeof globalCols>[];
+					for (let i = 0; i < dataStream.length; i++) {
+						stream.add(this.Generator(dataStream[i] as any));
+					}
+				} catch {
+					//
 				}
 				stream.end();
 			});
@@ -2241,6 +2290,13 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 		| StructStream<T, Name>
 		| ResultPromise<StructData<T, Name>[] | StructData<T, Name> | undefined | number, Error> {
 		const get = async () => {
+			if (this.data.proxyClient) {
+				return this.data.proxyClient.fromProperty(this, property as string, value, {
+					...config as any,
+					type: config.type === 'stream' ? 'all' : config.type,
+				}).unwrap(); 
+			}
+
 			if (isTesting(this)) {
 				const table = TestTable.get(this.data.name);
 				if (!table) throw noTableError(this);
@@ -2284,9 +2340,13 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 		if (config.type === 'stream') {
 			const stream = new StructStream(this);
 			setTimeout(async () => {
-				const dataStream = (await get()) as Structable<T & typeof globalCols>[];
-				for (let i = 0; i < dataStream.length; i++) {
-					stream.add(this.Generator(dataStream[i] as any));
+				try {
+					const dataStream = (await get()) as Structable<T & typeof globalCols>[];
+					for (let i = 0; i < dataStream.length; i++) {
+						stream.add(this.Generator(dataStream[i] as any));
+					}
+				} catch {
+					//
 				}
 				stream.end();
 			});
@@ -2433,6 +2493,13 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 			`Struct.get() This method is unstable, use with caution. fromProperty is recommended at this time`
 		);
 		const get = async () => {
+			if (this.data.proxyClient) {
+				return this.data.proxyClient.get(this, props, {
+					...config as any,
+					type: config.type === 'stream' ? 'all' : config.type,
+				}).unwrap(); 
+			}
+
 			if (isTesting(this)) {
 				const table = TestTable.get(this.data.name);
 				if (!table) throw noTableError(this);
@@ -2478,9 +2545,13 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 		if (config.type === 'stream') {
 			const stream = new StructStream(this);
 			setTimeout(async () => {
-				const dataStream = (await get()) as Structable<T & typeof globalCols>[];
-				for (let i = 0; i < dataStream.length; i++) {
-					stream.add(this.Generator(dataStream[i] as any));
+				try {
+					const dataStream = (await get()) as Structable<T & typeof globalCols>[];
+					for (let i = 0; i < dataStream.length; i++) {
+						stream.add(this.Generator(dataStream[i] as any));
+					}
+				} catch {
+					//
 				}
 				stream.end();
 			});
@@ -2522,6 +2593,9 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 	 */
 	clear() {
 		return attemptAsync(async () => {
+			if (this.data.proxyClient) {
+				throw new StructError(this, 'Cannot clear data when using a proxy client');
+			}
 			this.log('Clearing data...');
 			await this.database.execute(sql`
 				DELETE FROM ${this.table};
@@ -2556,6 +2630,10 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 				this,
 				'Cannot add defaults after struct has been built. Those are applied during the build process.'
 			);
+
+		if (this.data.proxyClient) {
+			throw new StructError(this, 'Cannot add defaults when using a proxy client');
+		}
 
 		this.defaults.push(...defaults);
 	}
@@ -2628,6 +2706,14 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 		| StructStream<T, Name>
 		| ResultPromise<StructData<T, Name>[] | undefined | StructData<T, Name> | number, Error> {
 		const get = async () => {
+			if (this.data.proxyClient) {
+				return this.data.proxyClient.getLifetimeItems(this, {
+					...config as any,
+					type: config.type === 'stream' ? 'all' : config.type,
+					includeArchived: true,
+				}).unwrap(); 
+			}
+
 			if (isTesting(this)) {
 				const table = TestTable.get(this.data.name);
 				if (!table) throw noTableError(this);
@@ -2671,9 +2757,13 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 		if (config.type === 'stream') {
 			const stream = new StructStream(this);
 			setTimeout(async () => {
-				const dataStream = (await get()) as Structable<T & typeof globalCols>[];
-				for (let i = 0; i < dataStream.length; i++) {
-					stream.add(this.Generator(dataStream[i] as any));
+				try {
+					const dataStream = (await get()) as Structable<T & typeof globalCols>[];
+					for (let i = 0; i < dataStream.length; i++) {
+						stream.add(this.Generator(dataStream[i] as any));
+					}
+				} catch {
+					//
 				}
 				stream.end();
 			});
@@ -2731,6 +2821,14 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 		return attemptAsync(async () => {
 			this.log('Building...');
 			this._database = database;
+
+			if (this.data.proxyClient) {
+				this.log('Using proxy client, skipping build process');
+				this.built = true;
+				this.emit('build');
+				this.log('Built!');
+				return;
+			}
 
 			resolveAll(
 				await Promise.all(

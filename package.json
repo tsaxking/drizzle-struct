@@ -37,6 +37,7 @@
 		"prettier-plugin-svelte": "^3.3.2",
 		"proper-lockfile": "^4.1.2",
 		"redis": "^5.8.0",
+		"redis-utils": "git+https://github.com/tsaxking/redis#v2.0.1",
 		"svelte": "^5.16.1",
 		"ts-node": "^10.9.2",
 		"ts-utils": "github:tsaxking/global-ts-utilities#v1.0.0",
@@ -46,7 +47,9 @@
 	},
 	"devDependencies": {
 		"@esbuild-kit/esm-loader": "^2.6.5",
+		"@types/chalk": "^2.2.4",
 		"@types/express": "^5.0.0",
+		"@types/node": "^24.3.0",
 		"@types/pg": "^8.11.10",
 		"drizzle-kit": "^0.22.8",
 		"typedoc": "^0.28.9",
