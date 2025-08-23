@@ -69,8 +69,8 @@ importers:
         specifier: ^5.8.0
         version: 5.8.2
       redis-utils:
-        specifier: github:tsaxking/redis#v2.0.3
-        version: redis-service@https://codeload.github.com/tsaxking/redis/tar.gz/05d476f90ff7ab30520e8310c5e3669393ef8084(@types/node@24.3.0)(yaml@2.8.1)
+        specifier: github:tsaxking/redis#v2.0.4
+        version: redis-service@https://codeload.github.com/tsaxking/redis/tar.gz/c9c10d20ea1484742c5284db7c13a96fc43f33ba(@types/node@24.3.0)(yaml@2.8.1)
       svelte:
         specifier: ^5.16.1
         version: 5.38.2
@@ -1992,8 +1992,8 @@ packages:
     resolution: {integrity: sha512-8zGqypfENjCIqGhgXToC8aB2r7YrBX+AQAfIPs/Mlk+BtPTztOvTS01NRW/3Eh60J+a48lt8qsCzirQ6loCVfA==}
     engines: {node: '>= 0.8'}
 
-  redis-service@https://codeload.github.com/tsaxking/redis/tar.gz/05d476f90ff7ab30520e8310c5e3669393ef8084:
-    resolution: {tarball: https://codeload.github.com/tsaxking/redis/tar.gz/05d476f90ff7ab30520e8310c5e3669393ef8084}
+  redis-service@https://codeload.github.com/tsaxking/redis/tar.gz/c9c10d20ea1484742c5284db7c13a96fc43f33ba:
+    resolution: {tarball: https://codeload.github.com/tsaxking/redis/tar.gz/c9c10d20ea1484742c5284db7c13a96fc43f33ba}
     version: 1.0.0
     engines: {node: v22.12.0}
 
@@ -3952,7 +3952,7 @@ snapshots:
       iconv-lite: 0.4.24
       unpipe: 1.0.0
 
-  redis-service@https://codeload.github.com/tsaxking/redis/tar.gz/05d476f90ff7ab30520e8310c5e3669393ef8084(@types/node@24.3.0)(yaml@2.8.1):
+  redis-service@https://codeload.github.com/tsaxking/redis/tar.gz/c9c10d20ea1484742c5284db7c13a96fc43f33ba(@types/node@24.3.0)(yaml@2.8.1):
     dependencies:
       redis: 5.8.2
       ts-utils: https://codeload.github.com/tsaxking/global-ts-utilities/tar.gz/41d2ddec9d5552a057d4272e57805283a2e580b4(@types/node@24.3.0)(yaml@2.8.1)
