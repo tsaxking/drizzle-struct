@@ -869,6 +869,7 @@ export class StructData<T extends Blank = any, Name extends string = any> {
 			if (config.emit === false) this.metadata.set('no-emit', true);
 			if (config.source) this.metadata.set('source', config.source);
 			this.struct.emit('delete', this);
+			this.struct.cache?.delete(this.id);
 		});
 	}
 
@@ -1393,6 +1394,10 @@ export class StructCache<T extends Blank = any> {
 				this.cache.delete(key);
 			}
 		}
+	}
+
+	delete(id: string) {
+		this.cache.delete(id);
 	}
 }
 
