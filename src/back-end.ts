@@ -232,6 +232,17 @@ export type StructBuilder<T extends Blank, Name extends string> = {
 	 * Sets up the host for the data for other microservices to connect to
 	 */
 	proxyServer?: RedisStructProxyServer<string, string>;
+
+	/**
+	 * Store data in memory as well as in the database for faster access.
+	 * This is not recommended for large amounts of data.
+	 * This is primarily designed for small amounts of static data that is read often but written to rarely.
+	 * In addition, this will only work for .fromId calls. No other queries will be cached.
+	 */
+	cache?: {
+		limit: number;
+		lifetime: number;
+	}
 };
 
 /**
@@ -1344,6 +1355,47 @@ export type MultiConfig = {
 	includeArchived?: boolean;
 }
 
+export class StructCache<T extends Blank = any> {
+	constructor(public readonly struct: Struct<T>) {}
+
+	private cache = new Map<string, {
+		data: Structable<T & typeof globalCols>;
+		timestamp: number;
+	}>();
+
+	get(id: string) {
+		const item = this.cache.get(id);
+		if (!item) return undefined;
+		item.timestamp = Date.now();
+		return item.data;
+	}
+
+	set(id: string, data: Structable<T & typeof globalCols>) {
+		this.cache.set(id, {
+			data,
+			timestamp: Date.now(),
+		});
+
+		this.purge();
+	}
+
+	purge() {
+		const keys = Array.from(this.cache.keys());
+		const toDelete = keys.slice(0, keys.length - Number(this.struct.data.cache?.limit));
+
+		for (const key of keys) {	
+			const item = this.cache.get(key);
+			if (!item) continue;
+			if (Date.now() - item.timestamp > Number(this.struct.data.cache?.lifetime)) {
+				this.cache.delete(key);
+			}
+			if (toDelete.includes(key)) {
+				this.cache.delete(key);
+			}
+		}
+	}
+}
+
 /**
  * Struct class, this is the main class for creating and managing structs.
  *
@@ -1494,6 +1546,14 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 		});
 	}
 
+	public static setupCachePurgeInterval(
+		time: number,
+	) {
+		return new Loop(() => {
+			Struct.each(s => s.cache?.purge());
+		}, time);
+	}
+
 	/**
 	 * Build all structs that the program has access to
 	 *
@@ -1638,6 +1698,8 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 	 */
 	public built = false;
 
+	public cache?: StructCache<T>;
+
 	/**
 	 * Creates an instance of Struct.
 	 *
@@ -1675,6 +1737,10 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 		if (this.data.proxyClient) {
 			this.log('Setting up proxy client');
 			this.data.proxyClient.setup(this as any);
+		}
+
+		if (this.data.cache) {
+			this.cache = new StructCache(this as any);
 		}
 	}
 
@@ -1819,6 +1885,9 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 	 */
 	Generator(data: Structable<T & typeof globalCols>) {
 		const res = this.validate(data);
+		if (this.cache) {
+			this.cache.set(data.id, data);
+		}
 		if (!res.success)
 			console.warn(
 				'Invalid data, there may be issues. If you see this, please fix your program, as this will become an error in the future',
@@ -1836,6 +1905,12 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 	 */
 	fromId(id: string) {
 		return attemptAsync(async () => {
+			if (this.cache) {
+				const cached = this.cache.get(id);
+				if (cached) {
+					return this.Generator(cached);
+				}
+			}
 			if (this.data.proxyClient) {
 				return this.data.proxyClient.fromId(this, id).unwrap();
 			}
@@ -2834,7 +2909,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 				await Promise.all(
 					this.defaults.map((d) => {
 						return attemptAsync(async () => {
-							const exists = (await this.fromId(d.id)).unwrap();
+							const exists = await this.fromId(d.id).unwrap();
 							if (exists) return;
 							const res = this.validate(d);
 							if (!res.success) throw new DataError(this, `Invalid default data: ${res.reason}`);
