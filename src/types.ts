@@ -16,6 +16,7 @@ export enum DataAction {
 	DeleteVersion = 'delete-version',
 	// ReadVersionHistory = 'read-version-history',
 	// ReadArchive = 'read-archive'
+	Clear = 'clear', // ADMIN ONLY
 }
 
 export type ColType =
