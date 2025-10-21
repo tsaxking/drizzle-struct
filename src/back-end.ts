@@ -2579,14 +2579,6 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 	fromIds(
 		ids: string[],
 		config: {
-			type: 'array';
-			limit: number;
-			offset: number;
-		}
-	): ResultPromise<StructData<T, Name>[], Error>;
-	fromIds(
-		ids: string[],
-		config: {
 			type: 'single';
 		}
 	): ResultPromise<StructData<T, Name> | undefined, Error>;
@@ -2622,16 +2614,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 
 			const squeal = inArray(this.table.id as any, ids);
 
-			const { offset, limit } = {
-				offset: undefined,
-				limit: undefined,
-				...config,
-			};
-			if (offset && limit) {
-				return this.database.select().from(this.table).where(squeal).orderBy(this.table.created).offset(offset).limit(limit);
-			} else {
-				return this.database.select().from(this.table).where(squeal).orderBy(this.table.created);
-			}
+			return this.database.select().from(this.table).where(squeal).orderBy(this.table.created);
 		};
 
 		if (config.type === 'stream') {
