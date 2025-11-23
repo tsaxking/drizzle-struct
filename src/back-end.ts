@@ -3387,6 +3387,158 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 			// });
 		});
 	}
+
+		/**
+		 * Search for data in the struct using advanced query params.
+		 * @param {StructSearchParams<T>} params
+		 * @param {MultiConfig} config
+		 * @returns {StructStream<T, Name> | ResultPromise<StructData<T, Name>[] | StructData<T, Name> | undefined | number, Error>}
+		 */
+		search(params: StructSearchParams<T>, config: MultiConfig):
+			ResultPromise<StructData<T, Name>[] | StructData<T, Name> | undefined | number, Error> {
+			// Ensure query is not an infinite loop
+			try {
+				JSON.stringify(params);
+			} catch {
+				throw new Error('Invalid search query: Circular reference');
+			}
+
+			// prevent injections
+			const schema = z.object({
+				operator: z.union([
+					z.literal('>'),
+					z.literal('<'),
+					z.literal('>='),
+					z.literal('<='),
+					z.literal('='),
+					z.literal('!='),
+					z.literal('contains'),
+					z.literal('startsWith'),
+					z.literal('endsWith'),
+					z.literal('equals'),
+				]).optional(),
+				value: z.unknown(),
+			});
+
+			const parsed = z.union([
+				schema,
+				z.object({
+					queries: z.array(schema),
+					type: z.union([
+						z.literal('or'),
+						z.literal('and'),
+					])
+				}), // each set is an "AND"
+			]).safeParse(params);
+			if (!parsed.success) {
+				throw new Error('Invalid search query: Invalid params')
+			}
+
+			const get = async () => {
+				// if (this.data.proxyClient) {
+				// 	return this.data.proxyClient.search(this, params, {
+				// 		...config as any,
+				// 		type: config.type === 'stream' ? 'all' : config.type,
+				// 	}).unwrap();
+				// }
+
+				// if (isTesting(this)) {
+				// 	const table = TestTable.get(this.data.name);
+				// 	if (!table) throw noTableError(this);
+				// 	return table.search(params).unwrap().map(d => d.data);
+				// }
+
+				// Build SQL WHERE clause from StructSearchParams
+				let whereClauses: SQL[] = [];
+				// Helper to recursively build SQL for SearchQuery
+				const buildQuery = (col: any, query: any): SQL => {
+					if (typeof query === 'object' && query !== null) {
+						if ('queries' in query && 'type' in query) {
+							const subClauses = query.queries.map(q => buildQuery(col, q));
+							return sql`(`.append(sql.join(subClauses, sql` ${query.type.toUpperCase()} `)).append(sql`)`);
+						}
+						if ('operator' in query && 'value' in query) {
+							// Handle string operators
+							if (query.operator === 'contains') {
+								return sql`${col} LIKE '%' || ${query.value} || '%';`;
+							} else if (query.operator === 'startsWith') {
+								return sql`${col} LIKE ${query.value} || '%'`;
+							} else if (query.operator === 'endsWith') {
+								return sql`${col} LIKE '%' || ${query.value}`;
+							} else if (query.operator === 'equals') {
+								return sql`${col} = ${query.value}`;
+							}
+						} else if ('value' in query) {
+							return sql`${col} = ${query.value}`;
+						}
+					}
+					// Fallback: always true
+					return sql`1 = 1`;
+				};
+
+				for (const key in params) {
+					const query = params[key];
+					if (!query) continue;
+					const col = this.table[key];
+					if (!col) continue;
+					whereClauses.push(buildQuery(col, query));
+				}
+				if (!config.includeArchived) {
+					whereClauses.push(sql`${this.table.archived} = ${false}`);
+				}
+				const squeal = whereClauses.length > 0 ? sql.join(whereClauses, sql` AND `) : sql`1 = 1`;
+
+				if (config.type === 'count') {
+					const res = await this.database
+						.select({ count: count() })
+						.from(this.table)
+						.where(squeal);
+					return res[0].count;
+				}
+				if (config.type === 'single') {
+					const result = (await this.database.select().from(this.table).where(squeal).orderBy(this.table.created))[0];
+					return result ? this.Generator(result as any) : undefined;
+				}
+				if (config.type === 'array') {
+					const results = await this.database
+						.select()
+						.from(this.table)
+						.where(squeal)
+						.limit(config.limit)
+						.offset(config.offset ?? 0);
+					return results.map((r: any) => this.Generator(r));
+				}
+				if (config.type === 'all' || config.type === 'stream') {
+					const results = await this.database
+						.select()
+						.from(this.table)
+						.where(squeal);
+					return results.map((r: any) => this.Generator(r));
+				}
+				throw new Error('Unknown search config type');
+			};
+			return attemptAsync(get);
+		}
+}
+
+type SearchQuery<T extends string | number | boolean | Date> = (T extends number ? {
+	operator: '>' | '<' | '>=' | '<=' | '=' | '!=';
+	value: number;
+} : T extends string ? {
+	operator: 'contains' | 'startsWith' | 'endsWith' | 'equals';
+	value: string;
+} : T extends boolean ? {
+	value: boolean;
+} : T extends Date ? {
+	operator: '>' | '<' | '>=' | '<=' | '=' | '!=';
+	value: Date;
+} : never) | {
+	queries: SearchQuery<T>[];
+	type: 'and' | 'or';
+};
+
+type StructSearchParams<T extends Blank> = {
+	[K in keyof T]?: SearchQuery<T[K]['_']['dataType']>;
 }
 
 
