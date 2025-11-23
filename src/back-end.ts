@@ -3454,7 +3454,10 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 				const buildQuery = (col: any, query: any): SQL => {
 					if (typeof query === 'object' && query !== null) {
 						if ('queries' in query && 'type' in query) {
-							const subClauses = query.queries.map(q => buildQuery(col, q));
+							const subClauses = query.queries.map((q: {
+								queries: SearchQuery<any>[];
+								type: 'and' | 'or';
+							}) => buildQuery(col, q));
 							return sql`(`.append(sql.join(subClauses, sql` ${query.type.toUpperCase()} `)).append(sql`)`);
 						}
 						if ('operator' in query && 'value' in query) {
