@@ -3388,6 +3388,23 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 		});
 	}
 
+	search(params: StructSearchParams<T>, config: { type: 'stream' }): StructStream<T, Name>;
+	search(
+		params: StructSearchParams<T>,
+		config: { type: 'array'; limit: number; offset: number }
+	): ResultPromise<StructData<T, Name>[], Error>;
+	search(
+		params: StructSearchParams<T>,
+		config: { type: 'single' }
+	): ResultPromise<StructData<T, Name> | undefined, Error>;
+	search(
+		params: StructSearchParams<T>,
+		config: { type: 'count' }
+	): ResultPromise<number>;
+	search(
+		params: StructSearchParams<T>,
+		config: { type: 'all' }
+	): ResultPromise<StructData<T, Name>[], Error>;
 		/**
 		 * Search for data in the struct using advanced query params.
 		 * @param {StructSearchParams<T>} params
@@ -3395,7 +3412,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 		 * @returns {StructStream<T, Name> | ResultPromise<StructData<T, Name>[] | StructData<T, Name> | undefined | number, Error>}
 		 */
 		search(params: StructSearchParams<T>, config: MultiConfig):
-			ResultPromise<StructData<T, Name>[] | StructData<T, Name> | undefined | number, Error> {
+			ResultPromise<StructData<T, Name>[] | StructData<T, Name> | undefined | number, Error> | StructStream<T, Name>{
 			// Ensure query is not an infinite loop
 			try {
 				JSON.stringify(params);
@@ -3520,6 +3537,23 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 				}
 				throw new Error('Unknown search config type');
 			};
+
+			if (config.type === 'stream') {
+				const stream = new StructStream(this);
+				setTimeout(async () => {
+					try {
+						const dataStream = (await get()) as Structable<T & typeof globalCols>[];
+						for (let i = 0; i < dataStream.length; i++) {
+							stream.add(this.Generator(dataStream[i] as any));
+						}
+					} catch {
+						//
+					}
+					stream.end();
+				});
+				return stream;
+			}
+
 			return attemptAsync(get);
 		}
 }
