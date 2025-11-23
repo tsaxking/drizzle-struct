@@ -3541,7 +3541,7 @@ type SearchQuery<T extends string | number | boolean | Date> = (T extends number
 };
 
 type StructSearchParams<T extends Blank> = {
-	[K in keyof T]?: SearchQuery<T[K]['_']['dataType']>;
+	[K in keyof T]?: SearchQuery<TsType<T[K]['_']['dataType']>>;
 }
 
 
@@ -3651,9 +3651,20 @@ export type Session = StructData<typeof sessionSampleStructCols, 'session'>;
 //     name: 'test',
 //     structure: {
 //         name: text('name').notNull(),
-//         age: text('age').notNull(),
+//         age: integer('age').notNull(),
 //     },
 //     safes: ['age']
 // });
+
+// test.search({
+// 	age: {
+// 		operator: '=',
+// 		value: 3,
+// 	}
+// }, {
+// 	type: 'array',
+// 	limit: 10,
+// 	offset: 0,
+// })
 
 // test.sample.safe().age;});
