@@ -1776,11 +1776,14 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 				);
 			}
 
+			const hash = await this.computeHash(data).unwrap();
+
 			const globals = {
 				id: this.data.generators?.id?.(data) ?? uuid(),
 				created: new Date(),
 				updated: new Date(),
 				archived: false,
+				hash,
 				// universes: JSON.stringify(this.data.generators?.universes?.() ?? []),
 				// universe: this.data.generators?.universe?.(data) ?? '',
 				attributes: JSON.stringify(this.data.generators?.attributes?.(data) ?? []),
