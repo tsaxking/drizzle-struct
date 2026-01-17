@@ -8,7 +8,7 @@ import { type ColumnDataType } from 'drizzle-orm';
 import { ComplexEventEmitter } from 'ts-utils/event-emitter';
 import { Loop } from 'ts-utils/loop';
 import { Stream } from 'ts-utils/stream';
-import { z } from 'zod';
+import { string, z } from 'zod';
 import { v4 as uuid } from 'uuid';
 import { DataAction, PropertyAction } from './types';
 import { OnceReadMap } from 'ts-utils/map';
@@ -18,7 +18,7 @@ import fs from 'fs';
 import chalk from 'chalk';
 import { RedisStructProxyClient, RedisStructProxyServer } from './redis-struct-proxy';
 import { isTesting, noDataError, noTableError, TestTable } from './testing';
-
+import xxhash, { XXHash, XXHashAPI } from 'xxhash-wasm';
 
 let hasRunFrontendWarn = false;
 const runFrontendWarn = () => {
@@ -255,7 +255,8 @@ export const globalCols = {
 	archived: boolean<'archived'>('archived').default(false).notNull(),
 	attributes: text('attributes').notNull(),
 	lifetime: integer('lifetime').notNull(),
-	canUpdate: boolean<'can_update'>('can_update').default(true).notNull()
+	canUpdate: boolean<'can_update'>('can_update').default(true).notNull(),
+	hash: text('hash').notNull().default(''),
 };
 
 /**
@@ -695,6 +696,10 @@ export class StructData<T extends Blank = any, Name extends string = any> {
 		return this.data.canUpdate;
 	}
 
+	get hash() {
+		return this.data.hash;
+	}
+
 	/**
 	 * Updates the data, this will emit an update event. If there is a version table, it will also make a version of the data of the state before the update
 	 *
@@ -748,6 +753,8 @@ export class StructData<T extends Blank = any, Name extends string = any> {
 			this.metadata.set('prev-state', JSON.stringify(this.safe()));
 			const newData: any = { ...this.data, ...data };
 
+			const hash = await this.struct.computeHash(newData).unwrap();
+
 			// Remove global columns
 			delete newData.id;
 			delete newData.created;
@@ -761,7 +768,8 @@ export class StructData<T extends Blank = any, Name extends string = any> {
 				.update(this.struct.table)
 				.set({
 					...newData,
-					updated: now
+					updated: now,
+					hash
 				})
 				.where(sql`${this.struct.table.id} = ${this.id}`);
 
@@ -2812,13 +2820,15 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 		database: PostgresJsDatabase,
 		// handler?: (event: RequestAction) => Promise<Response> | Response
 	) {
-		if (this.built) throw new FatalStructError(this, `Struct ${this.name} has already been built`);
 		if (this.data.sample)
 			throw new FatalStructError(
 				this,
 				`Struct ${this.name} is a sample struct and should never be built`
 			);
 		return attemptAsync(async () => {
+			if (this.built) {
+				return;
+			}
 			this.log('Building...');
 			this._database = database;
 
@@ -3385,6 +3395,39 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 
 			//     rl.on('close', res);
 			// });
+		});
+	}
+
+	private _hashAlg: XXHashAPI | null = null;
+
+	getHashAlg() {
+		return attemptAsync<XXHashAPI>(async () => {
+			if (!this._hashAlg) {
+				this._hashAlg = await xxhash();
+				return this._hashAlg;
+			} else {
+				return this._hashAlg;
+			}
+		});
+	}
+	
+	computeHash(data: Structable<T & typeof globalCols>) {
+		return attemptAsync(async () => {
+			const hash = await this.getHashAlg().unwrap();
+			const hashData = { ...data };
+			
+			const str = Object.keys(hashData).sort().map(key => {
+				const val = (hashData as any)[key];
+				if (val instanceof Date) {
+					return `${key}:${val.toISOString()}`;
+				} else if (typeof val === 'object' && val !== null) {
+					return `${key}:${JSON.stringify(val)}`;
+				} else {
+					return `${key}:${val}`;
+				}
+			}).join(';');
+
+			return hash.h64(str).toString(16);
 		});
 	}
 }
