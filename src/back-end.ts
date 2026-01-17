@@ -753,7 +753,6 @@ export class StructData<T extends Blank = any, Name extends string = any> {
 			this.metadata.set('prev-state', JSON.stringify(this.safe()));
 			const newData: any = { ...this.data, ...data };
 
-			const hash = await this.struct.computeHash(newData).unwrap();
 
 			// Remove global columns
 			delete newData.id;
@@ -764,6 +763,7 @@ export class StructData<T extends Blank = any, Name extends string = any> {
 			delete newData.universe;
 			delete newData.attributes;
 			delete newData.lifetime;
+			const hash = await this.struct.computeHash(newData).unwrap();
 			await this.database
 				.update(this.struct.table)
 				.set({
@@ -3483,7 +3483,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 		});
 	}
 	
-	computeHash(data: Structable<T & typeof globalCols>) {
+	computeHash(data: Record<string, unknown>) {
 		return attemptAsync(async () => {
 			const hash = await this.getHashAlg().unwrap();
 			const hashData = { ...data };
