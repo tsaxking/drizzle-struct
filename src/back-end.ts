@@ -763,6 +763,7 @@ export class StructData<T extends Blank = any, Name extends string = any> {
 			delete newData.universe;
 			delete newData.attributes;
 			delete newData.lifetime;
+			delete newData.hash;
 			const hash = await this.struct.computeHash(newData).unwrap();
 			await this.database
 				.update(this.struct.table)
@@ -777,7 +778,8 @@ export class StructData<T extends Blank = any, Name extends string = any> {
 			if (config.source) this.metadata.set('source', config.source);
 			Object.assign(this.data, {
 				...newData,
-				updated: now
+				updated: now,
+				hash
 			});
 			this.struct.emit('update', {
 				from: prev,
@@ -919,6 +921,38 @@ export class StructData<T extends Blank = any, Name extends string = any> {
 			}
 
 			return new DataVersion(this.struct, vhData);
+		});
+	}
+
+	/**
+	 * Resets the hash of the data, this is useful if you have updated the data outside of the struct system and want to reset the hash to avoid integrity check failures.
+	 * @param setUpdated Whether to set the updated time to now
+	 * @returns {*}
+	 */
+	resetHash(setUpdated: boolean = false) {
+		return attemptAsync(async () => {
+			const data = {};
+			Object.assign(data, this.data);
+			delete (data as any).id;
+			delete (data as any).created;
+			delete (data as any).updated;
+			delete (data as any).archived;
+			delete (data as any).attributes;
+			delete (data as any).lifetime;
+			delete (data as any).canUpdate;
+			delete (data as any).hash;
+			const hash = await this.struct.computeHash(data).unwrap();
+
+			await this.database
+				.update(this.struct.table)
+				.set({
+					hash,
+					...(setUpdated ? { updated: new Date() } : {})
+				} as any)
+				.where(sql`${this.struct.table.id} = ${this.id}`);
+			Object.assign(this.data, {
+				hash
+			});
 		});
 	}
 
