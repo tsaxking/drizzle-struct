@@ -53,7 +53,7 @@ export class RedisStructProxyClient<Name extends string, Target extends string, 
     }
 
     request<TReq, TRes, D, Struct extends string>(
-        event: `${Struct}.${'new' | 'delete' | 'update' | 'archive' | 'restore' | 'from-id' | 'from-property' | 'from-vhid' | 'all' | 'get' | 'lifetime-items' | 'archived' | 'get-versions' | 'restore-version' | 'delete-version' | 'set-attributes' | 'make-version'}`,
+        event: `${Struct}.${'new' | 'delete' | 'update' | 'archive' | 'restore' | 'from-id' | 'from-property' | 'from-vhid' | 'all' | 'get' | 'lifetime-items' | 'archived' | 'get-versions' | 'restore-version' | 'delete-version' | 'set-attributes' | 'make-version' | 'from-ids'}`,
         data: TReq,
         responseSchema: z.ZodType<TRes>,
         parser: (data: TRes) => D,
@@ -300,6 +300,19 @@ export class RedisStructProxyClient<Name extends string, Target extends string, 
         );
     }
 
+    fromIds<T extends Blank, Name extends string>(
+        struct: Struct<T, Name>,
+        ids: string[],
+        config: MultiConfig
+    ) {
+        return this.request(
+            `${struct.name}.from-ids`,
+            { ids, config },
+            z.array(struct.getZodSchema()),
+            (d) => d.map((item: any) => struct.Generator(item as any))
+        );
+    }
+
     // I'm not sure if these should be implemented.
     /**
      * @deprecated
@@ -439,6 +452,17 @@ export class RedisStructProxyServer<Name extends string, RedisName extends strin
             data: z.object({
                 id: z.string(),
                 attributes: z.array(z.string()),
+            }),
+            struct: z.string(),
+        }),
+        'from-ids': z.object({
+            data: z.object({
+                ids: z.array(z.string()),
+                config: z.object({
+                    limit: z.number().optional(),
+                    offset: z.number().optional(),
+                    includeArchived: z.boolean().optional(),
+                }).optional(),
             }),
             struct: z.string(),
         }),
@@ -760,6 +784,18 @@ export class RedisStructProxyServer<Name extends string, RedisName extends strin
                     throw new Error(`Item with id ${data.data.id} not found in struct ${data.struct}`);
                 }
                 return item.setAttributes(data.data.attributes).unwrap();
+            });
+
+            this.server.subscribe('from-ids', async (data) => {
+                const s = this.structs.get(data.struct);
+                if (!s) {
+                    throw new Error(`Struct ${data.struct} not found in RedisStructProxyServer`);
+                }
+
+                return s.fromIds(data.data.ids, {
+                    type: 'all',
+                    ...data.data.config,
+                }).unwrap().then(d => d.map(i => i.data));
             });
         });
     }

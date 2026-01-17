@@ -361,4 +361,12 @@ export class TestTable<T extends TestBlank> {
             );
         }
     }
+
+    fromIds(ids: string[]) {
+        return attempt(() => {
+            const items = this.data.filter(d => ids.includes(d.data.id));
+            this.log(`TestTable.fromIds called for ids=${JSON.stringify(ids)}, count=${items.length}`);
+            return items;
+        });
+    }
 }

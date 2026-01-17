@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { pgTable, text, boolean, integer, timestamp } from 'drizzle-orm/pg-core';
 import type { PgColumnBuilderBase, PgTableWithColumns } from 'drizzle-orm/pg-core';
-import { count, SQL, sql, type BuildColumns } from 'drizzle-orm';
+import { count, inArray, SQL, sql, type BuildColumns } from 'drizzle-orm';
 import { attempt, attemptAsync, resolveAll, type Result, ResultPromise } from 'ts-utils/check';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import { type ColumnDataType } from 'drizzle-orm';
@@ -2497,9 +2497,6 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 	):
 		| StructStream<T, Name>
 		| ResultPromise<StructData<T, Name>[] | StructData<T, Name> | undefined | number, Error> {
-		console.warn(
-			`Struct.get() This method is unstable, use with caution. fromProperty is recommended at this time`
-		);
 		const get = async () => {
 			if (this.data.proxyClient) {
 				return this.data.proxyClient.get(this, props, {
@@ -2576,6 +2573,81 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 					return this.Generator(data);
 				} else {
 					return data;
+				}
+			});
+		}
+	}
+
+	fromIds(
+		ids: string[],
+		config: {
+			type: 'stream';
+		}
+	): StructStream<T, Name>;
+	fromIds(
+		ids: string[],
+		config: {
+			type: 'single';
+		}
+	): ResultPromise<StructData<T, Name> | undefined, Error>;
+	fromIds(
+		ids: string[],
+		config: {
+			type: 'count';
+		}
+	): ResultPromise<number>;
+	fromIds(
+		ids: string[],
+		config: {
+			type: 'all';
+		}
+	): ResultPromise<StructData<T, Name>[], Error>;
+	fromIds(
+		ids: string[],
+		config: MultiConfig
+	): ResultPromise<StructData<T, Name>[] | StructData<T, Name> | undefined | number, Error> | StructStream<T, Name> {
+		const get = async () => {
+			if (this.data.proxyClient) {
+				return this.data.proxyClient.fromIds(this, ids, {
+					...config as any,
+					type: config.type === 'stream' ? 'all' : config.type,
+				}).unwrap(); 
+			}
+
+			if (isTesting(this)) {
+				const table = TestTable.get(this.data.name);
+				if (!table) throw noTableError(this);
+				return table.fromIds(ids).unwrap().map(d => d.data);
+			}
+
+			const squeal = inArray(this.table.id as any, ids);
+
+			return this.database.select().from(this.table).where(squeal).orderBy(this.table.created);
+		};
+
+		if (config.type === 'stream') {
+			const stream = new StructStream(this);
+			setTimeout(async () => {
+				try {
+					const dataStream = (await get()) as Structable<T & typeof globalCols>[];
+					for (let i = 0; i < dataStream.length; i++) {
+						stream.add(this.Generator(dataStream[i] as any));
+					}
+				} catch {
+					//
+				}
+				stream.end();
+			});
+			return stream;
+		} else {
+			return attemptAsync(async () => {
+				const data = (await get()) as
+					| Structable<T & typeof globalCols>[]
+					| Structable<T & typeof globalCols>;
+				if (Array.isArray(data)) {
+					return data.map((d) => this.Generator(d));
+				} else {
+					return this.Generator(data);
 				}
 			});
 		}
