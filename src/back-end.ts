@@ -2992,6 +2992,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 				attributes: createSchema(z.string(), 'attributes'),
 				lifetime: createSchema(z.number(), 'lifetime'),
 				canUpdate: createSchema(z.boolean(), 'canUpdate'),
+				hash: createSchema(z.string(), 'hash'),
 				...Object.fromEntries(
 					Object.entries(this.data.structure).map(([k, v]) => {
 						if (this.data.validators && this.data.validators[k]) {
