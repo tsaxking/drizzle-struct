@@ -2820,13 +2820,15 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 		database: PostgresJsDatabase,
 		// handler?: (event: RequestAction) => Promise<Response> | Response
 	) {
-		if (this.built) throw new FatalStructError(this, `Struct ${this.name} has already been built`);
 		if (this.data.sample)
 			throw new FatalStructError(
 				this,
 				`Struct ${this.name} is a sample struct and should never be built`
 			);
 		return attemptAsync(async () => {
+			if (this.built) {
+				return;
+			}
 			this.log('Building...');
 			this._database = database;
 
