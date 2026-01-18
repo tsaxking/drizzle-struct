@@ -20,6 +20,7 @@
 		"@eslint/compat": "^1.2.4",
 		"@msgpack/msgpack": "3.0.0-beta3",
 		"@types/proper-lockfile": "^4.1.4",
+		"amqplib": "^0.10.3",
 		"axios": "^1.7.9",
 		"chalk": "^5.4.1",
 		"dotenv": "^16.4.7",
@@ -48,6 +49,7 @@
 	},
 	"devDependencies": {
 		"@esbuild-kit/esm-loader": "^2.6.5",
+		"@types/amqplib": "^0.10.4",
 		"@types/chalk": "^2.2.4",
 		"@types/express": "^5.0.0",
 		"@types/node": "^24.3.0",
