@@ -88,14 +88,14 @@ export class StructTelemetry<T extends Blank, Name extends string> {
 	 * @private
 	 */
 	private setupMetrics(): void {
-		this.struct.on('create', (data) => {
+		this.struct.on('create', (data: any) => {
 			this.recordMetric('struct.create', 1, {
 				struct: this.struct.name,
 				source: (data.metadata.get('source') as string) || 'unknown'
 			});
 		});
 
-		this.struct.on('update', ({ from, to }) => {
+		this.struct.on('update', ({ from, to }: any) => {
 			this.recordMetric('struct.update', 1, {
 				struct: this.struct.name
 			});
@@ -108,7 +108,7 @@ export class StructTelemetry<T extends Blank, Name extends string> {
 			});
 		});
 
-		this.struct.on('error', (error) => {
+		this.struct.on('error', (error: any) => {
 			this.recordMetric('struct.error', 1, {
 				struct: this.struct.name,
 				error: error.message

@@ -68,13 +68,13 @@ export class MessageQueueBridge<T extends Blank, Name extends string> {
 	 */
 	async connect(): Promise<void> {
 		this.connection = await connect(this.config.amqpUrl);
-		this.channel = await this.connection.createChannel();
+		this.channel = await this.connection!.createChannel();
 
-		await this.channel.assertExchange(this.exchangeName, 'topic', {
+		await this.channel!.assertExchange(this.exchangeName, 'topic', {
 			durable: this.config.durable ?? true
 		});
 
-		await this.channel.assertQueue(this.queueName, {
+		await this.channel!.assertQueue(this.queueName, {
 			durable: this.config.durable ?? true,
 			arguments: {
 				'x-message-ttl': 86400000,
@@ -82,7 +82,7 @@ export class MessageQueueBridge<T extends Blank, Name extends string> {
 			}
 		});
 
-		await this.channel.bindQueue(this.queueName, this.exchangeName, `${this.struct.name}.*`);
+		await this.channel!.bindQueue(this.queueName, this.exchangeName, `${this.struct.name}.*`);
 
 		this.setupListeners();
 	}
@@ -93,23 +93,23 @@ export class MessageQueueBridge<T extends Blank, Name extends string> {
 	 * @private
 	 */
 	private setupListeners(): void {
-		this.struct.on('create', (data) => {
+		this.struct.on('create', (data: any) => {
 			this.publish('create', data);
 		});
 
-		this.struct.on('update', ({ to }) => {
+		this.struct.on('update', ({ to }: any) => {
 			this.publish('update', to);
 		});
 
-		this.struct.on('delete', (data) => {
+		this.struct.on('delete', (data: any) => {
 			this.publish('delete', data);
 		});
 
-		this.struct.on('archive', (data) => {
+		this.struct.on('archive', (data: any) => {
 			this.publish('archive', data);
 		});
 
-		this.struct.on('restore', (data) => {
+		this.struct.on('restore', (data: any) => {
 			this.publish('restore', data);
 		});
 	}

@@ -272,7 +272,7 @@ export class StructCache<T extends Blank, Name extends string> {
 	async subscribeToInvalidations(): Promise<void> {
 		await this.redis.subscribe(`invalidate:${this.struct.name}`);
 
-		this.redis.on('message', (channel, message) => {
+		this.redis.on('message', (channel: any, message: any) => {
 			if (channel === `invalidate:${this.struct.name}`) {
 				const payload = JSON.parse(message);
 
