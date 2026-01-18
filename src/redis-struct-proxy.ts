@@ -800,3 +800,80 @@ export class RedisStructProxyServer<Name extends string, RedisName extends strin
         });
     }
 }
+
+import { RedisConnectionPool } from './redis-pool';
+
+/**
+ * Pooled Redis Struct Proxy Client using connection pooling
+ *
+ * @export
+ * @class PooledRedisStructProxyClient
+ * @typedef {PooledRedisStructProxyClient}
+ * @extends {RedisStructProxyClient<Name, Target, RedisName>}
+ * @template Name
+ * @template Target
+ * @template RedisName
+ */
+export class PooledRedisStructProxyClient<
+    Name extends string,
+    Target extends string,
+    RedisName extends string
+> extends RedisStructProxyClient<Name, Target, RedisName> {
+
+    /**
+     * Creates an instance of PooledRedisStructProxyClient.
+     *
+     * @constructor
+     * @param {{ target: Target; name: Name; maxQueueLength?: number; }} config
+     * @param {RedisConnectionPool<RedisName>} pool
+     */
+    constructor(
+        config: Readonly<{
+            target: Target;
+            name: Name;
+            maxQueueLength?: number;
+        }>,
+        private pool: RedisConnectionPool<RedisName>
+    ) {
+        super(config, null as any);
+    }
+
+    /**
+     * Override request method to use connection pool
+     *
+     * @override
+     * @template TReq
+     * @template TRes
+     * @template D
+     * @template Struct
+     * @param {`${Struct}.${'new' | 'delete' | 'update' | 'archive' | 'restore' | 'from-id' | 'from-property' | 'from-vhid' | 'all' | 'get' | 'lifetime-items' | 'archived' | 'get-versions' | 'restore-version' | 'delete-version' | 'set-attributes' | 'make-version' | 'from-ids'}`} event
+     * @param {TReq} data
+     * @param {z.ZodType<TRes>} responseSchema
+     * @param {(data: TRes) => D} parser
+     * @param {number} [timeout=5000]
+     * @returns {*}
+     */
+    override request<TReq, TRes, D, Struct extends string>(
+        event: `${Struct}.${'new' | 'delete' | 'update' | 'archive' | 'restore' | 'from-id' | 'from-property' | 'from-vhid' | 'all' | 'get' | 'lifetime-items' | 'archived' | 'get-versions' | 'restore-version' | 'delete-version' | 'set-attributes' | 'make-version' | 'from-ids'}`,
+        data: TReq,
+        responseSchema: z.ZodType<TRes>,
+        parser: (data: TRes) => D,
+        timeout = 5000
+    ) {
+        return attemptAsync<D>(async () => {
+            const connection = await this.pool.acquire(this.config.target);
+
+            try {
+                const res = await connection.send(event, {
+                    data,
+                    timeout,
+                    returnType: responseSchema
+                }).unwrap();
+
+                return parser(res as TRes);
+            } finally {
+                await this.pool.release(this.config.target, connection);
+            }
+        });
+    }
+}

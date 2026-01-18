@@ -19,6 +19,7 @@ import chalk from 'chalk';
 import { RedisStructProxyClient, RedisStructProxyServer } from './redis-struct-proxy';
 import { isTesting, noDataError, noTableError, TestTable } from './testing';
 import xxhash, { XXHash, XXHashAPI } from 'xxhash-wasm';
+import { IndexManager, IndexConfig } from './indexing';
 
 let hasRunFrontendWarn = false;
 const runFrontendWarn = () => {
@@ -232,6 +233,11 @@ export type StructBuilder<T extends Blank, Name extends string> = {
 	 * Sets up the host for the data for other microservices to connect to
 	 */
 	proxyServer?: RedisStructProxyServer<string, string>;
+
+	/**
+	 * Database indexes to create for this struct
+	 */
+	indexes?: IndexConfig[];
 };
 
 /**
@@ -1681,6 +1687,14 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 	public built = false;
 
 	/**
+	 * Index manager for creating database indexes
+	 *
+	 * @private
+	 * @type {?IndexManager}
+	 */
+	private indexManager?: IndexManager;
+
+	/**
 	 * Creates an instance of Struct.
 	 *
 	 * @constructor
@@ -1717,6 +1731,10 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 		if (this.data.proxyClient) {
 			this.log('Setting up proxy client');
 			this.data.proxyClient.setup(this as any);
+		}
+
+		if (data.indexes) {
+			this.indexManager = new IndexManager(data.name);
 		}
 	}
 
@@ -2968,6 +2986,11 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 			// 	this.eventHandler(handler);
 			// }
 
+			if (this.data.indexes && this.indexManager) {
+				this.log('Creating indexes...');
+				await this.indexManager.createIndexes(database, this.data.indexes);
+			}
+
 			this.built = true;
 
 			this.emit('build');
@@ -3655,3 +3678,9 @@ export type Session = StructData<typeof sessionSampleStructCols, 'session'>;
 // });
 
 // test.sample.safe().age;});
+
+export * from './indexing';
+export * from './redis-pool';
+export * from './caching';
+export * from './message-queue';
+export * from './telemetry';
