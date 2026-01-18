@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { connect, Connection, Channel, ConsumeMessage } from 'amqplib';
+import { connect, Channel, ConsumeMessage } from 'amqplib';
 import type { Struct, Blank, StructData } from './back-end';
 
 /**
@@ -41,7 +41,7 @@ export interface MessageQueueConfig {
  * @template Name
  */
 export class MessageQueueBridge<T extends Blank, Name extends string> {
-	private connection?: Connection;
+	private connection?: any;
 	private channel?: Channel;
 	private exchangeName = 'struct_events';
 	private queueName: string;
