@@ -46,6 +46,14 @@ jobs:
       - name: Install Dependencies
         run: pnpm install
 
+      - name: Create .env file
+        run: |
+          echo DB_HOST=localhost >> .env
+          echo DB_USER=postgres >> .env
+          echo DB_NAME=drizzle_struct_test >> .env
+          echo DB_PORT=5432 >> .env
+          echo DB_PASS=postgres >> .env
+
       - name: Run migrations
         run: |
           pnpm run db:migrate
@@ -53,9 +61,3 @@ jobs:
 
       - name: Run Unit Tests
         run: pnpm test:unit
-        env:
-          DB_HOST: localhost
-          DB_USER: postgres
-          DB_NAME: drizzle_struct_test
-          DB_PORT: 5432
-          DB_PASS: postgres
