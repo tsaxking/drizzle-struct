@@ -2,15 +2,14 @@
 import { pgTable, text, boolean, integer, timestamp } from 'drizzle-orm/pg-core';
 import type { PgColumnBuilderBase, PgTableWithColumns } from 'drizzle-orm/pg-core';
 import { count, inArray, SQL, sql, type BuildColumns } from 'drizzle-orm';
-import { attempt, attemptAsync, resolveAll, type Result, ResultPromise } from 'ts-utils/check';
+import { attempt, attemptAsync, resolveAll, ResultPromise } from 'ts-utils/check';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import { type ColumnDataType } from 'drizzle-orm';
 import { ComplexEventEmitter } from 'ts-utils/event-emitter';
 import { Loop } from 'ts-utils/loop';
 import { Stream } from 'ts-utils/stream';
-import { string, z } from 'zod';
+import { z } from 'zod';
 import { v4 as uuid } from 'uuid';
-import { DataAction, PropertyAction } from './types';
 import { OnceReadMap } from 'ts-utils/map';
 import { log } from './utils';
 import path from 'path';
@@ -18,20 +17,7 @@ import fs from 'fs';
 import chalk from 'chalk';
 import { RedisStructProxyClient, RedisStructProxyServer } from './redis-struct-proxy';
 import { isTesting, noDataError, noTableError, TestTable } from './testing';
-import xxhash, { XXHash, XXHashAPI } from 'xxhash-wasm';
-
-let hasRunFrontendWarn = false;
-const runFrontendWarn = () => {
-	if (hasRunFrontendWarn) return;
-	hasRunFrontendWarn = true;
-	console.warn(
-		chalk.yellow(
-			'WARNING:',
-		),
-		'All frontend features, such as sendListen, queryListen, and callListen, block, bypass, frontend, etc. will be going away in the future.\n\n',
-		'Use or build other services that will run these systems.'
-	);
-};
+import xxhash, { XXHashAPI } from 'xxhash-wasm';
 
 /**
  * Error thrown for invalid struct state
@@ -182,10 +168,6 @@ export type StructBuilder<T extends Blank, Name extends string> = {
 		fn: (data: StructData<T, Name>, index: number) => void;
 		time: number;
 	};
-	/**
-	 * If this struct is meant to communicate with a front-end struct
-	 */
-	frontend?: boolean;
 	/**
 	 * Configure how you want global columns to be generated
 	 */
@@ -1278,55 +1260,6 @@ export type StructEvents<T extends Blank, Name extends string> = {
 
 	connect: void;
 };
-
-/**
- * Request event for sveltekit requests
- *
- * @export
- * @interface RequestEvent
- * @typedef {RequestEvent}
- */
-export interface RequestEvent {
-	/**
-	 * The request object
-	 *
-	 * @type {Request}
-	 */
-	request: Request;
-	/**
-	 * Yes, this is an any, but it's a placeholder for now
-	 *
-	 * @type {*}
-	 */
-	cookies: any;
-
-	/**
-	 * various parameters from the request
-	 *
-	 * @type {{
-	 * 		session: Session;
-	 * 		account?: Account;
-	 * 	}}
-	 */
-	locals: {
-		session: Session;
-		account?: Account;
-	}
-}
-
-/**
- * Request action for sveltekit struct requests
- *
- * @export
- * @typedef {RequestAction}
- */
-export type RequestAction = {
-	action: DataAction | PropertyAction | string;
-	data: unknown;
-	request: RequestEvent;
-	struct: Struct;
-};
-
 /**
  * Converts postgres datatypes to typescript types
  *
@@ -1758,16 +1691,6 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 	 */
 	get sample(): StructData<T, Name> {
 		throw new Error('Struct.sample should never be called at runtime, it is only used for testing');
-	}
-
-	/**
-	 * Whether the struct is frontend or not. If it is not set, it defaults to true.
-	 *
-	 * @readonly
-	 * @type {boolean}
-	 */
-	get frontend() {
-		return this.data.frontend === undefined ? true : this.data.frontend;
 	}
 
 	/**
@@ -3168,181 +3091,12 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 	}
 
 	/**
-	 * All bypass permissions for the struct
-	 *
-	 * @public
-	 * @readonly
-	 * @type {{
-	 *         action: DataAction | PropertyAction | '*';
-	 *         condition: (account: Account, data?: any) => boolean;
-	 *     }[]}
-	 */
-	public readonly bypasses: {
-		action: DataAction | PropertyAction | '*';
-		condition: (account: Account, data?: any) => boolean;
-	}[] = [];
-
-	/**
-	 * Allows an account to bypass a certain action
-	 * This is useful for allowing certain accounts to have access to their data or data they have created without needing to go through the normal permissions system
-	 *
-	 * This may be removed since it doesn't really fit into the scope of Structs
-	 *
-	 * @template {DataAction | PropertyAction | '*'} Action
-	 * @param {Action} action
-	 * @param {(account: Account, data?: Structable<T & typeof globalCols>) => boolean} condition
-	 * @returns {boolean) => void}
-	 */
-	bypass<Action extends DataAction | PropertyAction | '*'>(
-		action: Action,
-		condition: (account: Account, data?: Structable<T & typeof globalCols>) => boolean
-	) {
-		runFrontendWarn();
-		this.log('Added bypass');
-		this.bypasses.push({ action, condition });
-	}
-
-	/**
 	 * Logs data to the console with a blue prefix
 	 *
 	 * @param {...unknown[]} data 
 	 */
 	log(...data: unknown[]) {
 		if (this.data.log) console.log(chalk.blue(`[${this.name}]`), ...data);
-	}
-
-	/**
-	 * A map of query listeners for the struct
-	 *
-	 * @public
-	 * @readonly
-	 * @type {*}
-	 */
-	public readonly queryListeners = new Map<
-		string,
-		{
-			fn: (
-				event: RequestEvent,
-				data: unknown
-			) => QueryReturnType<T, Name> | Promise<QueryReturnType<T, Name>>;
-			filter?: (data: StructData<T, Name>) => boolean;
-		}
-	>();
-
-	/**
-	 * Listens for queries on the struct from the front end
-	 *
-	 * @param {string} event 
-	 * @param {(
-	 * 			event: RequestEvent,
-	 * 			data: unknown
-	 * 		) => QueryReturnType<T, Name> | Promise<QueryReturnType<T, Name>>} fn 
-	 * @param {?(data: StructData<T, Name>) => boolean} [filter] 
-	 * @returns {any, filter?: (data: StructData<T, Name>) => boolean) => void} 
-	 */
-	queryListen(
-		event: string,
-		fn: (
-			event: RequestEvent,
-			data: unknown
-		) => QueryReturnType<T, Name> | Promise<QueryReturnType<T, Name>>,
-		filter?: (data: StructData<T, Name>) => boolean
-	) {
-		runFrontendWarn();
-		this.queryListeners.set(event, {
-			fn,
-			filter
-		});
-	}
-
-	/**
-	 * A map of call listeners for the struct
-	 *
-	 * @public
-	 * @readonly
-	 * @type {*}
-	 */
-	public readonly callListeners = new Map<
-		string,
-		(event: RequestEvent, data: unknown) => StructStatus | Promise<StructStatus>
-	>();
-
-	/**
-	 * Listens for calls on the struct from the front end
-	 *
-	 * @param {string} event 
-	 * @param {(event: RequestEvent, data: unknown) => StructStatus | Promise<StructStatus>} fn 
-	 * @returns {any) => void} 
-	 */
-	callListen(
-		event: string,
-		fn: (event: RequestEvent, data: unknown) => StructStatus | Promise<StructStatus>
-	) {
-		runFrontendWarn();
-		this.callListeners.set(event, fn);
-	}
-
-	/**
-	 * A map of send listeners for the struct
-	 *
-	 * @public
-	 * @readonly
-	 * @type {*}
-	 */
-	public readonly sendListeners = new Map<
-		string,
-		(event: RequestEvent, data: unknown) => unknown
-	>();
-
-	/**
-	 * Listens for send events on the struct from the front end
-	 *
-	 * @param {string} event 
-	 * @param {(event: RequestEvent, data: unknown) => unknown} fn 
-	 * @returns {unknown) => void} 
-	 */
-	sendListen(event: string, fn: (event: RequestEvent, data: unknown) => unknown) {
-		runFrontendWarn();
-		this.sendListeners.set(event, fn);
-	}
-
-	/**
-	 * A 
-	 *
-	 * @public
-	 * @readonly
-	 * @type {*}
-	 */
-	public readonly blocks = new Map<
-		string,
-		{
-			fn: (event: RequestEvent, data: unknown) => boolean | Promise<boolean>;
-			reason: string;
-		}[]
-	>();
-
-	/**
-	 * Blocks a certain event from being processed
-	 *
-	 * @param {(DataAction | PropertyAction)} event 
-	 * @param {(event: RequestEvent, data: unknown) => boolean | Promise<boolean>} fn 
-	 * @param {string} reason 
-	 * @returns {any, reason: string) => void} 
-	 */
-	block(
-		event: DataAction | PropertyAction,
-		fn: (event: RequestEvent, data: unknown) => boolean | Promise<boolean>,
-		reason: string
-	) {
-		runFrontendWarn();
-		if (!this.blocks.has(event)) {
-			this.blocks.set(event, []);
-		}
-		this.blocks.get(event)?.push({
-			fn,
-			reason
-		});
-		this.log('Added block for', event, 'with reason:', reason);
 	}
 
 	/**
@@ -3563,95 +3317,3 @@ export type QueryReturnType<T extends Blank, Name extends string> =
 	StructStream<T, Name> | 
 	StructData<T, Name>[] |
 	Error;
-
-/**
- * Interface for accounts, used for bypasses.
- *
- * @export
- * @interface Account
- * @typedef {Account}
- */
-// export interface Account {
-// 	/**
-// 	 * Data for the account
-// 	 *
-// 	 * @type {{
-// 	 *         id: string;
-// 	 *         username: string;
-// 	 *         firstName: string;
-// 	 *         lastName: string;
-// 	 *         verified: boolean;
-// 	 *         email: string;
-// 	 *     }}
-// 	 */
-// 	data: {
-// 		id: string;
-// 		username: string;
-// 		firstName: string;
-// 		lastName: string;
-// 		verified: boolean;
-// 		email: string;
-// 	};
-
-// 	/**
-// 	 * ID of the account
-// 	 *
-// 	 * @readonly
-// 	 * @type {string}
-// 	 */
-// 	get id(): string;
-// }
-
-const accountSampleStructCols = {
-	username: text('username').notNull().unique(),
-	key: text('key').notNull().unique(),
-	salt: text('salt').notNull(),
-	firstName: text('first_name').notNull(),
-	lastName: text('last_name').notNull(),
-	email: text('email').notNull().unique(),
-	verified: boolean('verified').notNull(),
-	verification: text('verification').notNull(),
-	lastLogin: text('last_login').notNull().default(''),
-};
-
-/**
- * Account data structure, used for storing account information.
- *
- * @export
- * @typedef {Account}
- */
-export type Account = StructData<typeof accountSampleStructCols, 'account'>;
-
-/**
- * Sample structure for a session, used for tracking user sessions.
- *
- * @type {{ accountId: any; ip: any; userAgent: any; requests: any; prevUrl: any; tabs: any; }}
- */
-const sessionSampleStructCols = {
-	accountId: text('account_id').notNull(),
-	ip: text('ip').notNull(),
-	userAgent: text('user_agent').notNull(),
-	requests: integer('requests').notNull(),
-	prevUrl: text('prev_url').notNull(),
-	tabs: integer('tabs').notNull().default(0),
-}
-
-/**
- * Session data structure, used for tracking user sessions.
- *
- * @export
- * @typedef {Session}
- */
-export type Session = StructData<typeof sessionSampleStructCols, 'session'>;
-
-
-// const test = new Struct({
-//     name: 'test',
-//     structure: {
-//         name: text('name').notNull(),
-//         age: text('age').notNull(),
-//     },
-//     safes: ['age']
-// });
-
-// test.sample.safe().age;});
