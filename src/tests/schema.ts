@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
+import { NotNull, Table } from 'drizzle-orm';
 import { Struct } from '../struct';
 import {
 	text,
@@ -11,7 +11,19 @@ import {
 	real
 } from 'drizzle-orm/pg-core';
 
-export const struct: any = new Struct({
+type TestSchema = Struct<{
+	string: NotNull<ReturnType<typeof text>>;
+	boolean: NotNull<ReturnType<typeof boolean>>;
+	integer: NotNull<ReturnType<typeof integer>>;
+	real: NotNull<ReturnType<typeof real>>;
+	char: NotNull<ReturnType<typeof char>>;
+	timestamp: NotNull<ReturnType<typeof timestamp>>;
+	varchar: NotNull<ReturnType<typeof varchar>>;
+	date: NotNull<ReturnType<typeof date>>;
+	// pgEnum: NotNull<ReturnType<typeof pgEnum>>;
+}>;
+
+export const struct: TestSchema = new Struct({
 	name: 'test',
 	structure: {
 		string: text('string').notNull(),
@@ -28,7 +40,7 @@ export const struct: any = new Struct({
 		amount: 5,
 		type: 'versions'
 	}
-});
+}) as TestSchema;
 
-export const _table: any = struct.table;
-export const _versionTable: any = struct.versionTable;
+export const _table: Table = struct.table;
+export const _versionTable: Table | undefined = struct.versionTable;
