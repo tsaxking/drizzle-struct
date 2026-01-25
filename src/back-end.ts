@@ -1476,12 +1476,10 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 	 * @static
 	 * @async
 	 * @param {PostgresJsDatabase} database
-	 * @param {?(event: RequestAction) => Promise<Response> | Response} [handler]
 	 * @returns {any) => unknown}
 	 */
 	public static buildAll(
 		database: PostgresJsDatabase,
-		// handler?: (event: RequestAction) => Promise<Response> | Response
 	) {
 		return attemptAsync(async () => {
 			return resolveAll(
