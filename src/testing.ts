@@ -28,7 +28,14 @@ export function getTestDb(): PostgresJsDatabase {
 		return testDb;
 	}
 
-	const connectionString = `postgres://${process.env.PGUSER || 'postgres'}:${process.env.PGPASSWORD || 'postgres'}@${process.env.PGHOST || 'localhost'}:${process.env.PGPORT || '5432'}/${process.env.PGDATABASE || 'drizzle_struct_test'}`;
+	// Build connection string with proper URL encoding for password
+	const host = process.env.PGHOST || 'localhost';
+	const user = process.env.PGUSER || 'postgres';
+	const password = encodeURIComponent(process.env.PGPASSWORD || 'postgres');
+	const port = process.env.PGPORT || '5432';
+	const database = process.env.PGDATABASE || 'drizzle_struct_test';
+
+	const connectionString = `postgres://${user}:${password}@${host}:${port}/${database}`;
 
 	testSql = postgres(connectionString, {
 		max: 10,
@@ -65,12 +72,14 @@ export async function clearStructTable<T extends Record<string, any>, Name exten
 
 /**
  * Creates test data in a struct's table
- * Returns the created StructData instance
+ * Returns a ResultPromise that resolves to the created StructData instance
+ *
+ * Usage: const data = await createTestData(struct, { name: 'Test' }).unwrap();
  */
 export function createTestData<T extends Record<string, any>, Name extends string>(
 	struct: Struct<T, Name>,
 	data: Partial<T>
-): any {
+) {
 	return struct.new(data as any);
 }
 

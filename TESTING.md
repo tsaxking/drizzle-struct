@@ -35,7 +35,8 @@ pnpm test
 
 ```typescript
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
-import {  getTestDb,
+import {
+	getTestDb,
 	closeTestDb,
 	clearStructTable,
 	createTestData,
@@ -73,10 +74,10 @@ describe('Your Struct Tests', () => {
 	it('should query records', async () => {
 		// Create test data
 		await createTestData(yourStruct, { name: 'Test' });
-		
+
 		// Query the data
 		const all = await yourStruct.all({ type: 'array', limit: 10, offset: 0 }).unwrap();
-		
+
 		expect(all.length).toBe(1);
 	});
 });
@@ -85,21 +86,27 @@ describe('Your Struct Tests', () => {
 ## Testing Utilities
 
 ### `getTestDb()`
+
 Returns a connection to the test database. Uses environment variables for configuration.
 
 ### `closeTestDb()`
+
 Closes the test database connection. Should be called in `afterAll` hooks.
 
 ### `clearStructTable(struct)`
+
 Removes all data from a struct's table. Useful for cleaning up between tests.
 
 ### `createTestData(struct, data)`
+
 Creates a new record in the struct's table. Returns the created StructData instance.
 
 ### `hasData(struct)`
+
 Returns `true` if the struct has any data, `false` otherwise.
 
 ### `getRecordCount(struct)`
+
 Returns the number of records in the struct's table.
 
 ## Migration from Old Testing System
@@ -116,6 +123,7 @@ The old in-memory test table system (`TestTable`, `startTesting()`, `endTesting(
 ### Example Migration
 
 **Before (In-Memory):**
+
 ```typescript
 startTesting({
 	timeout: 5000,
@@ -131,6 +139,7 @@ endTesting({ structs: [myStruct] });
 ```
 
 **After (Real Database):**
+
 ```typescript
 describe('MyStruct Tests', () => {
 	beforeEach(async () => {
@@ -147,6 +156,7 @@ describe('MyStruct Tests', () => {
 ## Continuous Integration
 
 The GitHub Actions workflows automatically:
+
 - Spin up a PostgreSQL 16 service container
 - Configure environment variables
 - Run all tests against the real database
@@ -166,6 +176,7 @@ See `.github/workflows/test.yml` for the full configuration.
 ### Connection Errors
 
 If you see connection errors, verify:
+
 - PostgreSQL is running
 - Environment variables are set correctly
 - Database exists
