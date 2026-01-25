@@ -16,7 +16,9 @@
 		"check": "tsc --noEmit",
 		"system:check": "pnpm format && pnpm lint && pnpm check && pnpm test:unit",
 		"check:system": "pnpm format && pnpm lint && pnpm check && pnpm test:unit",
-		"doc": "typedoc"
+		"doc": "typedoc",
+		"db:migrate": "drizzle-kit migrate",
+		"db:push": "drizzle-kit push"
 	},
 	"keywords": [],
 	"author": "",
@@ -57,7 +59,7 @@
 		"@types/express": "^5.0.0",
 		"@types/node": "^24.3.0",
 		"@types/pg": "^8.11.10",
-		"drizzle-kit": "^0.22.8",
+		"drizzle-kit": "^0.31.8",
 		"globals": "^17.1.0",
 		"typedoc": "^0.28.9",
 		"typedoc-plugin-markdown": "^4.8.0",

@@ -1,10 +1,8 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { SQL, sql } from 'drizzle-orm';
+import { sql } from 'drizzle-orm';
 import { attempt, attemptAsync } from 'ts-utils/check';
 import { v4 as uuid } from 'uuid';
 import { OnceReadMap } from 'ts-utils/map';
-import chalk from 'chalk';
-import { isTesting, noDataError, noTableError, TestTable } from './testing';
 import { type Blank, type Struct, type Structable, globalCols, type SafeReturn } from './struct';
 import { StructError, DataError } from './utils';
 import { DataVersion } from './struct-data-version';
@@ -205,6 +203,7 @@ export class StructData<T extends Blank = any, Name extends string = any> {
 				from: prev,
 				to: this
 			});
+			return this;
 		});
 	}
 
@@ -303,14 +302,6 @@ export class StructData<T extends Blank = any, Name extends string = any> {
 				return this.struct.data.proxyClient.makeVersion(this.struct, this.id).unwrap();
 			}
 
-			if (isTesting(this.struct)) {
-				const table = TestTable.get(this.struct.data.name);
-				if (!table) throw noTableError(this.struct);
-				const data = table.fromId(this.id).unwrap();
-				if (!data) throw noDataError(this);
-				return new DataVersion(this.struct, data.makeVersion().unwrap().data as any);
-			}
-
 			if (!this.struct.versionTable)
 				throw new Error(`Struct ${this.struct.name} does not have a version table`);
 			this.log('Making version');
@@ -386,16 +377,6 @@ export class StructData<T extends Blank = any, Name extends string = any> {
 			if (this.struct.data.proxyClient) {
 				return this.struct.data.proxyClient.getVersions(this.struct, this.id).unwrap();
 			}
-			if (isTesting(this.struct)) {
-				const table = TestTable.get(this.struct.name);
-				if (!table) throw noTableError(this.struct);
-				const data = table.fromId(this.data.id).unwrap();
-				if (!data) throw noDataError(this);
-				return data
-					.getVersions()
-					.unwrap()
-					.map((v) => new DataVersion(this.struct, v.data));
-			}
 			if (!this.struct.versionTable)
 				throw new StructError(
 					this.struct,
@@ -417,13 +398,6 @@ export class StructData<T extends Blank = any, Name extends string = any> {
 	 */
 	getAttributes() {
 		return attempt(() => {
-			if (isTesting(this.struct)) {
-				const table = TestTable.get(this.struct.name);
-				if (!table) throw noTableError(this.struct);
-				const data = table.fromId(this.data.id).unwrap();
-				if (!data) throw noDataError(this);
-				return data.getAttributes().unwrap();
-			}
 			const a = JSON.parse(this.data.attributes);
 			if (!Array.isArray(a)) throw new DataError(this.struct, 'Attributes must be an array');
 			if (!a.every((i) => typeof i === 'string'))
@@ -445,13 +419,6 @@ export class StructData<T extends Blank = any, Name extends string = any> {
 					.unwrap();
 			}
 
-			if (isTesting(this.struct)) {
-				const table = TestTable.get(this.struct.name);
-				if (!table) throw noTableError(this.struct);
-				const data = table.fromId(this.data.id).unwrap();
-				if (!data) throw noDataError(this);
-				return data.setAttributes(...attributes).unwrap();
-			}
 			const prev = { ...this.data };
 			this.log('Setting attributes', attributes);
 			attributes = attributes
@@ -466,7 +433,7 @@ export class StructData<T extends Blank = any, Name extends string = any> {
 				} as any)
 				.where(sql`${this.struct.table.id} = ${this.id}`);
 			Object.assign(this.data, {
-				attributes,
+				attributes: JSON.stringify(attributes),
 				updated
 			});
 			this.struct.emit('update', {
@@ -483,13 +450,6 @@ export class StructData<T extends Blank = any, Name extends string = any> {
 	 */
 	removeAttributes(...attributes: string[]) {
 		return attemptAsync(async () => {
-			if (isTesting(this.struct)) {
-				const table = TestTable.get(this.struct.name);
-				if (!table) throw noTableError(this.struct);
-				const data = table.fromId(this.data.id).unwrap();
-				if (!data) throw noDataError(this);
-				return data.removeAttributes(...attributes).unwrap();
-			}
 			const a = this.getAttributes().unwrap();
 			const newAttributes = a.filter((i) => !attributes.includes(i));
 			return (await this.setAttributes(newAttributes)).unwrap();
@@ -503,13 +463,6 @@ export class StructData<T extends Blank = any, Name extends string = any> {
 	 */
 	addAttributes(...attributes: string[]) {
 		return attemptAsync(async () => {
-			if (isTesting(this.struct)) {
-				const table = TestTable.get(this.struct.name);
-				if (!table) throw noTableError(this.struct);
-				const data = table.fromId(this.data.id).unwrap();
-				if (!data) throw noDataError(this);
-				return data.addAttributes(...attributes).unwrap();
-			}
 			const a = this.getAttributes().unwrap();
 			return (await this.setAttributes([...a, ...attributes])).unwrap();
 		});
@@ -600,7 +553,14 @@ export class StructData<T extends Blank = any, Name extends string = any> {
 	 * @param {...unknown[]} data
 	 */
 	log(...data: unknown[]) {
-		this.struct.log(chalk.magenta(`(${this.id})`), ...data);
+		this.struct.log(
+			// magenta
+			'\x1b[35m',
+			`(${this.id})`,
+			// reset
+			'\x1b[0m',
+			...data
+		);
 	}
 
 	/**

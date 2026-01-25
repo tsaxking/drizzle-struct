@@ -13,24 +13,11 @@ import { v4 as uuid } from 'uuid';
 import { log } from './utils';
 import path from 'path';
 import fs from 'fs';
-import chalk from 'chalk';
 import { RedisStructProxyClient, RedisStructProxyServer } from './redis-struct-proxy';
-import { isTesting, noDataError, noTableError, TestTable } from './testing';
 import xxhash, { XXHashAPI } from 'xxhash-wasm';
 import { StructError, DataError, FatalDataError, FatalStructError } from './utils';
 import { DataVersion } from './struct-data-version';
 import { StructData } from './struct-data';
-
-/**
- * Status of a struct operation
- *
- * @typedef {StructStatus}
- */
-type StructStatus = {
-	success: boolean;
-	message?: string;
-	data?: unknown;
-};
 
 /**
  * Blank struct structure
@@ -287,6 +274,9 @@ export type StructEvents<T extends Blank, Name extends string> = {
 	'data-error': [DataError];
 	'fatal-data-error': [FatalDataError];
 
+	/**
+	 * Emitted when the struct is connected to the redis proxy server
+	 */
 	connect: void;
 };
 /**
@@ -797,12 +787,6 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 				...(!config?.overwriteGlobals ? globals : {})
 			};
 
-			if (isTesting(this)) {
-				const table = TestTable.get(this.data.name);
-				if (!table) throw noTableError(this);
-				return this.Generator(table.new(newData).unwrap().data);
-			}
-
 			await this.database.insert(this.table).values(newData as any);
 
 			const d = this.Generator(newData);
@@ -842,14 +826,6 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 			if (this.data.proxyClient) {
 				return this.data.proxyClient.fromId(this, id).unwrap();
 			}
-
-			if (isTesting(this)) {
-				const table = TestTable.get(this.data.name);
-				if (!table) throw noTableError(this);
-				const res = table.fromId(id).unwrap();
-				if (res) return this.Generator(res.data);
-				return undefined;
-			}
 			const data = await this.database
 				.select()
 				.from(this.table)
@@ -885,15 +861,6 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 					.fromVhId(this, vhId)
 					.unwrap()
 					.then((d) => (d ? new DataVersion(this, d as any) : undefined));
-			}
-			if (isTesting(this)) {
-				const table = TestTable.get(this.data.name);
-				if (!table) throw noTableError(this);
-				const v = table.fromVhId(vhId).unwrap();
-				if (!v) {
-					throw new Error(`No version found with vhId ${vhId} in ${this.data.name} testing suite`);
-				}
-				return new DataVersion(this, v.data);
 			}
 
 			if (!this.versionTable) {
@@ -976,16 +943,6 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 			if (this.data.proxyClient) {
 				return this.data.proxyClient.all(this, config).unwrap();
 			}
-
-			if (isTesting(this)) {
-				const table = TestTable.get(this.data.name);
-				if (!table) throw noTableError(this);
-				return table
-					.all()
-					.unwrap()
-					.map((d) => d.data);
-			}
-
 			const squeal = config.includeArchived ? sql`1 = 1` : sql`${this.table.archived} = ${false}`;
 
 			if (config.type === 'count') {
@@ -1123,15 +1080,6 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 						type: config.type === 'stream' ? 'all' : config.type
 					})
 					.unwrap();
-			}
-
-			if (isTesting(this)) {
-				const table = TestTable.get(this.data.name);
-				if (!table) throw noTableError(this);
-				return table
-					.archived()
-					.unwrap()
-					.map((d) => d.data);
 			}
 
 			const squeal = sql`${this.table.archived} = ${true}`;
@@ -1330,15 +1278,6 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 						type: config.type === 'stream' ? 'all' : config.type
 					})
 					.unwrap();
-			}
-
-			if (isTesting(this)) {
-				const table = TestTable.get(this.data.name);
-				if (!table) throw noTableError(this);
-				return table
-					.fromProperty(property, value)
-					.unwrap()
-					.map((d) => d.data);
 			}
 
 			let squeal: SQL;
@@ -1544,15 +1483,6 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 					.unwrap();
 			}
 
-			if (isTesting(this)) {
-				const table = TestTable.get(this.data.name);
-				if (!table) throw noTableError(this);
-				return table
-					.get(props)
-					.unwrap()
-					.map((d) => d.data);
-			}
-
 			// const squeal = sql.join(Object.keys(props).map(k => sql`${this.table[k]} = ${props[k]}`), sql` AND `);
 			let squeal = sql`1 = 1`;
 			for (const key in props) {
@@ -1666,15 +1596,6 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 						type: config.type === 'stream' ? 'all' : config.type
 					})
 					.unwrap();
-			}
-
-			if (isTesting(this)) {
-				const table = TestTable.get(this.data.name);
-				if (!table) throw noTableError(this);
-				return table
-					.fromIds(ids)
-					.unwrap()
-					.map((d) => d.data);
 			}
 
 			const squeal = inArray(this.table.id as any, ids);
@@ -1851,15 +1772,6 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 						includeArchived: true
 					})
 					.unwrap();
-			}
-
-			if (isTesting(this)) {
-				const table = TestTable.get(this.data.name);
-				if (!table) throw noTableError(this);
-				return table
-					.getLifetimeItems()
-					.unwrap()
-					.map((d) => d.data);
 			}
 
 			// const squeal = sql`${this.table.lifetime} > 0 AND ${this.table.archived} = ${false}`;
@@ -2204,7 +2116,14 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 	 * @param {...unknown[]} data
 	 */
 	log(...data: unknown[]) {
-		if (this.data.log) console.log(chalk.blue(`[${this.name}]`), ...data);
+		if (this.data.log) console.log(
+			// turn terminal blue
+			'\x1b[34m',
+			`[Struct:${this.name}]`,
+			// reset
+			'\x1b[0m',
+			...data
+		);
 	}
 
 	/**
@@ -2215,9 +2134,6 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 	 */
 	backup(dir: string) {
 		return attemptAsync(async () => {
-			if (isTesting(this)) {
-				throw new Error('Cannot backup a struct that is currently in testing mode');
-			}
 			if (!fs.existsSync(dir)) {
 				await fs.promises.mkdir(dir, { recursive: true });
 			}
@@ -2289,9 +2205,6 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 	 */
 	restore(file: string) {
 		return attemptAsync(async () => {
-			if (isTesting(this)) {
-				throw new Error('Cannot restore a struct that is currently in testing mode');
-			}
 			(await this.backup(path.dirname(file))).unwrap();
 			(await this.clear()).unwrap();
 

@@ -2,7 +2,6 @@
 import { sql } from 'drizzle-orm';
 import { attempt, attemptAsync } from 'ts-utils/check';
 import { OnceReadMap } from 'ts-utils/map';
-import chalk from 'chalk';
 import {
 	type Blank,
 	type Struct,
@@ -196,7 +195,18 @@ export class DataVersion<T extends Blank, Name extends string> {
 	 * @param {...unknown[]} data
 	 */
 	log(...data: unknown[]) {
-		this.struct.log(chalk.magenta(`${this.id}`), chalk.green(`(${this.vhId})`), ...data);
+		// this.struct.log(chalk.magenta(`${this.id}`), chalk.green(`(${this.vhId})`), ...data);
+		this.struct.log(
+			// magenta
+			'\x1b[35m',
+			`${this.id}`,
+			// green
+			'\x1b[32m',
+			`(${this.vhId})`,
+			// reset
+			'\x1b[0m',
+			...data
+		);
 	}
 
 	/**
