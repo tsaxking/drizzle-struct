@@ -13,24 +13,11 @@ import { v4 as uuid } from 'uuid';
 import { log } from './utils';
 import path from 'path';
 import fs from 'fs';
-import chalk from 'chalk';
 import { RedisStructProxyClient, RedisStructProxyServer } from './redis-struct-proxy';
-import { isTesting, noDataError, noTableError, TestTable } from './testing';
 import xxhash, { XXHashAPI } from 'xxhash-wasm';
 import { StructError, DataError, FatalDataError, FatalStructError } from './utils';
 import { DataVersion } from './struct-data-version';
 import { StructData } from './struct-data';
-
-/**
- * Status of a struct operation
- *
- * @typedef {StructStatus}
- */
-type StructStatus = {
-	success: boolean;
-	message?: string;
-	data?: unknown;
-};
 
 /**
  * Blank struct structure
@@ -132,13 +119,17 @@ export type Data<T extends Struct<Blank, string>> = T['sample'];
  */
 export const globalCols = {
 	id: text('id').primaryKey(),
-	created: timestamp('created', { withTimezone: true}).notNull().default(sql`now()`),
-	updated: timestamp('updated', { withTimezone: true}).notNull().default(sql`now()`),
+	created: timestamp('created', { withTimezone: true })
+		.notNull()
+		.default(sql`now()`),
+	updated: timestamp('updated', { withTimezone: true })
+		.notNull()
+		.default(sql`now()`),
 	archived: boolean<'archived'>('archived').default(false).notNull(),
 	attributes: text('attributes').notNull(),
 	lifetime: integer('lifetime').notNull(),
 	canUpdate: boolean<'can_update'>('can_update').default(true).notNull(),
-	hash: text('hash').notNull().default(''),
+	hash: text('hash').notNull().default('')
 };
 
 /**
@@ -167,18 +158,16 @@ export type Structable<T extends Blank> = {
 	[K in keyof T]: TsType<T[K]['_']['dataType']>; // | TsType<T[K]['config']['dataType']>;
 };
 
-
 export type SafeStructable<T extends Blank> = {
 	[K in keyof T]: SafeTsType<T[K]['_']['dataType']>;
-}
+};
 
 export type SafeReturn<T extends Blank, Keys extends (keyof T)[]> = Readonly<
-		Omit<
-			SafeStructable<T & typeof globalCols>,
-			Keys[number] // | (this["struct"]["data"]["safes"] extends (keyof T)[] ? this["struct"]["data"]["safes"][number] : never)
-		>
-	>;
-
+	Omit<
+		SafeStructable<T & typeof globalCols>,
+		Keys[number] // | (this["struct"]["data"]["safes"] extends (keyof T)[] ? this["struct"]["data"]["safes"][number] : never)
+	>
+>;
 
 /**
  * A stream of StructData
@@ -212,7 +201,9 @@ export class StructStream<T extends Blank = Blank, Name extends string = string>
 export const versionGlobalCols = {
 	vhId: text('vh_id').primaryKey(),
 	id: text('id').notNull(), // Used to overwrite the other primary key
-	vhCreated: timestamp('vh_created', { withTimezone: true }).notNull().default(sql`now()`),
+	vhCreated: timestamp('vh_created', { withTimezone: true })
+		.notNull()
+		.default(sql`now()`)
 };
 
 /**
@@ -264,10 +255,12 @@ export const toJson = <T extends Blank>(
  * @template {string} Name
  */
 export type StructEvents<T extends Blank, Name extends string> = {
-	update: [{
-		from: Structable<T & typeof globalCols>;
-		to: StructData<T, Name>;
-	}];
+	update: [
+		{
+			from: Structable<T & typeof globalCols>;
+			to: StructData<T, Name>;
+		}
+	];
 	archive: [StructData<T, Name>];
 	delete: [StructData<T, Name>];
 	restore: [StructData<T, Name>];
@@ -281,6 +274,9 @@ export type StructEvents<T extends Blank, Name extends string> = {
 	'data-error': [DataError];
 	'fatal-data-error': [FatalDataError];
 
+	/**
+	 * Emitted when the struct is connected to the redis proxy server
+	 */
 	connect: void;
 };
 /**
@@ -296,7 +292,8 @@ export type TsType<T extends ColumnDataType> = T extends 'string'
 		? number
 		: T extends 'boolean'
 			? boolean
-				: T extends 'date' ? Date
+			: T extends 'date'
+				? Date
 				: never;
 
 type ISOString = `${number}-${number}-${number}T${number}:${number}:${number}.${number}Z`;
@@ -307,7 +304,8 @@ export type SafeTsType<T extends ColumnDataType> = T extends 'string'
 		? number
 		: T extends 'boolean'
 			? boolean
-				: T extends 'date' ? ISOString
+			: T extends 'date'
+				? ISOString
 				: never;
 
 // export type SafeTsType<T extends ColumnDataType> = T extends 'string' ? string
@@ -323,24 +321,29 @@ export type SafeTsType<T extends ColumnDataType> = T extends 'string'
  * @export
  * @typedef {MultiConfig}
  */
-export type MultiConfig = {
-	type: 'stream',
-	includeArchived?: boolean;
-} | {
-	type: 'array',
-	includeArchived?: boolean;
-	limit: number;
-	offset: number;
-} | {
-	type: 'single',
-	includeArchived?: boolean;
-} | {
-	type: 'count',
-	includeArchived?: boolean;
-} | {
-	type: 'all',
-	includeArchived?: boolean;
-}
+export type MultiConfig =
+	| {
+			type: 'stream';
+			includeArchived?: boolean;
+	  }
+	| {
+			type: 'array';
+			includeArchived?: boolean;
+			limit: number;
+			offset: number;
+	  }
+	| {
+			type: 'single';
+			includeArchived?: boolean;
+	  }
+	| {
+			type: 'count';
+			includeArchived?: boolean;
+	  }
+	| {
+			type: 'all';
+			includeArchived?: boolean;
+	  };
 
 /**
  * Struct class, this is the main class for creating and managing structs.
@@ -501,12 +504,10 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 	 * @param {PostgresJsDatabase} database
 	 * @returns {any) => unknown}
 	 */
-	public static buildAll(
-		database: PostgresJsDatabase,
-	) {
+	public static buildAll(database: PostgresJsDatabase) {
 		return attemptAsync(async () => {
 			return resolveAll(
-				await Promise.all([...Struct.structs.values()].map((s) => s.build(database, /*handler*/)))
+				await Promise.all([...Struct.structs.values()].map((s) => s.build(database /*handler*/)))
 			).unwrap();
 		});
 	}
@@ -740,7 +741,10 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 	) {
 		return attemptAsync(async () => {
 			if (this.data.proxyClient) {
-				return this.data.proxyClient.new(this, data).unwrap().then(d => this.Generator(d as any));
+				return this.data.proxyClient
+					.new(this, data)
+					.unwrap()
+					.then((d) => this.Generator(d as any));
 			}
 			this.log('Creating new', data, config);
 			const validateRes = this.validate(data, {
@@ -783,12 +787,6 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 				...(!config?.overwriteGlobals ? globals : {})
 			};
 
-			if (isTesting(this)) {
-				const table = TestTable.get(this.data.name);
-				if (!table) throw noTableError(this);
-				return this.Generator(table.new(newData).unwrap().data);
-			}
-
 			await this.database.insert(this.table).values(newData as any);
 
 			const d = this.Generator(newData);
@@ -828,14 +826,6 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 			if (this.data.proxyClient) {
 				return this.data.proxyClient.fromId(this, id).unwrap();
 			}
-
-			if (isTesting(this)) {
-				const table = TestTable.get(this.data.name);
-				if (!table) throw noTableError(this);
-				const res = table.fromId(id).unwrap();
-				if (res) return this.Generator(res.data);
-				return undefined;
-			}
 			const data = await this.database
 				.select()
 				.from(this.table)
@@ -867,23 +857,14 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 	fromVhId(vhId: string) {
 		return attemptAsync(async () => {
 			if (this.data.proxyClient) {
-				return this.data.proxyClient.fromVhId(this, vhId).unwrap().then(d => d ? new DataVersion(this, d as any) : undefined);
+				return this.data.proxyClient
+					.fromVhId(this, vhId)
+					.unwrap()
+					.then((d) => (d ? new DataVersion(this, d as any) : undefined));
 			}
-			if (isTesting(this)) {
-				const table = TestTable.get(this.data.name);
-				if (!table) throw noTableError(this);
-				const v = table.fromVhId(vhId).unwrap();
-				if (!v) {
-					throw new Error(`No version found with vhId ${vhId} in ${this.data.name} testing suite`)
-				}
-				return new DataVersion(this, v.data);
-			}
-			
+
 			if (!this.versionTable) {
-				throw new FatalStructError(
-					this,
-					`Struct ${this.name} does not have a version table`
-				);
+				throw new FatalStructError(this, `Struct ${this.name} does not have a version table`);
 			}
 
 			const [data] = await this.database
@@ -898,8 +879,8 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 	/**
 	 * Retrieves all data from the struct based on the config provided.
 	 *
-	 * @param {{ type: 'stream'; limit?: number; offset?: number }} config 
-	 * @returns {StructStream<T, Name>} 
+	 * @param {{ type: 'stream'; limit?: number; offset?: number }} config
+	 * @returns {StructStream<T, Name>}
 	 */
 	all(config: { type: 'stream'; limit?: number; offset?: number }): StructStream<T, Name>;
 	/**
@@ -910,8 +891,8 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 	 * 		limit: number;
 	 * 		offset: number;
 	 * 		includeArchived?: boolean;
-	 * 	}} config 
-	 * @returns {ResultPromise<StructData<T, Name>[], Error>} 
+	 * 	}} config
+	 * @returns {ResultPromise<StructData<T, Name>[], Error>}
 	 */
 	all(config: {
 		type: 'array';
@@ -922,30 +903,36 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 	/**
 	 * Retrieves all data from the struct based on the config provided.
 	 *
-	 * @param {{ type: 'single'; includeArchived?: boolean; }} config 
-	 * @returns {(ResultPromise<StructData<T, Name> | undefined, Error>)} 
+	 * @param {{ type: 'single'; includeArchived?: boolean; }} config
+	 * @returns {(ResultPromise<StructData<T, Name> | undefined, Error>)}
 	 */
-	all(config: { type: 'single'; includeArchived?: boolean; }): ResultPromise<StructData<T, Name> | undefined, Error>;
+	all(config: {
+		type: 'single';
+		includeArchived?: boolean;
+	}): ResultPromise<StructData<T, Name> | undefined, Error>;
 	/**
 	 * Retrieves all data from the struct based on the config provided.
 	 *
-	 * @param {{ type: 'count'; includeArchived?: boolean; }} config 
-	 * @returns {ResultPromise<number>} 
+	 * @param {{ type: 'count'; includeArchived?: boolean; }} config
+	 * @returns {ResultPromise<number>}
 	 */
-	all(config: { type: 'count'; includeArchived?: boolean; }): ResultPromise<number>;
+	all(config: { type: 'count'; includeArchived?: boolean }): ResultPromise<number>;
 	/**
 	 * Retrieves all data from the struct based on the config provided.
 	 *
-	 * @param {{ type: 'all'; includeArchived?: boolean; }} config 
-	 * @returns {ResultPromise<StructData<T, Name>[], Error>} 
+	 * @param {{ type: 'all'; includeArchived?: boolean; }} config
+	 * @returns {ResultPromise<StructData<T, Name>[], Error>}
 	 */
-	all(config: { type: 'all'; includeArchived?: boolean; }): ResultPromise<StructData<T, Name>[], Error>;
+	all(config: {
+		type: 'all';
+		includeArchived?: boolean;
+	}): ResultPromise<StructData<T, Name>[], Error>;
 	/**
 	 * Retrieves all data from the struct based on the config provided.
 	 *
-	 * @param {MultiConfig} config 
+	 * @param {MultiConfig} config
 	 * @returns {(| StructStream<T, Name>
-	 * 		| ResultPromise<StructData<T, Name>[] | undefined | StructData<T, Name> | number, Error>)} 
+	 * 		| ResultPromise<StructData<T, Name>[] | undefined | StructData<T, Name> | number, Error>)}
 	 */
 	all(
 		config: MultiConfig
@@ -954,15 +941,8 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 		| ResultPromise<StructData<T, Name>[] | undefined | StructData<T, Name> | number, Error> {
 		const get = async () => {
 			if (this.data.proxyClient) {
-				return this.data.proxyClient.all(this, config).unwrap(); 
+				return this.data.proxyClient.all(this, config).unwrap();
 			}
-
-			if (isTesting(this)) {
-				const table = TestTable.get(this.data.name);
-				if (!table) throw noTableError(this);
-				return table.all().unwrap().map(d => d.data);
-			}
-
 			const squeal = config.includeArchived ? sql`1 = 1` : sql`${this.table.archived} = ${false}`;
 
 			if (config.type === 'count') {
@@ -976,16 +956,24 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 			}
 
 			if (config.type === 'single') {
-				return (await this.database.select().from(this.table).where(squeal).orderBy(this.table.created))[0];
+				return (
+					await this.database.select().from(this.table).where(squeal).orderBy(this.table.created)
+				)[0];
 			}
 
 			const { offset, limit } = {
 				offset: undefined,
 				limit: undefined,
-				...config,
+				...config
 			};
 			if (offset !== undefined && limit !== undefined) {
-				return this.database.select().from(this.table).where(squeal).orderBy(this.table.created).offset(offset).limit(limit);
+				return this.database
+					.select()
+					.from(this.table)
+					.where(squeal)
+					.orderBy(this.table.created)
+					.offset(offset)
+					.limit(limit);
 			} else {
 				return this.database.select().from(this.table).where(squeal).orderBy(this.table.created);
 			}
@@ -1025,8 +1013,8 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 	/**
 	 * Retrieves archived data from the struct based on the config provided.
 	 *
-	 * @param {{ type: 'stream'; limit?: number; offset?: number }} config 
-	 * @returns {StructStream<T, Name>} 
+	 * @param {{ type: 'stream'; limit?: number; offset?: number }} config
+	 * @returns {StructStream<T, Name>}
 	 */
 	archived(config: { type: 'stream'; limit?: number; offset?: number }): StructStream<T, Name>;
 	/**
@@ -1036,8 +1024,8 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 	 * 		type: 'array';
 	 * 		limit: number;
 	 * 		offset: number;
-	 * 	}} config 
-	 * @returns {ResultPromise<StructData<T, Name>[], Error>} 
+	 * 	}} config
+	 * @returns {ResultPromise<StructData<T, Name>[], Error>}
 	 */
 	archived(config: {
 		type: 'array';
@@ -1047,22 +1035,22 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 	/**
 	 * Retrieves archived data from the struct based on the config provided.
 	 *
-	 * @param {{ type: 'single' }} config 
-	 * @returns {(ResultPromise<StructData<T, Name> | undefined, Error>)} 
+	 * @param {{ type: 'single' }} config
+	 * @returns {(ResultPromise<StructData<T, Name> | undefined, Error>)}
 	 */
 	archived(config: { type: 'single' }): ResultPromise<StructData<T, Name> | undefined, Error>;
 	/**
 	 * Retrieves archived data from the struct based on the config provided.
 	 *
-	 * @param {{ type: 'count' }} config 
-	 * @returns {ResultPromise<number>} 
+	 * @param {{ type: 'count' }} config
+	 * @returns {ResultPromise<number>}
 	 */
 	archived(config: { type: 'count' }): ResultPromise<number>;
 	/**
 	 * Retrieves archived data from the struct based on the config provided.
 	 *
-	 * @param {{ type: 'all' }} config 
-	 * @returns {ResultPromise<StructData<T, Name>[], Error>} 
+	 * @param {{ type: 'all' }} config
+	 * @returns {ResultPromise<StructData<T, Name>[], Error>}
 	 */
 	archived(config: { type: 'all' }): ResultPromise<StructData<T, Name>[], Error>;
 	/**
@@ -1072,9 +1060,9 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 	 * 		type: 'stream' | 'array' | 'single' | 'count' | 'all';
 	 * 		limit?: number;
 	 * 		offset?: number;
-	 * 	}} config 
+	 * 	}} config
 	 * @returns {(| StructStream<T, Name>
-	 * 		| ResultPromise<StructData<T, Name>[] | StructData<T, Name> | undefined | number, Error>)} 
+	 * 		| ResultPromise<StructData<T, Name>[] | StructData<T, Name> | undefined | number, Error>)}
 	 */
 	archived(config: {
 		type: 'stream' | 'array' | 'single' | 'count' | 'all';
@@ -1085,17 +1073,13 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 		| ResultPromise<StructData<T, Name>[] | StructData<T, Name> | undefined | number, Error> {
 		const get = async () => {
 			if (this.data.proxyClient) {
-				return this.data.proxyClient.archived(this, {
-					...config as any,
-					includeArchived: true,
-					type: config.type === 'stream' ? 'all' : config.type,
-				}).unwrap(); 
-			}
-
-			if (isTesting(this)) {
-				const table = TestTable.get(this.data.name);
-				if (!table) throw noTableError(this);
-				return table.archived().unwrap().map(d => d.data);
+				return this.data.proxyClient
+					.archived(this, {
+						...(config as any),
+						includeArchived: true,
+						type: config.type === 'stream' ? 'all' : config.type
+					})
+					.unwrap();
 			}
 
 			const squeal = sql`${this.table.archived} = ${true}`;
@@ -1111,12 +1095,20 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 			}
 
 			if (config.type === 'single') {
-				return (await this.database.select().from(this.table).where(squeal).orderBy(this.table.created))[0];
+				return (
+					await this.database.select().from(this.table).where(squeal).orderBy(this.table.created)
+				)[0];
 			}
 
 			const { offset, limit } = config;
 			if (offset && limit) {
-				return this.database.select().from(this.table).where(squeal).orderBy(this.table.created).offset(offset).limit(limit);
+				return this.database
+					.select()
+					.from(this.table)
+					.where(squeal)
+					.orderBy(this.table.created)
+					.offset(offset)
+					.limit(limit);
 			} else {
 				return this.database.select().from(this.table).where(squeal).orderBy(this.table.created);
 			}
@@ -1156,16 +1148,16 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 	/**
 	 * Retrieves data from the struct based on a property and value.
 	 *
-	 * @template {keyof (T & typeof globalCols)} K 
-	 * @param {K} property 
-	 * @param {TsType<(T & typeof globalCols)[K]['_']['dataType']>} value 
+	 * @template {keyof (T & typeof globalCols)} K
+	 * @param {K} property
+	 * @param {TsType<(T & typeof globalCols)[K]['_']['dataType']>} value
 	 * @param {{
 	 * 			type: 'stream';
 	 * 			limit?: number;
 	 * 			offset?: number;
 	 * 			includeArchived?: boolean;
-	 * 		}} config 
-	 * @returns {StructStream<T, Name>} 
+	 * 		}} config
+	 * @returns {StructStream<T, Name>}
 	 */
 	fromProperty<K extends keyof (T & typeof globalCols)>(
 		property: K,
@@ -1180,16 +1172,16 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 	/**
 	 * Retrieves data from the struct based on a property and value.
 	 *
-	 * @template {keyof (T & typeof globalCols)} K 
-	 * @param {K} property 
-	 * @param {TsType<(T & typeof globalCols)[K]['_']['dataType']>} value 
+	 * @template {keyof (T & typeof globalCols)} K
+	 * @param {K} property
+	 * @param {TsType<(T & typeof globalCols)[K]['_']['dataType']>} value
 	 * @param {{
 	 * 			type: 'array';
 	 * 			limit: number;
 	 * 			offset: number;
 	 * 			includeArchived?: boolean;
-	 * 		}} config 
-	 * @returns {ResultPromise<StructData<T, Name>[], Error>} 
+	 * 		}} config
+	 * @returns {ResultPromise<StructData<T, Name>[], Error>}
 	 */
 	fromProperty<K extends keyof (T & typeof globalCols)>(
 		property: K,
@@ -1204,14 +1196,14 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 	/**
 	 * Retrieves data from the struct based on a property and value.
 	 *
-	 * @template {keyof (T & typeof globalCols)} K 
-	 * @param {K} property 
-	 * @param {TsType<(T & typeof globalCols)[K]['_']['dataType']>} value 
+	 * @template {keyof (T & typeof globalCols)} K
+	 * @param {K} property
+	 * @param {TsType<(T & typeof globalCols)[K]['_']['dataType']>} value
 	 * @param {{
 	 * 			type: 'single';
 	 * 			includeArchived?: boolean;
-	 * 		}} config 
-	 * @returns {(ResultPromise<StructData<T, Name> | undefined, Error>)} 
+	 * 		}} config
+	 * @returns {(ResultPromise<StructData<T, Name> | undefined, Error>)}
 	 */
 	fromProperty<K extends keyof (T & typeof globalCols)>(
 		property: K,
@@ -1224,14 +1216,14 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 	/**
 	 * Retrieves data from the struct based on a property and value.
 	 *
-	 * @template {keyof (T & typeof globalCols)} K 
-	 * @param {K} property 
-	 * @param {TsType<(T & typeof globalCols)[K]['_']['dataType']>} value 
+	 * @template {keyof (T & typeof globalCols)} K
+	 * @param {K} property
+	 * @param {TsType<(T & typeof globalCols)[K]['_']['dataType']>} value
 	 * @param {{
 	 * 			type: 'count';
 	 * 			includeArchived?: boolean;
-	 * 		}} config 
-	 * @returns {ResultPromise<number>} 
+	 * 		}} config
+	 * @returns {ResultPromise<number>}
 	 */
 	fromProperty<K extends keyof (T & typeof globalCols)>(
 		property: K,
@@ -1244,14 +1236,14 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 	/**
 	 * Retrieves data from the struct based on a property and value.
 	 *
-	 * @template {keyof (T & typeof globalCols)} K 
-	 * @param {K} property 
-	 * @param {TsType<(T & typeof globalCols)[K]['_']['dataType']>} value 
+	 * @template {keyof (T & typeof globalCols)} K
+	 * @param {K} property
+	 * @param {TsType<(T & typeof globalCols)[K]['_']['dataType']>} value
 	 * @param {{
 	 * 			type: 'all';
 	 * 			includeArchived?: boolean;
-	 * 		}} config 
-	 * @returns {ResultPromise<StructData<T, Name>[], Error>} 
+	 * 		}} config
+	 * @returns {ResultPromise<StructData<T, Name>[], Error>}
 	 */
 	fromProperty<K extends keyof (T & typeof globalCols)>(
 		property: K,
@@ -1264,12 +1256,12 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 	/**
 	 * Retrieves data from the struct based on a property and value.
 	 *
-	 * @template {keyof (T & typeof globalCols)} K 
-	 * @param {K} property 
-	 * @param {TsType<(T & typeof globalCols)[K]['_']['dataType']>} value 
-	 * @param {MultiConfig} config 
+	 * @template {keyof (T & typeof globalCols)} K
+	 * @param {K} property
+	 * @param {TsType<(T & typeof globalCols)[K]['_']['dataType']>} value
+	 * @param {MultiConfig} config
 	 * @returns {(| StructStream<T, Name>
-	 * 		| ResultPromise<StructData<T, Name>[] | StructData<T, Name> | undefined | number, Error>)} 
+	 * 		| ResultPromise<StructData<T, Name>[] | StructData<T, Name> | undefined | number, Error>)}
 	 */
 	fromProperty<K extends keyof (T & typeof globalCols)>(
 		property: K,
@@ -1280,18 +1272,13 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 		| ResultPromise<StructData<T, Name>[] | StructData<T, Name> | undefined | number, Error> {
 		const get = async () => {
 			if (this.data.proxyClient) {
-				return this.data.proxyClient.fromProperty(this, property as string, value, {
-					...config as any,
-					type: config.type === 'stream' ? 'all' : config.type,
-				}).unwrap(); 
+				return this.data.proxyClient
+					.fromProperty(this, property as string, value, {
+						...(config as any),
+						type: config.type === 'stream' ? 'all' : config.type
+					})
+					.unwrap();
 			}
-
-			if (isTesting(this)) {
-				const table = TestTable.get(this.data.name);
-				if (!table) throw noTableError(this);
-				return table.fromProperty(property, value).unwrap().map(d => d.data);
-			}
-
 
 			let squeal: SQL;
 			if (config.includeArchived) {
@@ -1311,16 +1298,24 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 			}
 
 			if (config.type === 'single') {
-				return (await this.database.select().from(this.table).where(squeal).orderBy(this.table.created))[0];
+				return (
+					await this.database.select().from(this.table).where(squeal).orderBy(this.table.created)
+				)[0];
 			}
 
 			const { offset, limit } = {
 				offset: undefined,
 				limit: undefined,
-				...config,
+				...config
 			};
 			if (offset && limit) {
-				return this.database.select().from(this.table).where(squeal).orderBy(this.table.created).offset(offset).limit(limit);
+				return this.database
+					.select()
+					.from(this.table)
+					.where(squeal)
+					.orderBy(this.table.created)
+					.offset(offset)
+					.limit(limit);
 			} else {
 				return this.database.select().from(this.table).where(squeal).orderBy(this.table.created);
 			}
@@ -1362,13 +1357,13 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 	 *
 	 * @param {{
 	 * 			[K in keyof T]?: TsType<T[K]['_']['dataType']>;
-	 * 		}} props 
+	 * 		}} props
 	 * @param {{
 	 * 			type: 'stream';
 	 * 			limit?: number;
 	 * 			offset?: number;
-	 * 		}} config 
-	 * @returns {StructStream<T, Name>} 
+	 * 		}} config
+	 * @returns {StructStream<T, Name>}
 	 */
 	get(
 		props: {
@@ -1385,13 +1380,13 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 	 *
 	 * @param {{
 	 * 			[K in keyof T]?: TsType<T[K]['_']['dataType']>;
-	 * 		}} props 
+	 * 		}} props
 	 * @param {{
 	 * 			type: 'array';
 	 * 			limit: number;
 	 * 			offset: number;
-	 * 		}} config 
-	 * @returns {ResultPromise<StructData<T, Name>[], Error>} 
+	 * 		}} config
+	 * @returns {ResultPromise<StructData<T, Name>[], Error>}
 	 */
 	get(
 		props: {
@@ -1408,11 +1403,11 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 	 *
 	 * @param {{
 	 * 			[K in keyof T]?: TsType<T[K]['_']['dataType']>;
-	 * 		}} props 
+	 * 		}} props
 	 * @param {{
 	 * 			type: 'single';
-	 * 		}} config 
-	 * @returns {(ResultPromise<StructData<T, Name> | undefined, Error>)} 
+	 * 		}} config
+	 * @returns {(ResultPromise<StructData<T, Name> | undefined, Error>)}
 	 */
 	get(
 		props: {
@@ -1427,11 +1422,11 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 	 *
 	 * @param {{
 	 * 			[K in keyof T]?: TsType<T[K]['_']['dataType']>;
-	 * 		}} props 
+	 * 		}} props
 	 * @param {{
 	 * 			type: 'count';
-	 * 		}} config 
-	 * @returns {ResultPromise<number>} 
+	 * 		}} config
+	 * @returns {ResultPromise<number>}
 	 */
 	get(
 		props: {
@@ -1446,11 +1441,11 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 	 *
 	 * @param {{
 	 * 			[K in keyof T]?: TsType<T[K]['_']['dataType']>;
-	 * 		}} props 
+	 * 		}} props
 	 * @param {{
 	 * 			type: 'all';
-	 * 		}} config 
-	 * @returns {ResultPromise<StructData<T, Name>[], Error>} 
+	 * 		}} config
+	 * @returns {ResultPromise<StructData<T, Name>[], Error>}
 	 */
 	get(
 		props: {
@@ -1465,10 +1460,10 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 	 *
 	 * @param {{
 	 * 			[K in keyof T]?: TsType<T[K]['_']['dataType']>;
-	 * 		}} props 
-	 * @param {MultiConfig} config 
+	 * 		}} props
+	 * @param {MultiConfig} config
 	 * @returns {(| StructStream<T, Name>
-	 * 		| ResultPromise<StructData<T, Name>[] | StructData<T, Name> | undefined | number, Error>)} 
+	 * 		| ResultPromise<StructData<T, Name>[] | StructData<T, Name> | undefined | number, Error>)}
 	 */
 	get(
 		props: {
@@ -1480,16 +1475,12 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 		| ResultPromise<StructData<T, Name>[] | StructData<T, Name> | undefined | number, Error> {
 		const get = async () => {
 			if (this.data.proxyClient) {
-				return this.data.proxyClient.get(this, props, {
-					...config as any,
-					type: config.type === 'stream' ? 'all' : config.type,
-				}).unwrap(); 
-			}
-
-			if (isTesting(this)) {
-				const table = TestTable.get(this.data.name);
-				if (!table) throw noTableError(this);
-				return table.get(props).unwrap().map(d => d.data);
+				return this.data.proxyClient
+					.get(this, props, {
+						...(config as any),
+						type: config.type === 'stream' ? 'all' : config.type
+					})
+					.unwrap();
 			}
 
 			// const squeal = sql.join(Object.keys(props).map(k => sql`${this.table[k]} = ${props[k]}`), sql` AND `);
@@ -1513,16 +1504,24 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 			}
 
 			if (config.type === 'single') {
-				return (await this.database.select().from(this.table).where(squeal).orderBy(this.table.created))[0];
+				return (
+					await this.database.select().from(this.table).where(squeal).orderBy(this.table.created)
+				)[0];
 			}
 
 			const { offset, limit } = {
 				offset: undefined,
 				limit: undefined,
-				...config,
+				...config
 			};
 			if (offset && limit) {
-				return this.database.select().from(this.table).where(squeal).orderBy(this.table.created).offset(offset).limit(limit);
+				return this.database
+					.select()
+					.from(this.table)
+					.where(squeal)
+					.orderBy(this.table.created)
+					.offset(offset)
+					.limit(limit);
 			} else {
 				return this.database.select().from(this.table).where(squeal).orderBy(this.table.created);
 			}
@@ -1586,19 +1585,17 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 	fromIds(
 		ids: string[],
 		config: MultiConfig
-	): ResultPromise<StructData<T, Name>[] | StructData<T, Name> | undefined | number, Error> | StructStream<T, Name> {
+	):
+		| ResultPromise<StructData<T, Name>[] | StructData<T, Name> | undefined | number, Error>
+		| StructStream<T, Name> {
 		const get = async () => {
 			if (this.data.proxyClient) {
-				return this.data.proxyClient.fromIds(this, ids, {
-					...config as any,
-					type: config.type === 'stream' ? 'all' : config.type,
-				}).unwrap(); 
-			}
-
-			if (isTesting(this)) {
-				const table = TestTable.get(this.data.name);
-				if (!table) throw noTableError(this);
-				return table.fromIds(ids).unwrap().map(d => d.data);
+				return this.data.proxyClient
+					.fromIds(this, ids, {
+						...(config as any),
+						type: config.type === 'stream' ? 'all' : config.type
+					})
+					.unwrap();
 			}
 
 			const squeal = inArray(this.table.id as any, ids);
@@ -1661,7 +1658,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 			await this.database.execute(sql`
 				DELETE FROM ${this.table};
 			`);
-			
+
 			if (this.versionTable) {
 				this.log('Clearing version data...');
 				await this.database.execute(sql`
@@ -1706,8 +1703,8 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 	 * 		type: 'stream';
 	 * 		limit?: number;
 	 * 		offset?: number;
-	 * 	}} config 
-	 * @returns {StructStream<T, Name>} 
+	 * 	}} config
+	 * @returns {StructStream<T, Name>}
 	 */
 	getLifetimeItems(config: {
 		type: 'stream';
@@ -1721,8 +1718,8 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 	 * 		type: 'array';
 	 * 		limit: number;
 	 * 		offset: number;
-	 * 	}} config 
-	 * @returns {ResultPromise<StructData<T, Name>[], Error>} 
+	 * 	}} config
+	 * @returns {ResultPromise<StructData<T, Name>[], Error>}
 	 */
 	getLifetimeItems(config: {
 		type: 'array';
@@ -1734,8 +1731,8 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 	 *
 	 * @param {{
 	 * 		type: 'single';
-	 * 	}} config 
-	 * @returns {(ResultPromise<StructData<T, Name> | undefined, Error>)} 
+	 * 	}} config
+	 * @returns {(ResultPromise<StructData<T, Name> | undefined, Error>)}
 	 */
 	getLifetimeItems(config: {
 		type: 'single';
@@ -1743,23 +1740,23 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 	/**
 	 * Retrieves all items that have a lifetime greater than 0. This is used to retrieve items that are not archived and have a lifetime set.
 	 *
-	 * @param {{ type: 'count' }} config 
-	 * @returns {ResultPromise<number>} 
+	 * @param {{ type: 'count' }} config
+	 * @returns {ResultPromise<number>}
 	 */
 	getLifetimeItems(config: { type: 'count' }): ResultPromise<number>;
 	/**
 	 * Retrieves all items that have a lifetime greater than 0. This is used to retrieve items that are not archived and have a lifetime set.
 	 *
-	 * @param {{ type: 'all' }} config 
-	 * @returns {ResultPromise<StructData<T, Name>[], Error>} 
+	 * @param {{ type: 'all' }} config
+	 * @returns {ResultPromise<StructData<T, Name>[], Error>}
 	 */
 	getLifetimeItems(config: { type: 'all' }): ResultPromise<StructData<T, Name>[], Error>;
 	/**
 	 * Retrieves all items that have a lifetime greater than 0. This is used to retrieve items that are not archived and have a lifetime set.
 	 *
-	 * @param {MultiConfig} config 
+	 * @param {MultiConfig} config
 	 * @returns {(| StructStream<T, Name>
-	 * 		| ResultPromise<StructData<T, Name>[] | undefined | StructData<T, Name> | number, Error>)} 
+	 * 		| ResultPromise<StructData<T, Name>[] | undefined | StructData<T, Name> | number, Error>)}
 	 */
 	getLifetimeItems(
 		config: MultiConfig
@@ -1768,17 +1765,13 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 		| ResultPromise<StructData<T, Name>[] | undefined | StructData<T, Name> | number, Error> {
 		const get = async () => {
 			if (this.data.proxyClient) {
-				return this.data.proxyClient.getLifetimeItems(this, {
-					...config as any,
-					type: config.type === 'stream' ? 'all' : config.type,
-					includeArchived: true,
-				}).unwrap(); 
-			}
-
-			if (isTesting(this)) {
-				const table = TestTable.get(this.data.name);
-				if (!table) throw noTableError(this);
-				return table.getLifetimeItems().unwrap().map(d => d.data);
+				return this.data.proxyClient
+					.getLifetimeItems(this, {
+						...(config as any),
+						type: config.type === 'stream' ? 'all' : config.type,
+						includeArchived: true
+					})
+					.unwrap();
 			}
 
 			// const squeal = sql`${this.table.lifetime} > 0 AND ${this.table.archived} = ${false}`;
@@ -1806,7 +1799,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 			const { offset, limit } = {
 				offset: undefined,
 				limit: undefined,
-				...config,
+				...config
 			};
 			if (offset && limit) {
 				return this.database.select().from(this.table).where(squeal).offset(offset).limit(limit);
@@ -1870,7 +1863,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 	 * @returns {any) => any}
 	 */
 	build(
-		database: PostgresJsDatabase,
+		database: PostgresJsDatabase
 		// handler?: (event: RequestAction) => Promise<Response> | Response
 	) {
 		if (this.data.sample)
@@ -1981,14 +1974,20 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 							if (validator instanceof z.ZodType) {
 								return [k, createSchema(validator, k)];
 							} else {
-								return [k, createSchema(z.unknown().refine((d) => {
-                                    try {
-                                        return validator(d);
-                                    } catch (error) {
-                                        this.log('Error running validator', k, error);
-                                        return false;
-                                    }
-                                }), k)];
+								return [
+									k,
+									createSchema(
+										z.unknown().refine((d) => {
+											try {
+												return validator(d);
+											} catch (error) {
+												this.log('Error running validator', k, error);
+												return false;
+											}
+										}),
+										k
+									)
+								];
 							}
 						}
 						const type = (v as any).config.dataType as ColumnDataType;
@@ -2029,8 +2028,8 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 	 * @param {?{
 	 * 		optionals?: (keyof T & keyof typeof globalCols)[];
 	 * 		not?: (keyof T & keyof typeof globalCols)[];
-	 * 	}} [config] 
-	 * @returns {*} 
+	 * 	}} [config]
+	 * @returns {*}
 	 */
 	getZodSchema(config?: {
 		optionals?: (keyof T & keyof typeof globalCols)[];
@@ -2114,23 +2113,28 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 	/**
 	 * Logs data to the console with a blue prefix
 	 *
-	 * @param {...unknown[]} data 
+	 * @param {...unknown[]} data
 	 */
 	log(...data: unknown[]) {
-		if (this.data.log) console.log(chalk.blue(`[${this.name}]`), ...data);
+		if (this.data.log)
+			console.log(
+				// turn terminal blue
+				'\x1b[34m',
+				`[Struct:${this.name}]`,
+				// reset
+				'\x1b[0m',
+				...data
+			);
 	}
 
 	/**
 	 * Creates a backup of the struct data in a specified directory.
 	 *
-	 * @param {string} dir 
-	 * @returns {*} 
+	 * @param {string} dir
+	 * @returns {*}
 	 */
 	backup(dir: string) {
 		return attemptAsync(async () => {
-			if (isTesting(this)) {
-				throw new Error('Cannot backup a struct that is currently in testing mode');
-			}
 			if (!fs.existsSync(dir)) {
 				await fs.promises.mkdir(dir, { recursive: true });
 			}
@@ -2197,14 +2201,11 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 	/**
 	 * Restores the struct data from a backup file.
 	 *
-	 * @param {string} file 
-	 * @returns {*} 
+	 * @param {string} file
+	 * @returns {*}
 	 */
 	restore(file: string) {
 		return attemptAsync(async () => {
-			if (isTesting(this)) {
-				throw new Error('Cannot restore a struct that is currently in testing mode');
-			}
 			(await this.backup(path.dirname(file))).unwrap();
 			(await this.clear()).unwrap();
 
@@ -2295,46 +2296,45 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 			}
 		});
 	}
-	
+
 	computeHash(data: Record<string, unknown>) {
 		return attemptAsync(async () => {
 			const hash = await this.getHashAlg().unwrap();
 			const hashData = { ...data };
-			
-			const str = Object.keys(hashData).sort().map(key => {
-				const val = (hashData as any)[key];
-				if (val instanceof Date) {
-					return `${key}:${val.toISOString()}`;
-				} else if (typeof val === 'object' && val !== null) {
-					return `${key}:${JSON.stringify(val)}`;
-				} else {
-					return `${key}:${val}`;
-				}
-			}).join(';');
+
+			const str = Object.keys(hashData)
+				.sort()
+				.map((key) => {
+					const val = (hashData as any)[key];
+					if (val instanceof Date) {
+						return `${key}:${val.toISOString()}`;
+					} else if (typeof val === 'object' && val !== null) {
+						return `${key}:${JSON.stringify(val)}`;
+					} else {
+						return `${key}:${val}`;
+					}
+				})
+				.join(';');
 
 			return hash.h64(str).toString(16);
 		});
 	}
 }
 
-
 // // TODO: build a smaller version of the struct, fewer headers
 // export class SmallStruct<T extends Blank, N extends string> {
 
 // }
-
-
-
 
 /**
  * Type representing the return type of a query on a struct.
  *
  * @export
  * @typedef {QueryReturnType}
- * @template {Blank} T 
- * @template {string} Name 
+ * @template {Blank} T
+ * @template {string} Name
  */
-export type QueryReturnType<T extends Blank, Name extends string> = 
-	StructStream<T, Name> | 
-	StructData<T, Name>[] |
-	Error;
+export type QueryReturnType<T extends Blank, Name extends string> =
+	| StructStream<T, Name>
+	| StructData<T, Name>[]
+	| Error;

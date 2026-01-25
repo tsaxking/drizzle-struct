@@ -1,8 +1,8 @@
 {
-  "entryPoints": ["src/**/*.ts"],
-  "out": "docs",
-  "excludePrivate": true,
-  "excludeProtected": true,
-  "excludeInternal": true,
-  "categorizeByGroup": true
+	"entryPoints": ["src/**/*.ts"],
+	"out": "docs",
+	"excludePrivate": true,
+	"excludeProtected": true,
+	"excludeInternal": true,
+	"categorizeByGroup": true
 }
