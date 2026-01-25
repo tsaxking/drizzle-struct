@@ -1,3 +1,4 @@
+import { Table } from 'drizzle-orm';
 import { Struct } from '../struct';
 import {
 	text,
@@ -10,7 +11,7 @@ import {
 	real
 } from 'drizzle-orm/pg-core';
 
-export const struct = new Struct({
+export const struct: Struct = new Struct({
 	name: 'test',
 	structure: {
 		string: text('string').notNull(),
@@ -29,5 +30,5 @@ export const struct = new Struct({
 	}
 });
 
-export const _table = struct.table;
-export const _versionTable = struct.versionTable;
+export const _table: Table = struct.table;
+export const _versionTable: Table | undefined = struct.versionTable;

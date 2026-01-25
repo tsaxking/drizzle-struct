@@ -11,6 +11,7 @@ import {
 	type SafeReturn
 } from './struct';
 import { StructError, DataError } from './utils';
+import { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 
 /**
  * A version of the data
@@ -49,7 +50,7 @@ export class DataVersion<T extends Blank, Name extends string> {
 	 * @readonly
 	 * @type {TsType<(T & { id: any; created: any; updated: any; archived: any; universes: any; attributes: any; lifetime: any; } & { vhId: any; id: any; vhCreated: any; })[string]["_"]["dataType"]>}
 	 */
-	get vhId() {
+	get vhId(): string {
 		return this.data.vhId;
 	}
 
@@ -59,7 +60,7 @@ export class DataVersion<T extends Blank, Name extends string> {
 	 * @readonly
 	 * @type {TsType<(T & { id: any; created: any; updated: any; archived: any; universes: any; attributes: any; lifetime: any; } & { vhId: any; id: any; vhCreated: any; })[string]["_"]["dataType"]>}
 	 */
-	get id() {
+	get id(): string {
 		return this.data.id;
 	}
 
@@ -69,7 +70,7 @@ export class DataVersion<T extends Blank, Name extends string> {
 	 * @readonly
 	 * @type {*}
 	 */
-	get created() {
+	get created(): Date {
 		return this.data.created;
 	}
 
@@ -79,7 +80,7 @@ export class DataVersion<T extends Blank, Name extends string> {
 	 * @readonly
 	 * @type {*}
 	 */
-	get updated() {
+	get updated(): Date {
 		return this.data.updated;
 	}
 
@@ -89,7 +90,7 @@ export class DataVersion<T extends Blank, Name extends string> {
 	 * @readonly
 	 * @type {TsType<(T & { id: any; created: any; updated: any; archived: any; universes: any; attributes: any; lifetime: any; } & { vhId: any; id: any; vhCreated: any; })[string]["_"]["dataType"]>}
 	 */
-	get archived() {
+	get archived(): boolean {
 		return this.data.archived;
 	}
 
@@ -99,7 +100,7 @@ export class DataVersion<T extends Blank, Name extends string> {
 	 * @readonly
 	 * @type {*}
 	 */
-	get vhCreated() {
+	get vhCreated(): Date {
 		return new Date(this.data.vhCreated);
 	}
 
@@ -109,7 +110,7 @@ export class DataVersion<T extends Blank, Name extends string> {
 	 * @readonly
 	 * @type {PostgresJsDatabase}
 	 */
-	get database() {
+	get database(): PostgresJsDatabase {
 		return this.struct.database;
 	}
 

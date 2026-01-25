@@ -6,6 +6,7 @@ import { OnceReadMap } from 'ts-utils/map';
 import { type Blank, type Struct, type Structable, globalCols, type SafeReturn } from './struct';
 import { StructError, DataError } from './utils';
 import { DataVersion } from './struct-data-version';
+import { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 
 /**
  * A single datapoint in the struct
@@ -51,7 +52,7 @@ export class StructData<T extends Blank = any, Name extends string = any> {
 	 * @readonly
 	 * @type {*}
 	 */
-	get id() {
+	get id(): string {
 		return this.data.id;
 	}
 
@@ -61,7 +62,7 @@ export class StructData<T extends Blank = any, Name extends string = any> {
 	 * @readonly
 	 * @type {*}
 	 */
-	get created() {
+	get created(): Date {
 		return this.data.created;
 	}
 
@@ -71,7 +72,7 @@ export class StructData<T extends Blank = any, Name extends string = any> {
 	 * @readonly
 	 * @type {*}
 	 */
-	get updated() {
+	get updated(): Date {
 		return this.data.updated;
 	}
 
@@ -81,7 +82,7 @@ export class StructData<T extends Blank = any, Name extends string = any> {
 	 * @readonly
 	 * @type {*}
 	 */
-	get archived() {
+	get archived(): boolean {
 		return this.data.archived;
 	}
 
@@ -91,7 +92,7 @@ export class StructData<T extends Blank = any, Name extends string = any> {
 	 * @readonly
 	 * @type {PostgresJsDatabase}
 	 */
-	get database() {
+	get database(): PostgresJsDatabase {
 		return this.struct.database;
 	}
 
@@ -101,7 +102,7 @@ export class StructData<T extends Blank = any, Name extends string = any> {
 	 * @readonly
 	 * @type {*}
 	 */
-	get lifetime() {
+	get lifetime(): number {
 		return this.data.lifetime;
 	}
 
@@ -111,11 +112,11 @@ export class StructData<T extends Blank = any, Name extends string = any> {
 	 * @readonly
 	 * @type {*}
 	 */
-	get canUpdate() {
+	get canUpdate(): boolean {
 		return this.data.canUpdate;
 	}
 
-	get hash() {
+	get hash(): string {
 		return this.data.hash;
 	}
 
