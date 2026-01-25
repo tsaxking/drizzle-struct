@@ -58,7 +58,7 @@ export class DataVersion<T extends Blank, Name extends string> {
     }
 
     /**
-     * The date the data was creaed
+     * The date the data was created
      *
      * @readonly
      * @type {*}
