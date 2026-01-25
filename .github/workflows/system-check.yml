@@ -49,8 +49,8 @@ jobs:
       - name: Run System Check
         run: pnpm system:check
         env:
-          PGHOST: localhost
-          PGUSER: postgres
-          PGDATABASE: drizzle_struct_test
-          PGPORT: 5432
-          PGPASSWORD: postgres
+          DB_HOST: localhost
+          DB_USER: postgres
+          DB_NAME: drizzle_struct_test
+          DB_PORT: 5432
+          DB_PASS: postgres
