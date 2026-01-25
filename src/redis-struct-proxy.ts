@@ -1,8 +1,9 @@
 import { Redis, ConnectionClientService, ConnectionServerService } from 'redis-utils';
-import { attemptAsync, type ResultPromise } from 'ts-utils/check';
+import { attemptAsync } from 'ts-utils/check';
 import { ComplexEventEmitter } from 'ts-utils/event-emitter';
 import { z } from 'zod';
-import { type Blank, Struct, type Structable, type MultiConfig, type TsType, StructStream, StructData, DataVersion } from './struct';
+import { type Blank, Struct, type Structable, type MultiConfig, type TsType} from './struct';
+import { DataVersion } from './struct-data-version';
 
 export class RedisStructProxyClient<Name extends string, Target extends string, RedisName extends string> {
     private id = 0;
