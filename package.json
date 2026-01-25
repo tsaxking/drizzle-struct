@@ -14,8 +14,8 @@
 		"lint": "eslint .",
 		"lint:fix": "eslint . --fix",
 		"check": "tsc --noEmit",
-		"system:check": "pnpm format && pnpm lint && pnpm check && pnpm test:unit",
-		"check:system": "pnpm format && pnpm lint && pnpm check && pnpm test:unit",
+		"system:check": "pnpm format && pnpm lint && pnpm check && pnpm test:unit && pnpm build",
+		"check:system": "pnpm system:check",
 		"doc": "typedoc",
 		"db:migrate": "drizzle-kit migrate",
 		"db:push": "drizzle-kit push"

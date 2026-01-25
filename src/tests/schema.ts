@@ -1,4 +1,4 @@
-import { Struct } from './struct';
+import { Struct } from '../struct';
 import {
 	text,
 	boolean,

@@ -11,7 +11,7 @@ if (!DB_NAME) throw new Error('DB_NAME is not defined in environment variables')
 
 export default defineConfig({
 	dialect: 'postgresql',
-	schema: './src/schema.ts',
+	schema: './src/tests/schema.ts',
 	dbCredentials: {
 		host: DB_HOST,
 		port: parseInt(DB_PORT, 10),
