@@ -1,8 +1,9 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { attempt } from "ts-utils/check";
-import { type Blank, Struct, StructData } from "./struct";
+import { type Blank, Struct } from "./struct";
 import { z } from 'zod';
 import { v4 as uuid } from 'uuid';
+import { StructData } from "./struct-data";
 
 const RED = '\x1b[31m';
 const RESET = '\x1b[0m';
