@@ -18,7 +18,7 @@ export default defineConfig({
 		user: DB_USER,
 		password: DB_PASS,
 		database: DB_NAME,
-		ssl: false,
+		ssl: false
 	},
 	verbose: true,
 	strict: true,
