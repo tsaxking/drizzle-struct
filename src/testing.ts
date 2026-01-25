@@ -1,376 +1,169 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { attempt } from 'ts-utils/check';
-import { type Blank, Struct } from './struct';
-import { z } from 'zod';
-import { v4 as uuid } from 'uuid';
-import { StructData } from './struct-data';
+/**
+ * Testing utilities for drizzle-struct
+ *
+ * This module provides helper functions and utilities for writing unit tests
+ * that interact with real database instances.
+ */
 
-const RED = '\x1b[31m';
-const RESET = '\x1b[0m';
+import { type Struct } from './struct';
+import { type StructData } from './struct-data';
+import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
+import postgres from 'postgres';
+import { drizzle } from 'drizzle-orm/postgres-js';
 
-const log = (...data: unknown[]) => {
-	console.log(
-		// red
-		RED,
-		'[Struct Testing]',
-		// reset
-		RESET,
-		...data
-	);
+/**
+ * Test database connection pool
+ * Shared across tests for efficiency
+ */
+let testDb: PostgresJsDatabase | null = null;
+let testSql: ReturnType<typeof postgres> | null = null;
+
+/**
+ * Creates a test database connection using environment variables
+ * Uses PGHOST, PGUSER, PGDATABASE, PGPORT, PGPASSWORD from .env
+ */
+export function getTestDb(): PostgresJsDatabase {
+	if (testDb) {
+		return testDb;
+	}
+
+	const connectionString = `postgres://${process.env.PGUSER || 'postgres'}:${process.env.PGPASSWORD || 'postgres'}@${process.env.PGHOST || 'localhost'}:${process.env.PGPORT || '5432'}/${process.env.PGDATABASE || 'drizzle_struct_test'}`;
+
+	testSql = postgres(connectionString, {
+		max: 10,
+		idle_timeout: 20,
+		connect_timeout: 10
+	});
+
+	testDb = drizzle(testSql);
+	return testDb;
+}
+
+/**
+ * Closes the test database connection
+ * Should be called after all tests complete
+ */
+export async function closeTestDb(): Promise<void> {
+	if (testSql) {
+		await testSql.end();
+		testSql = null;
+		testDb = null;
+	}
+}
+
+/**
+ * Clears all data from a struct's table
+ * Useful for test cleanup between test cases
+ */
+export async function clearStructTable<T extends Record<string, any>, Name extends string>(
+	struct: Struct<T, Name>
+): Promise<void> {
+	const db = getTestDb();
+	await db.delete(struct.table);
+}
+
+/**
+ * Creates test data in a struct's table
+ * Returns the created StructData instance
+ */
+export function createTestData<T extends Record<string, any>, Name extends string>(
+	struct: Struct<T, Name>,
+	data: Partial<T>
+): any {
+	return struct.new(data as any);
+}
+
+/**
+ * Checks if a struct has any data
+ */
+export async function hasData<T extends Record<string, any>, Name extends string>(
+	struct: Struct<T, Name>
+): Promise<boolean> {
+	const result = await struct.all({ type: 'array', limit: 1, offset: 0 }).unwrap();
+	return result.length > 0;
+}
+
+/**
+ * Gets the count of records in a struct's table
+ */
+export async function getRecordCount<T extends Record<string, any>, Name extends string>(
+	struct: Struct<T, Name>
+): Promise<number> {
+	const result = await struct.all({ type: 'all' }).unwrap();
+	return result.length;
+}
+
+/**
+ * Test lifecycle hooks
+ */
+export const testHooks = {
+	/**
+	 * Called before all tests
+	 */
+	beforeAll: async () => {
+		// Ensure database connection is ready
+		getTestDb();
+	},
+
+	/**
+	 * Called after all tests
+	 */
+	afterAll: async () => {
+		await closeTestDb();
+	},
+
+	/**
+	 * Called before each test
+	 */
+	beforeEach: async <T extends Record<string, any>, Name extends string>(
+		structs: Struct<T, Name>[]
+	) => {
+		// Clear all struct tables before each test
+		for (const struct of structs) {
+			await clearStructTable(struct);
+		}
+	},
+
+	/**
+	 * Called after each test
+	 */
+	afterEach: async () => {
+		// Cleanup can be added here if needed
+	}
 };
-const warn = (...data: unknown[]) => {
-	console.warn(
-		// red
-		RED,
-		'[Struct Testing]',
-		// reset
-		RESET,
-		...data
-	);
-};
-const error = (...data: unknown[]) => {
-	console.error(
-		// red
-		RED,
-		'[Struct Testing]',
-		// reset
-		RESET,
-		...data
-	);
+
+/**
+ * Legacy compatibility - these functions are no-ops now
+ * Tests should use real database instead of in-memory tables
+ */
+
+export const isTesting = (_struct: Struct<any, any>): boolean => {
+	// Always return false - we don't use test tables anymore
+	return false;
 };
 
 export const noTableError = (struct: Struct<any, any>) => {
-	return new Error(`isTesting(${struct.data.name}) is true, but there is no struct found.`);
+	return new Error(`No table found for struct: ${struct.data.name}`);
 };
 
 export const noDataError = (structData: StructData<any, any>) => {
-	return new Error(
-		`No data with ${structData.id} found in testing table ${structData.struct.name}`
-	);
+	return new Error(`No data with ${structData.id} found in table ${structData.struct.name}`);
 };
 
-export const startTesting = (config: {
-	timeout: number;
-	structs: Struct<any, any>[];
-	maxRows: number;
-	log: boolean;
-}) => {
-	log('Initializing tests', config.structs.map((s) => s.name).join(', '));
-	for (const struct of config.structs) {
-		TestTable.tables.set(
-			struct.name,
-			new TestTable({
-				maxRows: config.maxRows,
-				struct,
-				log: config.log
-			})
-		);
-	}
-	setTimeout(() => {
-		endTesting(config);
-	}, config.timeout);
+// Legacy exports for backwards compatibility
+export const startTesting = () => {
+	console.warn('startTesting() is deprecated. Use real database tests instead.');
 };
 
-export const endTesting = (config: { structs: Struct<any, any>[] }) => {
-	log('Deinitializing tests', ...config.structs.map((s) => s.data.name).join(', '));
-	for (const struct of config.structs) {
-		const table = TestTable.tables.get(struct.name);
-		if (table) {
-			table.clear();
-		}
-		TestTable.tables.delete(struct.name);
-	}
+export const endTesting = () => {
+	console.warn('endTesting() is deprecated. Use real database tests instead.');
 };
 
-export const isTesting = (struct: Struct<any, any>) => {
-	return TestTable.tables.has(struct.name);
-};
-
-type TestBlank = Record<string, unknown> & {
-	id: string;
-	created: Date;
-	updated: Date;
-	archived: boolean;
-	attributes: string;
-	lifetime: number;
-	canUpdate: boolean;
-};
-
-type TestVersionBlank = TestBlank & {
-	vhId: string;
-	vhCreated: Date;
-};
-
-export class TestRow<T extends TestBlank> {
-	constructor(
-		public readonly table: TestTable<T>,
-		public readonly data: T
-	) {}
-
-	update(data: Partial<T>) {
-		return attempt(() => {
-			this.table.log(`TestRow.update called for id=${this.data.id}`);
-			if (!this.data.canUpdate) {
-				throw new Error('Cannot update static data');
-			}
-			const res = this.table.config.struct.validate(data);
-			if (!res.success) {
-				throw new Error(`Validation failed: ${res.reason}`);
-			}
-			Object.assign(this.data, data);
-		});
-	}
-
-	delete() {
-		return attempt(() => {
-			this.table.log(`TestRow.delete called for id=${this.data.id}`);
-			this.table.data.splice(this.table.data.indexOf(this), 1);
-		});
-	}
-
-	setArchive(archive: boolean) {
-		return attempt(() => {
-			this.table.log(`TestRow.setArchive called for id=${this.data.id}, archive=${archive}`);
-			this.data.archived = archive;
-		});
-	}
-	getAttributes() {
-		return attempt(() => {
-			const attrs = z.array(z.string()).parse(JSON.parse(this.data.attributes));
-			this.table.log(`TestRow.getAttributes called for id=${this.data.id}, count=${attrs.length}`);
-			return attrs;
-		});
-	}
-
-	setAttributes(...attributes: string[]) {
-		return attempt(() => {
-			this.table.log(
-				`TestRow.setAttributes called for id=${this.data.id}, attributes=${JSON.stringify(attributes)}`
-			);
-			this.data.attributes = JSON.stringify(Array.from(new Set(attributes)));
-		});
-	}
-
-	addAttributes(...attributes: string[]) {
-		return attempt(() => {
-			this.table.log(
-				`TestRow.addAttributes called for id=${this.data.id}, attributes=${JSON.stringify(attributes)}`
-			);
-			const attr = new Set([...this.getAttributes().unwrap(), ...attributes]);
-			this.setAttributes(...attr);
-		});
-	}
-
-	removeAttributes(...attributes: string[]) {
-		return attempt(() => {
-			this.table.log(
-				`TestRow.removeAttributes called for id=${this.data.id}, attributes=${JSON.stringify(attributes)}`
-			);
-			const attr = this.getAttributes()
-				.unwrap()
-				.filter((a) => !attributes.includes(a));
-			this.setAttributes(...attr);
-		});
-	}
-
-	safe(...omit: string[]) {
-		const data = { ...this.data };
-		omit.push(...(this.table.config.struct.data.safes || []));
-		for (const key of omit) {
-			delete data[key as keyof typeof data];
-		}
-		this.table.log(`TestRow.safe called for id=${this.data.id}, omit=${JSON.stringify(omit)}`);
-		return data;
-	}
-
-	unsafe(...omit: string[]) {
-		const data = { ...this.data };
-		for (const key of omit) {
-			delete data[key as keyof typeof data];
-		}
-		this.table.log(`TestRow.unsafe called for id=${this.data.id}, omit=${JSON.stringify(omit)}`);
-		return data;
-	}
-
-	getVersions() {
-		return attempt(() => {
-			const versions = this.table.versions.filter((v) => v.data.id === this.data.id);
-			this.table.log(`TestRow.getVersions called for id=${this.data.id}, count=${versions.length}`);
-			return versions;
-		});
-	}
-
-	makeVersion() {
-		return attempt(() => {
-			this.table.log(`TestRow.makeVersion called for id=${this.data.id}`);
-			const version = new TestRowVersion(this.table, {
-				...this.data,
-				vhId: uuid(),
-				vhCreated: new Date()
-			});
-			this.table.versions.push(version as any);
-			return version;
-		});
-	}
-}
-
-export class TestRowVersion<T extends TestVersionBlank> {
-	constructor(
-		public readonly table: TestTable<T>,
-		public readonly data: T
-	) {}
-
-	delete() {
-		return attempt(() => {
-			this.table.log(`TestRowVersion.delete called for vhId=${this.data.vhId}`);
-			this.table.versions.splice(this.table.versions.indexOf(this), 1);
-		});
-	}
-
-	restore() {
-		return attempt(() => {
-			this.table.log(`TestRowVersion.restore called for vhId=${this.data.vhId}`);
-			const d = this.table.fromId(this.data.id).unwrap();
-			if (d) d.update(this.data);
-			else this.table.new(this.data);
-		});
-	}
-
-	getAttributes() {
-		return attempt(() => {
-			const attrs = z.array(z.string()).parse(JSON.parse(this.data.attributes));
-			this.table.log(
-				`TestRowVersion.getAttributes called for vhId=${this.data.vhId}, count=${attrs.length}`
-			);
-			return attrs;
-		});
-	}
-}
-
-export type TestTableConfig = {
-	maxRows: number;
-	struct: Struct<Blank, string>;
-	log: boolean;
-};
-
-export class TestTable<T extends TestBlank> {
-	public static readonly tables = new Map<string, TestTable<any>>();
-
-	public static get(name: string) {
-		return TestTable.tables.get(name);
-	}
-
-	public readonly data: TestRow<T>[] = [];
-	public readonly versions: TestRowVersion<
-		T & {
-			vhId: string;
-			vhCreated: Date;
-		}
-	>[] = [];
-
-	constructor(public readonly config: TestTableConfig) {}
-
-	new(data: T) {
-		return attempt(() => {
-			this.log(`TestTable.new called for id=${data.id}`);
-			if (this.fromId(data.id).unwrap()) {
-				throw new Error('Cannot add duplicate entry');
-			}
-			if (this.data.length === this.config.maxRows) {
-				throw new Error('Cannot add more entries, max rows reached');
-			}
-
-			const res = this.config.struct.validate(data);
-			if (!res.success) {
-				throw new Error(`Validation failed: ${res.reason}`);
-			}
-
-			const d = new TestRow(this, data);
-			this.data.push(d);
-			return d;
-		});
-	}
-
-	fromId(id: string) {
-		return attempt(() => {
-			const found = this.data.find((d) => d.data.id === id);
-			this.log(`TestTable.fromId called for id=${id}, found=${!!found}`);
-			return found;
-		});
-	}
-
-	fromProperty<K extends keyof T>(property: K, value: T[K]) {
-		return attempt(() => {
-			const filtered = this.data.filter((d) => d.data[property] === value);
-			this.log(
-				`TestTable.fromProperty called for property=${String(property)}, value=${String(value)}, count=${filtered.length}`
-			);
-			return filtered;
-		});
-	}
-
-	archived() {
-		return attempt(() => {
-			const archived = this.data.filter((d) => d.data.archived);
-			this.log(`TestTable.archived called, count=${archived.length}`);
-			return archived;
-		});
-	}
-
-	fromVhId(vhId: string) {
-		return attempt(() => {
-			const found = this.versions.find((v) => v.data.vhId === vhId);
-			this.log(`TestTable.fromVhId called for vhId=${vhId}, found=${!!found}`);
-			return found;
-		});
-	}
-
-	all() {
-		return attempt(() => {
-			const items = this.data;
-			this.log(`TestTable.all called, count=${items.length}`);
-			return items;
-		});
-	}
-
-	get(props: Partial<T>) {
-		return attempt(() => {
-			const d = this.data.filter((d) =>
-				Object.entries(props).every(([key, value]) => d.data[key as keyof T] === value)
-			);
-			this.log(`TestTable.get called for props=${JSON.stringify(props)}, count=${d.length}`);
-			return d;
-		});
-	}
-
-	clear() {
-		return attempt(() => {
-			this.log(`TestTable.clear called`);
-			this.log('Clearing tables');
-			this.data.length = 0;
-			this.versions.length = 0;
-		});
-	}
-
-	getLifetimeItems() {
-		return attempt(() => {
-			const items = this.data.filter((d) => d.data.lifetime > 0);
-			this.log(`TestTable.getLifetimeItems called, count=${items.length}`);
-			return items;
-		});
-	}
-
-	log(...data: unknown[]) {
-		if (this.config.log) {
-			log(`(${this.config.struct.data.name})`, ...data);
-		}
-	}
-
-	fromIds(ids: string[]) {
-		return attempt(() => {
-			const items = this.data.filter((d) => ids.includes(d.data.id));
-			this.log(`TestTable.fromIds called for ids=${JSON.stringify(ids)}, count=${items.length}`);
-			return items;
-		});
+export class TestTable {
+	static tables = new Map();
+	static get(_name: string) {
+		// Return null to indicate testing mode is disabled
+		return null;
 	}
 }
