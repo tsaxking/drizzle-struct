@@ -62,29 +62,9 @@
 			"import": "./lib/esm/index.js",
 			"require": "./lib/cjs/index.js"
 		},
-		"./back-end": {
-			"import": "./lib/esm/back-end.js",
-			"require": "./lib/cjs/back-end.js"
-		},
-		"./types": {
-			"import": "./lib/esm/types.js",
-			"require": "./lib/cjs/types.js"
-		},
-		"./utils": {
-			"import": "./lib/esm/utils.js",
-			"require": "./lib/cjs/utils.js"
-		},
-		"./unit-tests": {
-			"import": "./lib/esm/unit-tests.js",
-			"require": "./lib/cjs/unit-test.js"
-		},
-		"./proxy": {
-			"import": "./lib/esm/redis-struct-proxy.js",
-			"require": "./lib/cjs/redis-struct-proxy.js"
-		},
-		"./testing": {
-			"import": "./lib/esm/testing.js",
-			"require": "./lib/cjs/testing.js"
+		"./*": {
+			"import": "./lib/esm/*.js",
+			"require": "./lib/cjs/*.js"
 		}
 	}
 }
