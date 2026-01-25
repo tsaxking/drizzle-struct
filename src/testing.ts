@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { attempt } from "ts-utils/check";
-import { type Blank, Struct, StructData } from "./back-end";
+import { type Blank, Struct, StructData } from "./struct";
 import { z } from 'zod';
 import { v4 as uuid } from 'uuid';
 
