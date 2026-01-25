@@ -29,12 +29,12 @@ const DB = drizzle(
 	})
 );
 
-
 describe.sequential('Struct Real Database Tests', () => {
 	const WAIT_TIME = 5000; // ms
-	const createTimeout = (message: string) => setTimeout(() => {
-		throw new Error(message);
-	}, WAIT_TIME);
+	const createTimeout = (message: string) =>
+		setTimeout(() => {
+			throw new Error(message);
+		}, WAIT_TIME);
 
 	beforeAll(async () => {
 		const timeout = createTimeout('Database build timed out');
@@ -44,7 +44,6 @@ describe.sequential('Struct Real Database Tests', () => {
 		await struct.build(DB).unwrap();
 		await struct.clear().unwrap();
 	});
-
 
 	afterAll(async () => {
 		await struct.clear().unwrap();
@@ -60,7 +59,9 @@ describe.sequential('Struct Real Database Tests', () => {
 			expect(record.data.integer).toBe(40);
 			expect(record.data.real).toBe(99.99);
 			expect(record.data.char).toBe('A');
-			expect(new Date(record.data.timestamp).toISOString()).toBe(new Date('2024-01-01').toISOString());
+			expect(new Date(record.data.timestamp).toISOString()).toBe(
+				new Date('2024-01-01').toISOString()
+			);
 			expect(record.data.varchar).toBe('test varchar');
 			expect(new Date(record.data.date).toISOString()).toBe(new Date('2024-01-01').toISOString());
 		});
@@ -112,19 +113,20 @@ describe.sequential('Struct Real Database Tests', () => {
 
 	let data: typeof struct.sample | undefined;
 
-
 	it('should insert and retrieve a new record', async () => {
-		const inserted = await struct.new({
-			string: 'test',
-			boolean: true,
-			integer: 40,
-			real: 99.99,
-			char: 'A',
-			timestamp: new Date('2024-01-01'),
-			varchar: 'test varchar',
-			date: new Date('2024-01-01').toISOString(),
-			// pgEnum: 'option1',
-		}).unwrap();
+		const inserted = await struct
+			.new({
+				string: 'test',
+				boolean: true,
+				integer: 40,
+				real: 99.99,
+				char: 'A',
+				timestamp: new Date('2024-01-01'),
+				varchar: 'test varchar',
+				date: new Date('2024-01-01').toISOString()
+				// pgEnum: 'option1',
+			})
+			.unwrap();
 
 		data = inserted;
 	});
@@ -139,7 +141,9 @@ describe.sequential('Struct Real Database Tests', () => {
 		expect(record.data.integer).toBe(40);
 		expect(record.data.real).toBe(99.99);
 		expect(record.data.char).toBe('A');
-		expect(new Date(record.data.timestamp).toISOString()).toBe(new Date('2024-01-01').toISOString());
+		expect(new Date(record.data.timestamp).toISOString()).toBe(
+			new Date('2024-01-01').toISOString()
+		);
 		expect(record.data.varchar).toBe('test varchar');
 		expect(new Date(record.data.date).toISOString()).toBe(new Date('2024-01-01').toISOString());
 		// expect(record.pgEnum).toBe('option1');
@@ -147,9 +151,11 @@ describe.sequential('Struct Real Database Tests', () => {
 
 	it('Should update the record', async () => {
 		if (!data) throw new Error('No data inserted from create test');
-		const updated = await data.update({
-			string: 'updated test'
-		}).unwrap();
+		const updated = await data
+			.update({
+				string: 'updated test'
+			})
+			.unwrap();
 		expect(updated?.data.string).toBe('updated test');
 	});
 

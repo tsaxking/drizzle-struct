@@ -1,5 +1,14 @@
-import { Struct } from "./struct";
-import { text, boolean, timestamp, integer, char, date, /* pgEnum, */ varchar, real } from 'drizzle-orm/pg-core';
+import { Struct } from './struct';
+import {
+	text,
+	boolean,
+	timestamp,
+	integer,
+	char,
+	date,
+	/* pgEnum, */ varchar,
+	real
+} from 'drizzle-orm/pg-core';
 
 export const struct = new Struct({
 	name: 'test',
@@ -11,12 +20,12 @@ export const struct = new Struct({
 		char: char('char', { length: 1 }).notNull(),
 		timestamp: timestamp('timestamp').notNull(),
 		varchar: varchar('varchar', { length: 255 }).notNull(),
-		date: date('date').notNull(),
+		date: date('date').notNull()
 		// pgEnum: pgEnum('pg_enum', ['option1', 'option2', 'option3']),
 	},
 	versionHistory: {
 		amount: 5,
-		type: 'versions',
+		type: 'versions'
 	}
 });
 

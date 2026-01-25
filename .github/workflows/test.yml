@@ -48,7 +48,6 @@ jobs:
 
       - name: Run migrations
         run: |
-          cd dashboard
           pnpm run db:migrate
           pnpm run db:push --strict --verbose --force
 

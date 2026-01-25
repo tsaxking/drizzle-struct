@@ -55,6 +55,7 @@
 	},
 	"devDependencies": {
 		"@esbuild-kit/esm-loader": "^2.6.5",
+		"@eslint/js": "^9.39.2",
 		"@types/chalk": "^2.2.4",
 		"@types/express": "^5.0.0",
 		"@types/node": "^24.3.0",

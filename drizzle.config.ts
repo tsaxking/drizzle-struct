@@ -10,19 +10,19 @@ if (!DB_PORT) throw new Error('DB_PORT is not defined in environment variables')
 if (!DB_NAME) throw new Error('DB_NAME is not defined in environment variables');
 
 export default defineConfig({
-    dialect: 'postgresql',
-    schema: './src/schema.ts',
-    dbCredentials: {
-        host: DB_HOST,
-        port: parseInt(DB_PORT, 10),
-        user: DB_USER,
-        password: DB_PASS,
-        database: DB_NAME,
-        ssl: {
-            rejectUnauthorized: false,
-        }
-    },
-    verbose: true,
-    strict: true,
-    out: './drizzle',
+	dialect: 'postgresql',
+	schema: './src/schema.ts',
+	dbCredentials: {
+		host: DB_HOST,
+		port: parseInt(DB_PORT, 10),
+		user: DB_USER,
+		password: DB_PASS,
+		database: DB_NAME,
+		ssl: {
+			rejectUnauthorized: false
+		}
+	},
+	verbose: true,
+	strict: true,
+	out: './drizzle'
 });

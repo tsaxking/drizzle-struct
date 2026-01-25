@@ -2116,14 +2116,15 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 	 * @param {...unknown[]} data
 	 */
 	log(...data: unknown[]) {
-		if (this.data.log) console.log(
-			// turn terminal blue
-			'\x1b[34m',
-			`[Struct:${this.name}]`,
-			// reset
-			'\x1b[0m',
-			...data
-		);
+		if (this.data.log)
+			console.log(
+				// turn terminal blue
+				'\x1b[34m',
+				`[Struct:${this.name}]`,
+				// reset
+				'\x1b[0m',
+				...data
+			);
 	}
 
 	/**

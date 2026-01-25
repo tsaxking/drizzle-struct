@@ -38,7 +38,10 @@ export default ts.config(
 			'@typescript-eslint/no-unused-vars': [
 				'warn',
 				{ argsIgnorePattern: '^_', varsIgnorePattern: '^_' }
-			]
+			],
+			'@typescript-eslint/no-explicit-any': 'warn',
+			// in scripts, I don't care about require vs import
+			'@typescript-eslint/no-require-imports': 'off'
 		}
 	}
 );
