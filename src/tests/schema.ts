@@ -39,7 +39,7 @@ export const struct: TestSchema = new Struct({
 	versionHistory: {
 		amount: 5,
 		type: 'versions'
-	}
+	},
 }) as TestSchema;
 
 export const _table: Table = struct.table;

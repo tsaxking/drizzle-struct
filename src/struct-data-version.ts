@@ -22,7 +22,7 @@ import { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
  * @template {Blank} T
  * @template {string} Name
  */
-export class DataVersion<T extends Blank, Name extends string> {
+export class DataVersion<T extends Blank = any, Name extends string = any> {
 	/**
 	 * This is a local metadata map, it is not saved in the database and is designed to be short-lived
 	 *

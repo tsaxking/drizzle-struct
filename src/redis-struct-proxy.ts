@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { Redis, ConnectionClientService, ConnectionServerService } from 'redis-utils';
 import { attemptAsync } from 'ts-utils/check';
 import { ComplexEventEmitter } from 'ts-utils/event-emitter';
@@ -80,7 +81,7 @@ export class RedisStructProxyClient<
 		});
 	}
 
-	setup(struct: Struct<Blank, string>) {
+	setup(_struct: Struct<Blank, string>) {
 		return;
 	}
 
@@ -329,18 +330,6 @@ export class RedisStructProxyServer<Name extends string, RedisName extends strin
 			}),
 			struct: z.string()
 		}),
-		fromProperty: z.object({
-			data: z.object({
-				property: z.string(),
-				value: z.unknown(),
-				config: z.object({
-					limit: z.number().optional(),
-					offset: z.number().optional(),
-					includeArchived: z.boolean().optional()
-				})
-			}),
-			struct: z.string()
-		}),
 		fromVhId: z.object({
 			data: z.object({
 				vhId: z.string()
@@ -558,36 +547,6 @@ export class RedisStructProxyServer<Name extends string, RedisName extends strin
 					.fromId(data.data.id)
 					.unwrap()
 					.then((d) => d?.data);
-			});
-
-			this.server.subscribe('fromProperty', async (data) => {
-				const s = this.structs.get(data.struct);
-				if (!s) {
-					throw new Error(`Struct ${data.struct} not found in RedisStructProxyServer`);
-				}
-
-				const config = {};
-
-				if (data.data.config.limit && !isNaN(data.data.config.limit)) {
-					(config as any).limit = Number(data.data.config.limit);
-					(config as any).offset =
-						data.data.config.offset && !isNaN(data.data.config.offset)
-							? data.data.config.offset
-							: 0;
-					(config as any).type = 'array';
-				} else {
-					(config as any).type = 'all';
-				}
-
-				(config as any).includeArchived = data.data.config.includeArchived;
-
-				return s
-					.fromProperty(data.data.property, data.data.value as any, {
-						type: 'all', // for typing purposes
-						...config
-					})
-					.unwrap()
-					.then((d) => d.map((i) => i.data));
 			});
 
 			this.server.subscribe('fromVhId', async (data) => {
