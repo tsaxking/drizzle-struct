@@ -19,6 +19,22 @@ function addFileExtensions(dir) {
 					}
 					return `import ${imports} from '${source}.js'`;
 				}
+			).replace(
+				/export\s+{(.*?)\s+from\s+['"](.+?)['"]/g,
+				(match, exports, source) => {
+					if (!source.endsWith('.js') && !source.startsWith('./') && !source.startsWith('../')) {
+						return match;
+					}
+					return `export {${exports} from '${source}.js'`;
+				}
+			).replace(
+				/export\s+\*\s+from\s+['"](.+?)['"]/g,
+				(match, source) => {
+					if (!source.endsWith('.js') && !source.startsWith('./') && !source.startsWith('../')) {
+						return match;
+					}
+					return `export * from '${source}.js'`;
+				}
 			);
 			fs.writeFileSync(fullPath, content, 'utf-8');
 		}
