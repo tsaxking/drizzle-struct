@@ -170,7 +170,6 @@ export class StructData<T extends Blank = any, Name extends string = any> {
 			}
 			this.log('Updating');
 			this.makeVersion();
-			this.metadata.set('prev-state', JSON.stringify(this.safe()));
 			const newData: any = { ...this.data, ...data };
 
 			// Remove global columns
@@ -583,10 +582,16 @@ export class StructData<T extends Blank = any, Name extends string = any> {
 					updated: new Date()
 				} as any)
 				.where(sql`${this.struct.table.id} = ${this.id}`);
+			this.struct.emit('update', {
+				from: {
+					...this.data,
+					canUpdate: this.canUpdate
+				},
+				to: this,
+			})
 			Object.assign(this.data, {
-				canUpdate: true
+				canUpdate: !isStatic,
 			});
-			this.emitSelf();
 		});
 	}
 }
