@@ -1157,7 +1157,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 	 * Retrieves data from the struct based on the properties and values provided. (This method is unstable, use with caution)
 	 *
 	 * @param {{
-	 * 			[K in keyof (T & typeof globalCols)]?: TsType<T[K]['_']['dataType']>;
+	 * 			[K in keyof (T & typeof globalCols)]?: TsType<(T & typeof globalCols)[K]['_']['dataType']>;
 	 * 		}} props
 	 * @param {{
 	 * 			type: 'stream';
@@ -1168,7 +1168,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 	 */
 	get(
 		props: {
-			[K in keyof (T & typeof globalCols)]?: TsType<T[K]['_']['dataType']>;
+			[K in keyof (T & typeof globalCols)]?: TsType<(T & typeof globalCols)[K]['_']['dataType']>;
 		},
 		config: {
 			type: 'stream';
@@ -1180,7 +1180,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 	 * Retrieves data from the struct based on the properties and values provided. (This method is unstable, use with caution)
 	 *
 	 * @param {{
-	 * 			[K in keyof (T & typeof globalCols)]?: TsType<T[K]['_']['dataType']>;
+	 * 			[K in keyof (T & typeof globalCols)]?: TsType<(T & typeof globalCols)[K]['_']['dataType']>;
 	 * 		}} props
 	 * @param {{
 	 * 			type: 'array';
@@ -1191,7 +1191,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 	 */
 	get(
 		props: {
-			[K in keyof (T & typeof globalCols)]?: TsType<T[K]['_']['dataType']>;
+			[K in keyof (T & typeof globalCols)]?: TsType<(T & typeof globalCols)[K]['_']['dataType']>;
 		},
 		config: {
 			type: 'array';
@@ -1203,7 +1203,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 	 * Retrieves data from the struct based on the properties and values provided. (This method is unstable, use with caution)
 	 *
 	 * @param {{
-	 * 			[K in keyof (T & typeof globalCols)]?: TsType<T[K]['_']['dataType']>;
+	 * 			[K in keyof (T & typeof globalCols)]?: TsType<(T & typeof globalCols)[K]['_']['dataType']>;
 	 * 		}} props
 	 * @param {{
 	 * 			type: 'single';
@@ -1212,7 +1212,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 	 */
 	get(
 		props: {
-			[K in keyof (T & typeof globalCols)]?: TsType<T[K]['_']['dataType']>;
+			[K in keyof (T & typeof globalCols)]?: TsType<(T & typeof globalCols)[K]['_']['dataType']>;
 		},
 		config: {
 			type: 'single';
@@ -1222,7 +1222,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 	 * Retrieves data from the struct based on the properties and values provided. (This method is unstable, use with caution)
 	 *
 	 * @param {{
-	 * 			[K in keyof (T & typeof globalCols)]?: TsType<T[K]['_']['dataType']>;
+	 * 			[K in keyof (T & typeof globalCols)]?: TsType<(T & typeof globalCols)[K]['_']['dataType']>;
 	 * 		}} props
 	 * @param {{
 	 * 			type: 'count';
@@ -1231,7 +1231,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 	 */
 	get(
 		props: {
-			[K in keyof (T & typeof globalCols)]?: TsType<T[K]['_']['dataType']>;
+			[K in keyof (T & typeof globalCols)]?: TsType<(T & typeof globalCols)[K]['_']['dataType']>;
 		},
 		config: {
 			type: 'count';
@@ -1241,7 +1241,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 	 * Retrieves data from the struct based on the properties and values provided. (This method is unstable, use with caution)
 	 *
 	 * @param {{
-	 * 			[K in keyof (T & typeof globalCols)]?: TsType<T[K]['_']['dataType']>;
+	 * 			[K in keyof (T & typeof globalCols)]?: TsType<((T & typeof globalCols) & typeof globalCols)[K]['_']['dataType']>;
 	 * 		}} props
 	 * @param {{
 	 * 			type: 'all';
@@ -1250,7 +1250,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 	 */
 	get(
 		props: {
-			[K in keyof (T & typeof globalCols)]?: TsType<T[K]['_']['dataType']>;
+			[K in keyof (T & typeof globalCols)]?: TsType<(T & typeof globalCols)[K]['_']['dataType']>;
 		},
 		config: {
 			type: 'all';
@@ -1260,7 +1260,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 	 * Retrieves data from the struct based on the properties and values provided. (This method is unstable, use with caution)
 	 *
 	 * @param {{
-	 * 			[K in keyof (T & typeof globalCols)]?: TsType<T[K]['_']['dataType']>;
+	 * 			[K in keyof (T & typeof globalCols)]?: TsType<(T & typeof globalCols)[K]['_']['dataType']>;
 	 * 		}} props
 	 * @param {MultiConfig} config
 	 * @returns {(| StructStream<T, Name>
@@ -1268,7 +1268,7 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 	 */
 	get(
 		props: {
-			[K in keyof (T & typeof globalCols)]?: TsType<T[K]['_']['dataType']>;
+			[K in keyof (T & typeof globalCols)]?: TsType<(T & typeof globalCols)[K]['_']['dataType']>;
 		},
 		config: MultiConfig
 	):
