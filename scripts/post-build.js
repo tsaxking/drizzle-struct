@@ -11,31 +11,25 @@ function addFileExtensions(dir) {
 			addFileExtensions(fullPath);
 		} else if (fullPath.endsWith('.js')) {
 			let content = fs.readFileSync(fullPath, 'utf-8');
-			content = content.replace(
-				/import\s+(.+?)\s+from\s+['"](.+?)['"]/g,
-				(match, imports, source) => {
+			content = content
+				.replace(/import\s+(.+?)\s+from\s+['"](.+?)['"]/g, (match, imports, source) => {
 					if (!source.endsWith('.js') && !source.startsWith('./') && !source.startsWith('../')) {
 						return match;
 					}
 					return `import ${imports} from '${source}.js'`;
-				}
-			).replace(
-				/export\s+{(.*?)\s+from\s+['"](.+?)['"]/g,
-				(match, exports, source) => {
+				})
+				.replace(/export\s+{(.*?)\s+from\s+['"](.+?)['"]/g, (match, exports, source) => {
 					if (!source.endsWith('.js') && !source.startsWith('./') && !source.startsWith('../')) {
 						return match;
 					}
 					return `export {${exports} from '${source}.js'`;
-				}
-			).replace(
-				/export\s+\*\s+from\s+['"](.+?)['"]/g,
-				(match, source) => {
+				})
+				.replace(/export\s+\*\s+from\s+['"](.+?)['"]/g, (match, source) => {
 					if (!source.endsWith('.js') && !source.startsWith('./') && !source.startsWith('../')) {
 						return match;
 					}
 					return `export * from '${source}.js'`;
-				}
-			);
+				});
 			fs.writeFileSync(fullPath, content, 'utf-8');
 		}
 	}

@@ -587,10 +587,10 @@ export class StructData<T extends Blank = any, Name extends string = any> {
 					...this.data,
 					canUpdate: this.canUpdate
 				},
-				to: this,
-			})
+				to: this
+			});
 			Object.assign(this.data, {
-				canUpdate: !isStatic,
+				canUpdate: !isStatic
 			});
 		});
 	}
