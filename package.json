@@ -44,7 +44,7 @@
 		"prettier-plugin-svelte": "^3.3.2",
 		"proper-lockfile": "^4.1.2",
 		"redis": "^5.8.0",
-		"redis-utils": "github:tsaxking/redis#2026-02-18-TK-NodeV24",
+		"redis-utils": "github:tsaxking/redis#v3.0.0",
 		"svelte": "^5.16.1",
 		"ts-node": "^10.9.2",
 		"ts-utils": "github:tsaxking/global-ts-utilities#v1.0.0",
