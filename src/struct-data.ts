@@ -141,14 +141,6 @@ export class StructData<T extends Blank = any, Name extends string = any> {
 	) {
 		return attemptAsync(async () => {
 			const prev = { ...this.data };
-			if (this.struct.data.proxyClient) {
-				const res = await this.struct.data.proxyClient.update(this.struct, this.id, data).unwrap();
-				this.struct.emit('update', {
-					from: prev,
-					to: res
-				});
-				return res;
-			}
 			if (!this.canUpdate) {
 				throw new DataError(this.struct, 'Cannot change static data');
 			}
@@ -227,17 +219,6 @@ export class StructData<T extends Blank = any, Name extends string = any> {
 		}
 	) {
 		return attemptAsync(async () => {
-			if (this.struct.data.proxyClient) {
-				if (archived) {
-					const res = await this.struct.data.proxyClient.archive(this.struct, this.id).unwrap();
-					this.struct.emit('archive', this);
-					return res;
-				} else {
-					const res = await this.struct.data.proxyClient.restore(this.struct, this.id).unwrap();
-					this.struct.emit('restore', this);
-					return res;
-				}
-			}
 			this.log('Setting archive:', archived);
 			await this.struct.database
 				.update(this.struct.table)
@@ -274,11 +255,6 @@ export class StructData<T extends Blank = any, Name extends string = any> {
 		}
 	) {
 		return attemptAsync(async () => {
-			if (this.struct.data.proxyClient) {
-				const res = await this.struct.data.proxyClient.delete(this.struct, this.id).unwrap();
-				this.struct.emit('delete', this);
-				return res;
-			}
 			this.log('Deleting');
 			this.makeVersion();
 			await this.database
@@ -298,9 +274,6 @@ export class StructData<T extends Blank = any, Name extends string = any> {
 	 */
 	makeVersion() {
 		return attemptAsync(async () => {
-			if (this.struct.data.proxyClient) {
-				return this.struct.data.proxyClient.makeVersion(this.struct, this.id).unwrap();
-			}
 
 			if (!this.struct.versionTable)
 				throw new Error(`Struct ${this.struct.name} does not have a version table`);
@@ -310,7 +283,7 @@ export class StructData<T extends Blank = any, Name extends string = any> {
 			const vhData = { ...this.data, vhId, vhCreated } as any;
 			await this.database.insert(this.struct.versionTable).values(vhData);
 
-			const prev = (await this.getVersions()).unwrap();
+			const prev = await this.getVersions().unwrap();
 			if (this.struct.data.versionHistory) {
 				if (this.struct.data.versionHistory.type === 'days') {
 					const days = this.struct.data.versionHistory.amount;
@@ -374,9 +347,6 @@ export class StructData<T extends Blank = any, Name extends string = any> {
 	 */
 	getVersions() {
 		return attemptAsync(async () => {
-			if (this.struct.data.proxyClient) {
-				return this.struct.data.proxyClient.getVersions(this.struct, this.id).unwrap();
-			}
 			if (!this.struct.versionTable)
 				throw new StructError(
 					this.struct,
@@ -413,11 +383,6 @@ export class StructData<T extends Blank = any, Name extends string = any> {
 	 */
 	setAttributes(attributes: string[]) {
 		return attemptAsync(async () => {
-			if (this.struct.data.proxyClient) {
-				return this.struct.data.proxyClient
-					.setAttributes(this.struct, this.id, attributes)
-					.unwrap();
-			}
 
 			const prev = { ...this.data };
 			this.log('Setting attributes', attributes);
@@ -571,9 +536,6 @@ export class StructData<T extends Blank = any, Name extends string = any> {
 	 */
 	setStatic(isStatic: boolean) {
 		return attemptAsync(async () => {
-			if (this.struct.data.proxyClient) {
-				throw new DataError(this.struct, 'Cannot set static via proxy client');
-			}
 			this.log('Setting static:', isStatic);
 			await this.database
 				.update(this.struct.table)

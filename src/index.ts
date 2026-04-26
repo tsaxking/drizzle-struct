@@ -3,4 +3,3 @@ export * from './struct-data';
 export * from './struct-data-version';
 export * from './utils';
 export * from './types';
-export * from './redis-struct-proxy';

@@ -13,7 +13,6 @@ import { v4 as uuid } from 'uuid';
 import { log } from './utils';
 import path from 'path';
 import fs from 'fs';
-import { RedisStructProxyClient, RedisStructProxyServer } from './redis-struct-proxy';
 import xxhash, { XXHashAPI } from 'xxhash-wasm';
 import { StructError, DataError, FatalDataError, FatalStructError } from './utils';
 import { DataVersion } from './struct-data-version';
@@ -92,18 +91,6 @@ export type StructBuilder<T extends Blank, Name extends string> = {
 	validators?: {
 		[key in keyof T]?: z.ZodType<T[key]['_']['dataType']> | ((data: unknown) => boolean);
 	};
-
-	/**
-	 * If you want to proxy this struct through a different microservice
-	 * If you do this, you cannot expose this struct's table(s) directly to drizzle-orm.
-	 * You cannot share a database between different microservices where both have different structs, so use this if you want to share state between different microservices.
-	 */
-	proxyClient?: RedisStructProxyClient<string, string, string>;
-
-	/**
-	 * Sets up the host for the data for other microservices to connect to
-	 */
-	proxyServer?: RedisStructProxyServer<string, string>;
 
 	/**
 	 * If you want to register this struct automatically (default: true)
@@ -282,10 +269,6 @@ export type StructEvents<T extends Blank, Name extends string> = {
 	'data-error': [DataError];
 	'fatal-data-error': [FatalDataError];
 
-	/**
-	 * Emitted when the struct is connected to the redis proxy server
-	 */
-	connect: void;
 };
 /**
  * Converts postgres datatypes to typescript types
@@ -672,15 +655,6 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 			});
 		}
 
-		if (this.data.proxyServer) {
-			this.log('Setting up proxy server');
-			this.data.proxyServer.setup(this as any);
-		}
-
-		if (this.data.proxyClient) {
-			this.log('Setting up proxy client');
-			this.data.proxyClient.setup(this as any);
-		}
 	}
 
 	/**
@@ -748,12 +722,6 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 		}
 	) {
 		return attemptAsync(async () => {
-			if (this.data.proxyClient) {
-				return this.data.proxyClient
-					.new(this, data)
-					.unwrap()
-					.then((d) => this.Generator(d as any));
-			}
 			this.log('Creating new', data, config);
 			const validateRes = this.validate(data, {
 				optionals: config?.overwriteGlobals ? [] : (Object.keys(globalCols) as string[])
@@ -831,9 +799,6 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 	 */
 	fromId(id: string) {
 		return attemptAsync(async () => {
-			if (this.data.proxyClient) {
-				return this.data.proxyClient.fromId(this, id).unwrap();
-			}
 			const data = await this.database
 				.select()
 				.from(this.table)
@@ -864,12 +829,6 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 	 */
 	fromVhId(vhId: string) {
 		return attemptAsync(async () => {
-			if (this.data.proxyClient) {
-				return this.data.proxyClient
-					.fromVhId(this, vhId)
-					.unwrap()
-					.then((d) => (d ? new DataVersion(this, d as any) : undefined));
-			}
 
 			if (!this.versionTable) {
 				throw new FatalStructError(this, `Struct ${this.name} does not have a version table`);
@@ -948,9 +907,6 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 		| StructStream<T, Name>
 		| ResultPromise<StructData<T, Name>[] | undefined | StructData<T, Name> | number, Error> {
 		const get = async () => {
-			if (this.data.proxyClient) {
-				return this.data.proxyClient.all(this, config).unwrap();
-			}
 			const squeal = config.includeArchived ? sql`1 = 1` : sql`${this.table.archived} = ${false}`;
 
 			if (config.type === 'count') {
@@ -1080,16 +1036,6 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 		| StructStream<T, Name>
 		| ResultPromise<StructData<T, Name>[] | StructData<T, Name> | undefined | number, Error> {
 		const get = async () => {
-			if (this.data.proxyClient) {
-				return this.data.proxyClient
-					.archived(this, {
-						...(config as any),
-						includeArchived: true,
-						type: config.type === 'stream' ? 'all' : config.type
-					})
-					.unwrap();
-			}
-
 			const squeal = sql`${this.table.archived} = ${true}`;
 
 			if (config.type === 'count') {
@@ -1275,14 +1221,6 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 		| StructStream<T, Name>
 		| ResultPromise<StructData<T, Name>[] | StructData<T, Name> | undefined | number, Error> {
 		const get = async () => {
-			if (this.data.proxyClient) {
-				return this.data.proxyClient
-					.get(this, props, {
-						...(config as any),
-						type: config.type === 'stream' ? 'all' : config.type
-					})
-					.unwrap();
-			}
 
 			// const squeal = sql.join(Object.keys(props).map(k => sql`${this.table[k]} = ${props[k]}`), sql` AND `);
 			let squeal = sql`1 = 1`;
@@ -1394,14 +1332,6 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 		| ResultPromise<StructData<T, Name>[] | StructData<T, Name> | undefined | number, Error>
 		| StructStream<T, Name> {
 		const get = async () => {
-			if (this.data.proxyClient) {
-				return this.data.proxyClient
-					.fromIds(this, ids, {
-						...(config as any),
-						type: config.type === 'stream' ? 'all' : config.type
-					})
-					.unwrap();
-			}
 
 			const squeal = inArray(this.table.id as any, ids);
 
@@ -1456,9 +1386,6 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 	 */
 	clear() {
 		return attemptAsync(async () => {
-			if (this.data.proxyClient) {
-				throw new StructError(this, 'Cannot clear data when using a proxy client');
-			}
 			this.log('Clearing data...');
 			await this.database.execute(sql`
 				DELETE FROM ${this.table};
@@ -1494,9 +1421,6 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 				'Cannot add defaults after struct has been built. Those are applied during the build process.'
 			);
 
-		if (this.data.proxyClient) {
-			throw new StructError(this, 'Cannot add defaults when using a proxy client');
-		}
 
 		this.defaults.push(...defaults);
 	}
@@ -1569,16 +1493,6 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 		| StructStream<T, Name>
 		| ResultPromise<StructData<T, Name>[] | undefined | StructData<T, Name> | number, Error> {
 		const get = async () => {
-			if (this.data.proxyClient) {
-				return this.data.proxyClient
-					.getLifetimeItems(this, {
-						...(config as any),
-						type: config.type === 'stream' ? 'all' : config.type,
-						includeArchived: true
-					})
-					.unwrap();
-			}
-
 			// const squeal = sql`${this.table.lifetime} > 0 AND ${this.table.archived} = ${false}`;
 			let squeal: SQL;
 			if (config.includeArchived) {
@@ -1683,13 +1597,6 @@ export class Struct<T extends Blank = any, Name extends string = any> {
 			this.log('Building...');
 			this._database = database;
 
-			if (this.data.proxyClient) {
-				this.log('Using proxy client, skipping build process');
-				this.built = true;
-				this.emit('build');
-				this.log('Built!');
-				return;
-			}
 
 			resolveAll(
 				await Promise.all(

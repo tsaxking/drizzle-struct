@@ -137,13 +137,6 @@ export class DataVersion<T extends Blank = any, Name extends string = any> {
 					this.struct,
 					`Struct ${this.struct.name} does not have a version table`
 				);
-			if (this.struct.data.proxyClient) {
-				const res = await this.struct.data.proxyClient
-					.deleteVersion(this.struct, this.vhId)
-					.unwrap();
-				this.struct.emit('delete-version', this);
-				return res;
-			}
 			await this.database
 				.delete(this.struct.versionTable)
 				.where(sql`${this.struct.versionTable.vhId} = ${this.vhId}`);
@@ -172,13 +165,6 @@ export class DataVersion<T extends Blank = any, Name extends string = any> {
 		}
 	) {
 		return attemptAsync(async () => {
-			if (this.struct.data.proxyClient) {
-				const res = await this.struct.data.proxyClient
-					.restoreVersion(this.struct, this.vhId)
-					.unwrap();
-				this.struct.emit('restore-version', this);
-				return res;
-			}
 
 			const data = (await this.struct.fromId(this.id)).unwrap();
 			if (!data) this.struct.new(this.data);
